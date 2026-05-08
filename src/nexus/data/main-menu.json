@@ -1,0 +1,22 @@
+{
+	"routes": {
+		"label": "Routes",
+		"items": [
+			{
+				"title": "My Account",
+				"url": "/account",
+				"icon": "user"
+			}
+		]
+	},
+	"mainMenu": {
+		"label": "Main",
+		"items": [
+			{
+				"title": "Dashboard",
+				"url": "/",
+				"icon": "gauge"
+			}
+		]
+	}
+}
