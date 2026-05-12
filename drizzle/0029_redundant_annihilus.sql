@@ -1,0 +1,2 @@
+ALTER TABLE "event" ADD COLUMN "gallery_photo_file_id" uuid;--> statement-breakpoint
+ALTER TABLE "event" ADD CONSTRAINT "event_gallery_photo_file_id_file_id_fk" FOREIGN KEY ("gallery_photo_file_id") REFERENCES "public"."file"("id") ON DELETE set null ON UPDATE no action;

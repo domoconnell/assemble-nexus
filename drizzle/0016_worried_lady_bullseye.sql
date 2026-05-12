@@ -1,0 +1,1 @@
+ALTER TABLE "room" ADD COLUMN "buffer_minutes" integer DEFAULT 60 NOT NULL;

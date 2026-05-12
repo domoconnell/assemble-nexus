@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude (local-only)
+/claude-playground
+/claude-tasks
+/claude.md

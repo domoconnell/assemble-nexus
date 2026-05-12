@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../../db/index.js";
 import { bearer, magicLink } from "better-auth/plugins";
 import { passkey } from "@better-auth/passkey";
-import { sendEmail } from "@/services/sendgrid.service.js";
+import { sendTemplate } from "@/utils/email/email.service.js";
 import * as authSchema from "@/db/schema/auth_schema.js";
 import { user } from "@/db/schema/entities/user.js";
 import { eq } from "drizzle-orm";
@@ -40,14 +40,7 @@ export const auth = betterAuth({
         magicLink({
             disableSignUp: true,
             expiresIn: 15 * 60,
-            sendMagicLink: async ({ email, url /*, token*/ }) => {
-
-                console.log("Sending magic link to:", email, "->", url);
-
-                const sendgridApiKey = process.env.SENDGRID_API_KEY;
-                if (!sendgridApiKey) throw new Error("SENDGRID_API_KEY is not defined");
-
-
+            sendMagicLink: async ({ email, url }) => {
                 const [u] = await db
                     .select({
                         first_name: user.first_name,
@@ -57,26 +50,11 @@ export const auth = betterAuth({
                     .where(eq(user.email, email))
                     .limit(1);
 
-                console.log("send magic link to user:", u);
-
-                const dynamicTemplateData = {
+                await sendTemplate("magic-link", email, {
                     magicLink: url,
                     firstName: u?.first_name ?? "",
                     lastName: u?.last_name ?? "",
-                }
-                console.log("dynamicTemplateData:", dynamicTemplateData);
-                const msg = {
-                    to: email,
-                    from: "dom@webworks.marketing",
-                    templateId: "d-af2103969dd34e3193dcca2dcf94d153",
-                    dynamicTemplateData,
-                    hideWarnings: true,
-                };
-                try {
-                    await sendEmail(msg);
-                } catch (err) {
-                    throw new Error(err.message);
-                }
+                });
             },
         }),
         passkey({

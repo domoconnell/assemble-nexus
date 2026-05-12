@@ -1,0 +1,1 @@
+ALTER TABLE "facility_package" ADD COLUMN "quantifiable" boolean DEFAULT false NOT NULL;

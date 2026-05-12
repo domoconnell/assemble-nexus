@@ -1,0 +1,1 @@
+ALTER TABLE "capacity_layout" ADD COLUMN "icon" text;

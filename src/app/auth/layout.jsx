@@ -21,7 +21,7 @@ export default async function AuthLayout({ children }) {
     });
 
     if (session?.user) {
-        redirect("/");
+        redirect("/admin");
     }
 
     return children;

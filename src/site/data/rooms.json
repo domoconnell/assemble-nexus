@@ -1,0 +1,32 @@
+[
+	{
+		"slug": "concert-hall",
+		"name": "Concert Hall",
+		"tagline": "A 400-capacity main room with a custom-tuned PA and a sprung wooden stage.",
+		"shortDescription": "Our flagship space. Concerts, conferences, weddings, awards ceremonies. Class-A AV, floor-to-ceiling acoustic treatment, full lighting rig.",
+		"capacitySeated": 320,
+		"capacityStanding": 400,
+		"hue": "from-cyan-500/15 via-cyan-700/10 to-transparent",
+		"avHighlight": "L-Acoustics A15 line array · Allen & Heath dLive · 32-way LED rig"
+	},
+	{
+		"slug": "the-hall",
+		"name": "The Hall",
+		"tagline": "A flexible 180-capacity room for talks, receptions, and rehearsals.",
+		"shortDescription": "High ceilings, blackout drapes, fast turnaround. Equally at home for a panel of 40 or a launch party of 180.",
+		"capacitySeated": 120,
+		"capacityStanding": 180,
+		"hue": "from-emerald-500/15 via-teal-700/10 to-transparent",
+		"avHighlight": "QSC K12.2 system · 4K projector · stage lighting"
+	},
+	{
+		"slug": "the-atrium",
+		"name": "The Atrium",
+		"tagline": "An 80-capacity reception space with natural light and a working bar.",
+		"shortDescription": "Glass front, polished concrete floor, integrated bar. Drinks receptions, art previews, intimate book launches.",
+		"capacitySeated": 50,
+		"capacityStanding": 80,
+		"hue": "from-amber-400/15 via-orange-600/10 to-transparent",
+		"avHighlight": "Bose distributed audio · ambient lighting · bar service"
+	}
+]

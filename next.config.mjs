@@ -11,6 +11,13 @@ const nextConfig = {
 			dynamic: 180,
 		},
 	},
+	images: {
+		remotePatterns: [
+			{ protocol: 'https', hostname: 'cdn.assembly-rooms.com' },
+			{ protocol: 'https', hostname: '*.s3.amazonaws.com' },
+			{ protocol: 'https', hostname: '*.s3.*.amazonaws.com' },
+		],
+	},
 };
 
 export default nextConfig;

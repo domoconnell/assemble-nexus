@@ -1,0 +1,2 @@
+ALTER TABLE "ticket_order" ADD COLUMN "booking_fee_cents" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "ticket_order" ADD COLUMN "booking_fee_borne_by" text DEFAULT 'organiser' NOT NULL;

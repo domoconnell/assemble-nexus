@@ -21,10 +21,11 @@ import { authClient } from "@/utils/auth/auth-client";
 import { useRouter } from "next/navigation";
 
 function safeNextPath(nextParam) {
-    if (!nextParam) return "/";
-    if (typeof nextParam !== "string") return "/";
-    if (!nextParam.startsWith("/")) return "/";
-    if (nextParam.startsWith("//")) return "/";
+    const fallback = "/auth/post-login";
+    if (!nextParam) return fallback;
+    if (typeof nextParam !== "string") return fallback;
+    if (!nextParam.startsWith("/")) return fallback;
+    if (nextParam.startsWith("//")) return fallback;
     return nextParam;
 }
 
@@ -34,7 +35,9 @@ export default function LoginForm(className, ...props) {
     const router = useRouter();
 
     const nextPath = useMemo(() => {
-        return safeNextPath(searchParams.get("next"));
+        return safeNextPath(
+            searchParams.get("callbackURL") ?? searchParams.get("next"),
+        );
     }, [searchParams]);
 
     const [formDisabled, setFormDisabled] = useState(false);

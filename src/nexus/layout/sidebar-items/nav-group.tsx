@@ -28,6 +28,7 @@ type NavSubItem = {
 	title: string
 	url: string
 	minUserLevel?: number
+	badge_key?: string
 }
 
 type NavItem = {
@@ -36,6 +37,7 @@ type NavItem = {
 	icon?: string
 	isActive?: boolean
 	minUserLevel?: number
+	badge_key?: string
 	items?: NavSubItem[]
 }
 
@@ -44,7 +46,22 @@ type NavGroupProps = {
 	items: NavItem[]
 }
 
-export function NavGroup({ menu }: { menu: NavGroupProps }) {
+function Badge({ count }: { count: number }) {
+	if (!count) return null
+	return (
+		<span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-medium px-1.5">
+			{count > 99 ? "99+" : count}
+		</span>
+	)
+}
+
+export function NavGroup({
+	menu,
+	counts = {},
+}: {
+	menu: NavGroupProps
+	counts?: Record<string, number>
+}) {
 	const { label, items } = menu
 	const { user } = useAuth()
 	const userLevel = user?.level ?? 0
@@ -83,8 +100,11 @@ export function NavGroup({ menu }: { menu: NavGroupProps }) {
 												{visibleSubItems.map((subItem) => (
 													<SidebarMenuSubItem key={subItem.title}>
 														<SidebarMenuSubButton asChild>
-															<Link href={subItem.url} className="ml-4 w-full flex items-center gap-4">
+															<Link href={subItem.url} prefetch={false} className="ml-4 w-full flex items-center gap-4">
 																<span className="text-nowrap">{subItem.title}</span>
+																{subItem.badge_key && (
+																	<Badge count={counts[subItem.badge_key] ?? 0} />
+																)}
 															</Link>
 														</SidebarMenuSubButton>
 													</SidebarMenuSubItem>
@@ -99,6 +119,7 @@ export function NavGroup({ menu }: { menu: NavGroupProps }) {
 										<Link href={item.url} className="w-full flex items-center gap-4">
 											{item.icon && <span className="w-5 h-5 flex items-center justify-center"><FontAwesomeIcon icon={byPrefixAndName.fas[item.icon]} /></span>}
 											<span className="text-nowrap">{item.title}</span>
+											{item.badge_key && <Badge count={counts[item.badge_key] ?? 0} />}
 										</Link>
 									</SidebarMenuButton>
 								</SidebarMenuItem>

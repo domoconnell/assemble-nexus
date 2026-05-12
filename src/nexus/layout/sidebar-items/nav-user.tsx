@@ -84,7 +84,7 @@ export function NavUser() {
 						</DropdownMenuLabel>
 						<DropdownMenuSeparator />
 						<DropdownMenuGroup>
-							<DropdownMenuItem className="cursor-pointer" onClick={() => NavTo("/account")}>
+							<DropdownMenuItem className="cursor-pointer" onClick={() => NavTo("/admin/account")}>
 								<UserCircleIcon />
 								Account
 							</DropdownMenuItem>

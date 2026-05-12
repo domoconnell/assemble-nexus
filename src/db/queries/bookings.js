@@ -1,0 +1,434 @@
+import { and, asc, desc, eq, gt, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
+import { db } from "@/db/index.js";
+import { booking } from "@/db/schema/entities/booking.js";
+import { booking_segment } from "@/db/schema/entities/booking_segment.js";
+import { booking_facility_selection } from "@/db/schema/entities/booking_facility_selection.js";
+import { booking_status_event } from "@/db/schema/entities/booking_status_event.js";
+import { booking_type } from "@/db/schema/entities/booking_type.js";
+import { customer } from "@/db/schema/entities/customer.js";
+import { room } from "@/db/schema/entities/room.js";
+import { room_blockout } from "@/db/schema/entities/room_blockout.js";
+import { room_blockout_room } from "@/db/schema/entities/room_blockout_room.js";
+import { capacity_layout } from "@/db/schema/entities/capacity_layout.js";
+import { deposit_policy } from "@/db/schema/entities/deposit_policy.js";
+import { event } from "@/db/schema/entities/event.js";
+import { event_room } from "@/db/schema/entities/event_room.js";
+import { psp_intent } from "@/db/schema/entities/psp_intent.js";
+
+export async function getActiveDepositPolicy(venueId) {
+	const [row] = await db
+		.select()
+		.from(deposit_policy)
+		.where(
+			and(
+				eq(deposit_policy.venue_id, venueId),
+				eq(deposit_policy.is_active, true),
+				isNull(deposit_policy.deletedAt),
+			),
+		)
+		.orderBy(desc(deposit_policy.createdAt))
+		.limit(1);
+	return row ?? null;
+}
+
+export async function getBookingByReference(reference) {
+	const [b] = await db
+		.select({
+			id: booking.id,
+			venue_id: booking.venue_id,
+			reference: booking.reference,
+			status: booking.status,
+			subtotal_cents: booking.subtotal_cents,
+			vat_cents: booking.vat_cents,
+			total_cents: booking.total_cents,
+			discount_id: booking.discount_id,
+			discount_label_snapshot: booking.discount_label_snapshot,
+			discount_percent_x100_snapshot: booking.discount_percent_x100_snapshot,
+			discount_amount_cents: booking.discount_amount_cents,
+			ticketing_enabled: booking.ticketing_enabled,
+			ticketing_setup_fee_pct_x100_snapshot: booking.ticketing_setup_fee_pct_x100_snapshot,
+			ticketing_setup_fee_cents: booking.ticketing_setup_fee_cents,
+			deposit_required_cents: booking.deposit_required_cents,
+			deposit_non_refundable_cents: booking.deposit_non_refundable_cents,
+			deposit_paid_cents: booking.deposit_paid_cents,
+			balance_paid_cents: booking.balance_paid_cents,
+			customer_notes: booking.customer_notes,
+			submitted_at: booking.submitted_at,
+			approved_at: booking.approved_at,
+			confirmed_at: booking.confirmed_at,
+			rejected_at: booking.rejected_at,
+			cancelled_at: booking.cancelled_at,
+			completed_at: booking.completed_at,
+			customer_first_name: customer.first_name,
+			customer_last_name: customer.last_name,
+			customer_email: customer.email,
+		})
+		.from(booking)
+		.innerJoin(customer, eq(booking.customer_id, customer.id))
+		.where(and(eq(booking.reference, reference), isNull(booking.deletedAt)))
+		.limit(1);
+	return b ?? null;
+}
+
+export async function getBookingById(id) {
+	const [b] = await db
+		.select({
+			id: booking.id,
+			venue_id: booking.venue_id,
+			reference: booking.reference,
+			status: booking.status,
+			subtotal_cents: booking.subtotal_cents,
+			vat_cents: booking.vat_cents,
+			total_cents: booking.total_cents,
+			discount_id: booking.discount_id,
+			discount_label_snapshot: booking.discount_label_snapshot,
+			discount_percent_x100_snapshot: booking.discount_percent_x100_snapshot,
+			discount_amount_cents: booking.discount_amount_cents,
+			ticketing_enabled: booking.ticketing_enabled,
+			ticketing_setup_fee_pct_x100_snapshot: booking.ticketing_setup_fee_pct_x100_snapshot,
+			ticketing_setup_fee_cents: booking.ticketing_setup_fee_cents,
+			deposit_required_cents: booking.deposit_required_cents,
+			deposit_non_refundable_cents: booking.deposit_non_refundable_cents,
+			deposit_paid_cents: booking.deposit_paid_cents,
+			balance_paid_cents: booking.balance_paid_cents,
+			customer_notes: booking.customer_notes,
+			internal_notes: booking.internal_notes,
+			submitted_at: booking.submitted_at,
+			approved_at: booking.approved_at,
+			confirmed_at: booking.confirmed_at,
+			rejected_at: booking.rejected_at,
+			cancelled_at: booking.cancelled_at,
+			completed_at: booking.completed_at,
+			customer_id: customer.id,
+			customer_first_name: customer.first_name,
+			customer_last_name: customer.last_name,
+			customer_email: customer.email,
+			customer_phone: customer.phone,
+			customer_organisation: customer.organisation,
+			customer_marketing_opt_in: customer.marketing_opt_in,
+		})
+		.from(booking)
+		.innerJoin(customer, eq(booking.customer_id, customer.id))
+		.where(and(eq(booking.id, id), isNull(booking.deletedAt)))
+		.limit(1);
+	return b ?? null;
+}
+
+export async function listBookingSegments(bookingId) {
+	return db
+		.select({
+			id: booking_segment.id,
+			booking_id: booking_segment.booking_id,
+			starts_at: booking_segment.starts_at,
+			ends_at: booking_segment.ends_at,
+			rate_snapshot_kind: booking_segment.rate_snapshot_kind,
+			rate_snapshot_amount_cents: booking_segment.rate_snapshot_amount_cents,
+			units_x100: booking_segment.units_x100,
+			vat_rate_snapshot_x100: booking_segment.vat_rate_snapshot_x100,
+			computed_subtotal_cents: booking_segment.computed_subtotal_cents,
+			computed_vat_cents: booking_segment.computed_vat_cents,
+			sort_order: booking_segment.sort_order,
+			room_name: room.name,
+			room_slug: room.slug,
+			booking_type_label: booking_type.label,
+			booking_type_key: booking_type.key,
+			layout_label: capacity_layout.label,
+			layout_icon: capacity_layout.icon,
+		})
+		.from(booking_segment)
+		.innerJoin(room, eq(booking_segment.room_id, room.id))
+		.innerJoin(booking_type, eq(booking_segment.booking_type_id, booking_type.id))
+		.leftJoin(capacity_layout, eq(booking_segment.layout_id, capacity_layout.id))
+		.where(and(eq(booking_segment.booking_id, bookingId), isNull(booking_segment.deletedAt)))
+		.orderBy(asc(booking_segment.sort_order), asc(booking_segment.starts_at));
+}
+
+export async function listBookingFacilitySelections(bookingId) {
+	return db
+		.select()
+		.from(booking_facility_selection)
+		.where(eq(booking_facility_selection.booking_id, bookingId))
+		.orderBy(asc(booking_facility_selection.sort_order));
+}
+
+export async function listBookingStatusEvents(bookingId) {
+	return db
+		.select()
+		.from(booking_status_event)
+		.where(eq(booking_status_event.booking_id, bookingId))
+		.orderBy(asc(booking_status_event.at));
+}
+
+export async function listBookingsForAdmin(venueId, { tab = "pending" } = {}) {
+	const conditions = [eq(booking.venue_id, venueId), isNull(booking.deletedAt)];
+	if (tab === "pending") {
+		conditions.push(inArray(booking.status, ["pending"]));
+	} else if (tab === "upcoming") {
+		conditions.push(inArray(booking.status, ["approved", "confirmed"]));
+	} else if (tab === "past") {
+		conditions.push(inArray(booking.status, ["rejected", "cancelled", "completed"]));
+	}
+
+	const rows = await db
+		.select({
+			id: booking.id,
+			reference: booking.reference,
+			status: booking.status,
+			total_cents: booking.total_cents,
+			submitted_at: booking.submitted_at,
+			ticketing_enabled: booking.ticketing_enabled,
+			customer_first_name: customer.first_name,
+			customer_last_name: customer.last_name,
+			customer_email: customer.email,
+			customer_organisation: customer.organisation,
+		})
+		.from(booking)
+		.innerJoin(customer, eq(booking.customer_id, customer.id))
+		.where(and(...conditions))
+		.orderBy(desc(booking.submitted_at));
+	return rows;
+}
+
+export async function listBookingsForUser(userId) {
+	const { contact } = await import("@/db/schema/entities/contact.js");
+	const { organisation_contact } = await import("@/db/schema/entities/organisation_contact.js");
+
+	const selectShape = {
+		id: booking.id,
+		reference: booking.reference,
+		status: booking.status,
+		total_cents: booking.total_cents,
+		submitted_at: booking.submitted_at,
+		ticketing_enabled: booking.ticketing_enabled,
+	};
+
+	const [viaCustomer, viaOrganisation] = await Promise.all([
+		db
+			.select(selectShape)
+			.from(booking)
+			.innerJoin(customer, eq(booking.customer_id, customer.id))
+			.where(and(eq(customer.user_id, userId), isNull(booking.deletedAt))),
+		db
+			.select(selectShape)
+			.from(booking)
+			.innerJoin(organisation_contact, eq(organisation_contact.organisation_id, booking.organisation_id))
+			.innerJoin(contact, eq(contact.id, organisation_contact.contact_id))
+			.where(
+				and(
+					eq(contact.user_id, userId),
+					isNull(contact.deletedAt),
+					isNull(booking.deletedAt),
+				),
+			),
+	]);
+
+	const byId = new Map();
+	for (const r of viaCustomer) byId.set(r.id, r);
+	for (const r of viaOrganisation) byId.set(r.id, r);
+	return [...byId.values()].sort((a, b) => {
+		const aTime = a.submitted_at ? new Date(a.submitted_at).getTime() : 0;
+		const bTime = b.submitted_at ? new Date(b.submitted_at).getTime() : 0;
+		return bTime - aTime;
+	});
+}
+
+export async function getBookingForUser(bookingId, userId) {
+	const [b] = await db
+		.select({
+			id: booking.id,
+			reference: booking.reference,
+			status: booking.status,
+			subtotal_cents: booking.subtotal_cents,
+			vat_cents: booking.vat_cents,
+			total_cents: booking.total_cents,
+			discount_label_snapshot: booking.discount_label_snapshot,
+			discount_amount_cents: booking.discount_amount_cents,
+			ticketing_enabled: booking.ticketing_enabled,
+			ticketing_setup_fee_cents: booking.ticketing_setup_fee_cents,
+			deposit_required_cents: booking.deposit_required_cents,
+			customer_notes: booking.customer_notes,
+			submitted_at: booking.submitted_at,
+			approved_at: booking.approved_at,
+			confirmed_at: booking.confirmed_at,
+			rejected_at: booking.rejected_at,
+			cancelled_at: booking.cancelled_at,
+			completed_at: booking.completed_at,
+			customer_first_name: customer.first_name,
+			customer_last_name: customer.last_name,
+			customer_email: customer.email,
+		})
+		.from(booking)
+		.innerJoin(customer, eq(booking.customer_id, customer.id))
+		.where(
+			and(
+				eq(booking.id, bookingId),
+				eq(customer.user_id, userId),
+				isNull(booking.deletedAt),
+			),
+		)
+		.limit(1);
+	return b ?? null;
+}
+
+export async function countPendingBookings(venueId) {
+	const rows = await db
+		.select({ id: booking.id })
+		.from(booking)
+		.where(
+			and(
+				eq(booking.venue_id, venueId),
+				eq(booking.status, "pending"),
+				isNull(booking.deletedAt),
+			),
+		);
+	return rows.length;
+}
+
+export async function getPendingIntentForBooking(bookingId, kind = "deposit") {
+	const rows = await db
+		.select()
+		.from(psp_intent)
+		.where(
+			and(
+				eq(psp_intent.booking_id, bookingId),
+				eq(psp_intent.status, "requires_payment_method"),
+				sql`coalesce(${psp_intent.metadata}->>'kind', 'deposit') = ${kind}`,
+			),
+		)
+		.orderBy(desc(psp_intent.createdAt))
+		.limit(1);
+	return rows[0] ?? null;
+}
+
+export async function getSucceededIntentForBooking(bookingId) {
+	const rows = await db
+		.select()
+		.from(psp_intent)
+		.where(
+			and(
+				eq(psp_intent.booking_id, bookingId),
+				eq(psp_intent.status, "succeeded"),
+			),
+		)
+		.orderBy(desc(psp_intent.createdAt))
+		.limit(1);
+	return rows[0] ?? null;
+}
+
+const BLOCKING_STATUSES = ["pending", "approved", "confirmed", "completed"];
+
+const BLOCKING_EVENT_STATUSES = ["draft", "pending_review", "published"];
+
+/**
+ * Find events that have manually-picked rooms (via event_room) overlapping the
+ * requested window on the given room. Events linked to a booking are already
+ * blocked through findConflictingSegments via that booking's segments, so we
+ * exclude them here to avoid double-counting.
+ */
+export async function findConflictingEvents({
+	roomId,
+	startsAt,
+	endsAt,
+	excludeEventIds = [],
+}) {
+	const conditions = [
+		eq(event_room.room_id, roomId),
+		isNull(event.deletedAt),
+		isNull(event.booking_id),
+		lt(event.starts_at, endsAt),
+		gt(event.ends_at, startsAt),
+		inArray(event.status, BLOCKING_EVENT_STATUSES),
+	];
+	if (excludeEventIds.length) {
+		conditions.push(notInArray(event.id, excludeEventIds));
+	}
+	return db
+		.select({
+			id: event.id,
+			title: event.title,
+			status: event.status,
+			starts_at: event.starts_at,
+			ends_at: event.ends_at,
+		})
+		.from(event_room)
+		.innerJoin(event, eq(event_room.event_id, event.id))
+		.where(and(...conditions))
+		.orderBy(asc(event.starts_at));
+}
+
+/**
+ * Find any room_blockout rows that overlap [startsAt, endsAt) for the given
+ * room. A blockout with NO linked rooms applies to every room at its venue,
+ * so we match those too via the `not exists` clause.
+ */
+export async function findConflictingBlockouts({ roomId, startsAt, endsAt }) {
+	const roomRow = await db
+		.select({ venue_id: room.venue_id })
+		.from(room)
+		.where(eq(room.id, roomId))
+		.limit(1);
+	if (!roomRow.length) return [];
+	const venueId = roomRow[0].venue_id;
+
+	return db
+		.select({
+			id: room_blockout.id,
+			starts_at: room_blockout.starts_at,
+			ends_at: room_blockout.ends_at,
+			reason: room_blockout.reason,
+			is_public: room_blockout.is_public,
+		})
+		.from(room_blockout)
+		.where(
+			and(
+				eq(room_blockout.venue_id, venueId),
+				isNull(room_blockout.deletedAt),
+				lt(room_blockout.starts_at, endsAt),
+				gt(room_blockout.ends_at, startsAt),
+				sql`(
+					exists (
+						select 1 from ${room_blockout_room} rbr
+						where rbr.blockout_id = ${room_blockout.id}
+						  and rbr.room_id = ${roomId}
+					)
+					or not exists (
+						select 1 from ${room_blockout_room} rbr
+						where rbr.blockout_id = ${room_blockout.id}
+					)
+				)`,
+			),
+		)
+		.orderBy(asc(room_blockout.starts_at));
+}
+
+export async function findConflictingSegments({
+	roomId,
+	startsAt,
+	endsAt,
+	excludeBookingIds = [],
+}) {
+	const conditions = [
+		eq(booking_segment.room_id, roomId),
+		isNull(booking_segment.deletedAt),
+		lt(booking_segment.starts_at, endsAt),
+		gt(booking_segment.ends_at, startsAt),
+		inArray(booking.status, BLOCKING_STATUSES),
+		isNull(booking.deletedAt),
+	];
+	if (excludeBookingIds.length) {
+		conditions.push(notInArray(booking_segment.booking_id, excludeBookingIds));
+	}
+	return db
+		.select({
+			id: booking_segment.id,
+			booking_id: booking_segment.booking_id,
+			booking_reference: booking.reference,
+			booking_status: booking.status,
+			starts_at: booking_segment.starts_at,
+			ends_at: booking_segment.ends_at,
+		})
+		.from(booking_segment)
+		.innerJoin(booking, eq(booking_segment.booking_id, booking.id))
+		.where(and(...conditions))
+		.orderBy(asc(booking_segment.starts_at));
+}

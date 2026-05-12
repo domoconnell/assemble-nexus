@@ -15,7 +15,7 @@ export default async function ProtectedLayout({ children }) {
     });
 
     if (!session?.user) {
-        redirect("/auth/login");
+        redirect("/auth/login?callbackURL=/admin");
     }
 
     return (

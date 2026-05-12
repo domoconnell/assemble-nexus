@@ -1,0 +1,1 @@
+ALTER TABLE "pricing_rule" ADD COLUMN "daily_cap_cents" integer;

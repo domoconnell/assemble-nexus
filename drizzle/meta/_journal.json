@@ -8,6 +8,216 @@
       "when": 1772832287981,
       "tag": "0000_tiresome_korath",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778288864389,
+      "tag": "0001_overjoyed_fat_cobra",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778289309902,
+      "tag": "0002_nice_agent_brand",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778329364908,
+      "tag": "0003_free_warlock",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778357926620,
+      "tag": "0004_lowly_ultimates",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778359099902,
+      "tag": "0005_glamorous_ezekiel",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778359596758,
+      "tag": "0006_zippy_swarm",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778359628090,
+      "tag": "0007_skinny_hellion",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778360424841,
+      "tag": "0008_loud_war_machine",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778364528661,
+      "tag": "0009_special_jane_foster",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778367240237,
+      "tag": "0010_overjoyed_silver_samurai",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778368577041,
+      "tag": "0011_short_kingpin",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1778369804810,
+      "tag": "0012_flimsy_power_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778370592187,
+      "tag": "0013_safe_thunderbolt_ross",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1778372975754,
+      "tag": "0014_volatile_shatterstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1778373729047,
+      "tag": "0015_flawless_bill_hollister",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1778418791896,
+      "tag": "0016_worried_lady_bullseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1778434375353,
+      "tag": "0017_productive_magik",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1778437380340,
+      "tag": "0018_stale_lady_ursula",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778438775630,
+      "tag": "0019_chunky_stranger",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1778441339333,
+      "tag": "0020_cloudy_genesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1778453009233,
+      "tag": "0021_great_maddog",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1778459788910,
+      "tag": "0022_overconfident_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1778487975449,
+      "tag": "0023_little_ezekiel_stane",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778494572565,
+      "tag": "0024_sparkling_zuras",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1778504570053,
+      "tag": "0025_oval_emma_frost",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1778504986526,
+      "tag": "0026_flimsy_major_mapleleaf",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1778505837510,
+      "tag": "0027_wise_pet_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1778536164165,
+      "tag": "0028_graceful_madame_hydra",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1778572065341,
+      "tag": "0029_redundant_annihilus",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1778577545695,
+      "tag": "0030_flaky_eternals",
+      "breakpoints": true
     }
   ]
 }

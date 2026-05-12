@@ -4,7 +4,7 @@
 		"items": [
 			{
 				"title": "My Account",
-				"url": "/account",
+				"url": "/admin/account",
 				"icon": "user"
 			}
 		]
@@ -14,8 +14,65 @@
 		"items": [
 			{
 				"title": "Dashboard",
-				"url": "/",
+				"url": "/admin",
 				"icon": "gauge"
+			},
+			{
+				"title": "Rooms",
+				"url": "/admin/rooms",
+				"icon": "door-open"
+			},
+			{
+				"title": "Bookings",
+				"url": "/admin/bookings",
+				"icon": "calendar-check",
+				"badge_key": "bookings_pending"
+			},
+			{
+				"title": "Blockouts",
+				"url": "/admin/blockouts",
+				"icon": "calendar-xmark"
+			},
+			{
+				"title": "Events",
+				"url": "/admin/events",
+				"icon": "ticket"
+			},
+			{
+				"title": "CRM",
+				"url": "/admin/crm",
+				"icon": "address-book"
+			},
+			{
+				"title": "Website CMS",
+				"url": "/admin/cms",
+				"icon": "browser"
+			},
+			{
+				"title": "Ledger",
+				"url": "/admin/ledger",
+				"icon": "chart-line",
+				"items": [
+					{ "title": "Overview", "url": "/admin/ledger/overview" },
+					{ "title": "Recurring costs", "url": "/admin/ledger/recurring" },
+					{ "title": "Expenses", "url": "/admin/ledger/expenses" },
+					{ "title": "POS takings", "url": "/admin/ledger/pos" },
+					{ "title": "Manual income", "url": "/admin/ledger/income" }
+				]
+			},
+			{
+				"title": "Settings",
+				"url": "/admin/settings",
+				"icon": "gear",
+				"items": [
+					{ "title": "Booking types", "url": "/admin/settings/booking-types" },
+					{ "title": "Deposit policy", "url": "/admin/settings/deposit-policy" },
+					{ "title": "Booking agreement", "url": "/admin/settings/booking-agreement" },
+					{ "title": "Discounts", "url": "/admin/settings/discounts" },
+					{ "title": "Ticketing", "url": "/admin/settings/ticketing" },
+					{ "title": "Payments", "url": "/admin/settings/payments" },
+					{ "title": "Hours & rate bands", "url": "/admin/settings/hours" }
+				]
 			}
 		]
 	}

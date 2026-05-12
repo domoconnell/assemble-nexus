@@ -31,7 +31,7 @@ function createClient() {
     password: POSTGRES_PASSWORD,
     database: POSTGRES_DB,
     ssl: { ca, rejectUnauthorized: true },
-    max: 1,
+    max: 5,
     idle_timeout: 20,
     max_lifetime: 60 * 5,
   });

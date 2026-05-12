@@ -1,0 +1,29 @@
+[
+	{
+		"slug": "winter-organ-recital",
+		"title": "Winter Organ Recital",
+		"summary": "An evening of Bach, Widor, and Vierne performed on the restored Mander organ.",
+		"startsAt": "2026-12-12T19:30:00Z",
+		"room": "Concert Hall",
+		"isTicketed": true,
+		"hue": "from-indigo-500/15 via-violet-700/10 to-transparent"
+	},
+	{
+		"slug": "panel-the-future-of-live",
+		"title": "Panel: The Future of Live",
+		"summary": "Promoters, venue operators, and artists in conversation. Hosted by The Quietus.",
+		"startsAt": "2026-06-04T18:00:00Z",
+		"room": "The Hall",
+		"isTicketed": true,
+		"hue": "from-emerald-500/15 via-teal-700/10 to-transparent"
+	},
+	{
+		"slug": "launch-night-vol-3",
+		"title": "Launch Night Vol. 3",
+		"summary": "Three new bands. One stage. Free entry, donations welcome.",
+		"startsAt": "2026-05-22T20:00:00Z",
+		"room": "The Atrium",
+		"isTicketed": false,
+		"hue": "from-rose-500/15 via-pink-700/10 to-transparent"
+	}
+]
