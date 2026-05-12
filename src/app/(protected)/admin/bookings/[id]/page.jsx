@@ -6,6 +6,7 @@ import {
 	listBookingFacilitySelections,
 	listBookingStatusEvents,
 } from "@/db/queries/bookings";
+import { getEventByBookingId } from "@/db/queries/events";
 import BookingDetailActions from "../_components/booking-detail-actions";
 import RecurrencePanel from "../_components/recurrence-panel";
 import BookingOrganisationPicker from "../_components/booking-organisation-picker";
@@ -60,12 +61,16 @@ export default async function AdminBookingDetailPage({ params }) {
 	if (!booking) notFound();
 
 	const venue = await requireCurrentVenue();
-	const [segments, facilities, statusEvents, organisations] = await Promise.all([
-		listBookingSegments(booking.id),
-		listBookingFacilitySelections(booking.id),
-		listBookingStatusEvents(booking.id),
-		listOrganisations(venue.id),
-	]);
+	const [segments, facilities, statusEvents, organisations, linkedEvent] =
+		await Promise.all([
+			listBookingSegments(booking.id),
+			listBookingFacilitySelections(booking.id),
+			listBookingStatusEvents(booking.id),
+			listOrganisations(venue.id),
+			booking.ticketing_enabled
+				? getEventByBookingId(booking.id)
+				: Promise.resolve(null),
+		]);
 	const currentOrg = booking.organisation_id
 		? organisations.find((o) => o.id === booking.organisation_id) ?? null
 		: null;
@@ -100,6 +105,26 @@ export default async function AdminBookingDetailPage({ params }) {
 					Submitted {booking.submitted_at ? stampFmt.format(new Date(booking.submitted_at)) : "—"}
 				</p>
 			</div>
+
+			{linkedEvent && (
+				<Link
+					href={`/admin/events/${linkedEvent.id}`}
+					className="block rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 hover:bg-primary/10 transition"
+				>
+					<div className="flex items-baseline justify-between gap-4 flex-wrap">
+						<div>
+							<div className="text-xs uppercase tracking-[0.22em] text-primary">
+								Ticketed event
+							</div>
+							<div className="font-medium mt-1">{linkedEvent.title}</div>
+							<div className="text-xs text-muted-foreground mt-0.5 capitalize">
+								Status: {linkedEvent.status.replace("_", " ")}
+							</div>
+						</div>
+						<span className="text-xs text-muted-foreground">Manage event →</span>
+					</div>
+				</Link>
+			)}
 
 			<div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
 				<div className="space-y-6">

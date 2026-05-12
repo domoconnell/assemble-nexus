@@ -21,6 +21,7 @@ import { byPrefixAndName } from "@awesome.me/kit-71c392801a/icons";
 import { DatePicker } from "./date-picker";
 import { TimePicker } from "./time-picker";
 import { expandPattern, weekdayPositionInMonth } from "@/lib/booking/recurrence";
+import IdentityStep, { EMPTY_IDENTITY, identityComplete } from "./identity-step.jsx";
 
 const stepVariants = {
 	enter: (dir) => ({ x: dir === "back" ? -60 : 60, opacity: 0 }),
@@ -88,24 +89,78 @@ function combineLocalDateTime(date, time) {
 function emptyDateRow() {
 	return { date: "", start_time: "", end_time: "" };
 }
-function emptyCustomer() {
-	return {
-		first_name: "",
-		last_name: "",
-		email: "",
-		phone: "",
-		organisation: "",
-		notes: "",
-		marketing_opt_in: false,
-	};
-}
-
 function isRowComplete(r) {
 	return Boolean(r.date && r.start_time && r.end_time);
 }
 
-function customerValid(c) {
-	return Boolean(c.first_name && c.last_name && c.email && c.email.includes("@"));
+function emptyTicketTypeDraft() {
+	return { name: "", price_pounds: "", max_quantity: "" };
+}
+
+function ticketTypeDraftValid(t) {
+	if (!t.name.trim()) return false;
+	const p = Number(t.price_pounds);
+	if (!Number.isFinite(p) || p < 0) return false;
+	return true;
+}
+
+function buildIdentityPayload(id) {
+	if (id.phase === "pick_org") {
+		return {
+			mode: "existing_org",
+			organisation_id: id.selectedOrgId,
+		};
+	}
+	if (id.phase === "new_org") {
+		// Logged-in user creating a fresh organisation
+		return {
+			mode: "new_org_existing_user",
+			new_org: {
+				name: id.newOrgName.trim(),
+				description: id.newOrgDescription.trim(),
+			},
+		};
+	}
+	if (id.phase === "new_user") {
+		return {
+			mode: "new_user_new_org",
+			new_user: {
+				first_name: id.firstName.trim(),
+				last_name: id.lastName.trim(),
+				email: id.email.trim(),
+				phone: id.phone.trim() || null,
+				marketing_opt_in: !!id.marketingOptIn,
+			},
+			new_org: {
+				name: id.newOrgName.trim(),
+				description: id.newOrgDescription.trim(),
+			},
+		};
+	}
+	if (id.phase === "admin_form") {
+		const customer = {
+			first_name: id.firstName.trim(),
+			last_name: id.lastName.trim(),
+			email: id.email.trim(),
+			phone: id.phone.trim() || null,
+		};
+		if (id.adminCreatingOrg) {
+			return {
+				mode: "admin_create",
+				customer,
+				new_org: {
+					name: id.newOrgName.trim(),
+					description: id.newOrgDescription.trim(),
+				},
+			};
+		}
+		return {
+			mode: "admin_create",
+			customer,
+			organisation_id: id.selectedOrgId,
+		};
+	}
+	return null;
 }
 
 export default function BookingWidget({
@@ -116,6 +171,7 @@ export default function BookingWidget({
 	preselectedRoomSlug,
 	lockedRoomId = null,
 	mode = "standalone",
+	availableOrganisations = [],
 }) {
 	const router = useRouter();
 
@@ -156,7 +212,10 @@ export default function BookingWidget({
 	const [facilitySelections, setFacilitySelections] = useState({});
 	const [discountId, setDiscountId] = useState(null);
 	const [ticketingEnabled, setTicketingEnabled] = useState(false);
-	const [customer, setCustomer] = useState(emptyCustomer());
+	const [ticketSetupMode, setTicketSetupMode] = useState("later"); // "later" | "now"
+	const [pendingTicketTypes, setPendingTicketTypes] = useState([emptyTicketTypeDraft()]);
+	const [identity, setIdentity] = useState(EMPTY_IDENTITY);
+	const [eventBrief, setEventBrief] = useState("");
 
 	// Recurrence: null when the booking is a single occurrence; otherwise the
 	// pattern object that gets expanded client-side into multiple identical
@@ -190,7 +249,8 @@ export default function BookingWidget({
 		if (facilityPackages.length > 0) list.push({ key: "facilities", title: "Add-ons" });
 		if (room?.allow_ticketed_events) list.push({ key: "ticketing", title: "Ticketing" });
 		if (discounts.length > 0) list.push({ key: "discounts", title: "Discounts" });
-		list.push({ key: "customer", title: "Your details" });
+		list.push({ key: "identity", title: "Who's booking" });
+		list.push({ key: "event_brief", title: "About this event" });
 		list.push({ key: "review", title: "Review" });
 		return list;
 	}, [
@@ -345,21 +405,39 @@ export default function BookingWidget({
 			case "room":
 				return Boolean(roomId);
 			case "event":
-				return eventRows.length > 0 && eventRows.every(isRowComplete);
+				return (
+					eventRows.length > 0 &&
+					eventRows.every(isRowComplete) &&
+					eventRows.every((r) => !r.conflict)
+				);
 			case "setup":
-				return setupRows.every(isRowComplete);
+				return setupRows.every(isRowComplete) && setupRows.every((r) => !r.conflict);
 			case "rehearsal":
-				return rehearsalRows.every(isRowComplete);
+				return (
+					rehearsalRows.every(isRowComplete) &&
+					rehearsalRows.every((r) => !r.conflict)
+				);
 			case "teardown":
-				return teardownRows.every(isRowComplete);
+				return (
+					teardownRows.every(isRowComplete) &&
+					teardownRows.every((r) => !r.conflict)
+				);
 			case "facilities":
 				return true;
-			case "ticketing":
-				return true;
+			case "ticketing": {
+				if (!ticketingEnabled) return true;
+				if (ticketSetupMode === "later") return true;
+				return (
+					pendingTicketTypes.length > 0 &&
+					pendingTicketTypes.every(ticketTypeDraftValid)
+				);
+			}
 			case "discounts":
 				return true;
-			case "customer":
-				return customerValid(customer);
+			case "identity":
+				return identityComplete(identity);
+			case "event_brief":
+				return eventBrief.trim().length >= 3;
 			case "review":
 				return false;
 			default:
@@ -375,21 +453,27 @@ export default function BookingWidget({
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					customer: {
-						first_name: customer.first_name,
-						last_name: customer.last_name,
-						email: customer.email,
-						phone: customer.phone || null,
-						organisation: customer.organisation || null,
-						marketing_opt_in: customer.marketing_opt_in,
-					},
-					customer_notes: customer.notes || null,
+					identity: buildIdentityPayload(identity),
+					customer_notes: eventBrief.trim() || null,
 					segments: apiSegments,
 					facility_selections: apiFacilitySelections,
 					discount_id: discountId,
 					ticketing: ticketingEnabled && room?.allow_ticketed_events
 						? { enabled: true, room_id: roomId }
 						: { enabled: false },
+					pending_ticket_types:
+						ticketingEnabled && ticketSetupMode === "now"
+							? pendingTicketTypes
+									.filter(ticketTypeDraftValid)
+									.map((t, i) => ({
+										name: t.name.trim(),
+										price_cents: Math.round(Number(t.price_pounds) * 100),
+										max_quantity: t.max_quantity
+											? Math.max(1, parseInt(t.max_quantity, 10))
+											: null,
+										sort_order: i,
+									}))
+							: null,
 					recurrence_rule: recurrence,
 				}),
 			});
@@ -397,8 +481,10 @@ export default function BookingWidget({
 			if (!res.ok) throw new Error(data?.error || "Submission failed");
 			if (mode === "admin") {
 				router.push(`/admin/bookings/${data.id}`);
+			} else if (data.event_id && ticketSetupMode === "now") {
+				router.push(`/my-events/${data.event_id}/setup`);
 			} else {
-				router.push(`/booking/${data.reference}`);
+				router.push(`/my-bookings/${data.id}`);
 			}
 		} catch (err) {
 			setSubmitError(err?.message || "Submission failed");
@@ -519,6 +605,10 @@ export default function BookingWidget({
 						enabled={ticketingEnabled}
 						onChange={setTicketingEnabled}
 						ticketingQuote={quote?.ticketing}
+						setupMode={ticketSetupMode}
+						onSetupModeChange={setTicketSetupMode}
+						pendingTypes={pendingTicketTypes}
+						onPendingTypesChange={setPendingTicketTypes}
 					/>
 				)}
 				{currentStep?.key === "discounts" && (
@@ -528,8 +618,16 @@ export default function BookingWidget({
 						onChange={setDiscountId}
 					/>
 				)}
-				{currentStep?.key === "customer" && (
-					<CustomerStep customer={customer} onChange={setCustomer} />
+				{currentStep?.key === "identity" && (
+					<IdentityStep
+						value={identity}
+						onChange={setIdentity}
+						adminMode={mode === "admin"}
+						availableOrganisations={availableOrganisations}
+					/>
+				)}
+				{currentStep?.key === "event_brief" && (
+					<EventBriefStep value={eventBrief} onChange={setEventBrief} />
 				)}
 				{currentStep?.key === "review" && (
 					<ReviewStep
@@ -542,8 +640,12 @@ export default function BookingWidget({
 						teardownRows={teardownRows}
 						facilitySelections={facilitySelections}
 						facilityPackages={facilityPackages}
-						customer={customer}
+						identity={identity}
+						eventBrief={eventBrief}
 						quote={quote}
+						ticketingEnabled={ticketingEnabled && room?.allow_ticketed_events}
+						ticketSetupMode={ticketSetupMode}
+						pendingTicketTypes={pendingTicketTypes}
 					/>
 				)}
 			</motion.div>
@@ -566,7 +668,7 @@ export default function BookingWidget({
 					)}
 					<Button
 						onClick={submit}
-						disabled={submitting || !apiSegments.length || !customerValid(customer)}
+						disabled={submitting || !apiSegments.length || !identityComplete(identity) || !eventBrief.trim()}
 					>
 						{submitting ? "Submitting…" : "Submit enquiry"}
 					</Button>
@@ -664,7 +766,7 @@ function RoomStep({ rooms, roomId, onChange }) {
 	);
 }
 
-function DateRow({ row, onChange, onRemove, canRemove, roomId }) {
+function DateRow({ row, onChange, onRemove, canRemove, roomId, onConflictChange }) {
 	function set(patch) {
 		onChange({ ...row, ...patch });
 	}
@@ -679,8 +781,14 @@ function DateRow({ row, onChange, onRemove, canRemove, roomId }) {
 	useEffect(() => {
 		if (!complete) {
 			setAvailability(null);
+			onConflictChange?.(false);
 			return;
 		}
+		// Pessimistically block until the server confirms availability — this
+		// closes the race where the user changes dates and clicks Next before
+		// the new check returns.
+		setAvailability(null);
+		onConflictChange?.(true);
 		const controller = new AbortController();
 		const handle = setTimeout(async () => {
 			setChecking(true);
@@ -696,10 +804,18 @@ function DateRow({ row, onChange, onRemove, canRemove, roomId }) {
 					}),
 				});
 				const data = await res.json();
-				if (res.ok) setAvailability(data);
-				else setAvailability(null);
+				if (res.ok) {
+					setAvailability(data);
+					onConflictChange?.(data.available === false);
+				} else {
+					setAvailability(null);
+					onConflictChange?.(false);
+				}
 			} catch (err) {
-				if (err?.name !== "AbortError") setAvailability(null);
+				if (err?.name !== "AbortError") {
+					setAvailability(null);
+					onConflictChange?.(false);
+				}
 			} finally {
 				setChecking(false);
 			}
@@ -708,6 +824,7 @@ function DateRow({ row, onChange, onRemove, canRemove, roomId }) {
 			controller.abort();
 			clearTimeout(handle);
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [roomId, startsIso, endsIso, complete]);
 
 	const conflicts = availability?.available === false ? availability.conflicts : [];
@@ -751,21 +868,25 @@ function DateRow({ row, onChange, onRemove, canRemove, roomId }) {
 
 function ConflictWarning({ conflicts, bufferMinutes }) {
 	const first = conflicts[0];
-	const startStr = formatVenueTime(first.starts_at);
-	const endStr = formatVenueTime(first.ends_at);
-	const dateStr = formatVenueDate(first.starts_at);
+	// Show the *effective* unavailable window — the booked/event time
+	// plus the room's required buffer either side.
+	const bufferMs = (bufferMinutes ?? 0) * 60 * 1000;
+	const blockedStart = new Date(new Date(first.starts_at).getTime() - bufferMs);
+	const blockedEnd = new Date(new Date(first.ends_at).getTime() + bufferMs);
+	const startStr = formatVenueTime(blockedStart);
+	const endStr = formatVenueTime(blockedEnd);
+	const dateStr = formatVenueDate(blockedStart);
 	const heading =
 		first.kind === "event"
 			? "This room is hosting an event then."
-			: "Time conflicts with an existing booking.";
+			: first.kind === "blockout"
+				? "The room isn't available then."
+				: "Time conflicts with an existing booking.";
 	return (
 		<div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
 			<div className="font-medium">{heading}</div>
 			<div className="mt-0.5">
-				{dateStr} · {startStr}–{endStr}
-				{bufferMinutes > 0 && (
-					<span className="text-destructive/80"> · {bufferMinutes}-min buffer applied</span>
-				)}
+				Room in use {dateStr} · {startStr}–{endStr}
 				{conflicts.length > 1 && (
 					<span className="text-destructive/80"> · +{conflicts.length - 1} more</span>
 				)}
@@ -855,6 +976,11 @@ function DateRowsStep({
 						onRemove={() => remove(i)}
 						canRemove={rows.length > 1 || !required}
 						roomId={roomId}
+						onConflictChange={(c) =>
+							onChange((prev) =>
+								prev.map((pr, j) => (j === i ? { ...pr, conflict: c } : pr)),
+							)
+						}
 					/>
 				))}
 			</div>
@@ -1104,6 +1230,11 @@ function ConditionalDateStep({ title, subtitle, rows, onChange, addLabel, roomId
 							onRemove={() => onChange(rows.filter((_, j) => j !== i))}
 							canRemove
 							roomId={roomId}
+							onConflictChange={(c) =>
+								onChange((prev) =>
+									prev.map((pr, j) => (j === i ? { ...pr, conflict: c } : pr)),
+								)
+							}
 						/>
 					))}
 				</div>
@@ -1372,7 +1503,17 @@ function ticketingFeeSentence(pctX100, flatCents) {
 	return `We'll charge a fee of ${pct}% plus a flat ${flatStr} per ticket processed through our system.${includes}`;
 }
 
-function TicketingStep({ room, ticketingSettings, enabled, onChange, ticketingQuote }) {
+function TicketingStep({
+	room,
+	ticketingSettings,
+	enabled,
+	onChange,
+	ticketingQuote,
+	setupMode,
+	onSetupModeChange,
+	pendingTypes,
+	onPendingTypesChange,
+}) {
 	const setupPct = (room?.ticketing_setup_fee_pct_x100 ?? 0) / 100;
 	const platformPctX100 = ticketingSettings?.platform_fee_pct_x100 ?? 0;
 	const platformFlatCents = ticketingSettings?.platform_fee_flat_cents ?? 0;
@@ -1431,7 +1572,128 @@ function TicketingStep({ room, ticketingSettings, enabled, onChange, ticketingQu
 					<p>{ticketingFeeSentence(platformPctX100, platformFlatCents)}</p>
 				</div>
 			)}
+
+			{enabled && (
+				<TicketSetupBranch
+					mode={setupMode}
+					onModeChange={onSetupModeChange}
+					types={pendingTypes}
+					onTypesChange={onPendingTypesChange}
+				/>
+			)}
 		</div>
+	);
+}
+
+function TicketSetupBranch({ mode, onModeChange, types, onTypesChange }) {
+	function update(i, patch) {
+		onTypesChange(types.map((t, j) => (j === i ? { ...t, ...patch } : t)));
+	}
+	function remove(i) {
+		onTypesChange(types.filter((_, j) => j !== i));
+	}
+	function addAnother() {
+		onTypesChange([...types, emptyTicketTypeDraft()]);
+	}
+	return (
+		<div className="space-y-4">
+			<div className="grid grid-cols-2 gap-2">
+				<ModePill
+					active={mode === "now"}
+					onClick={() => onModeChange("now")}
+					title="Set up the event now"
+					subtitle="Sketch out your ticket types — we&apos;ll spin up a draft event you can refine straight away."
+				/>
+				<ModePill
+					active={mode === "later"}
+					onClick={() => onModeChange("later")}
+					title="Skip — set it up later"
+					subtitle="Submit the booking first and design the event afterwards."
+				/>
+			</div>
+			{mode === "now" && (
+				<div className="space-y-3 rounded-lg border border-foreground/10 bg-background p-4">
+					<div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+						Ticket types
+					</div>
+					{types.map((t, i) => (
+						<div
+							key={i}
+							className="grid grid-cols-[1.6fr_1fr_1fr_auto] gap-2 items-end"
+						>
+							<div className="space-y-1">
+								<Label className="text-xs" htmlFor={`tt-name-${i}`}>
+									Name
+								</Label>
+								<Input
+									id={`tt-name-${i}`}
+									placeholder="Standard"
+									value={t.name}
+									onChange={(e) => update(i, { name: e.target.value })}
+								/>
+							</div>
+							<div className="space-y-1">
+								<Label className="text-xs" htmlFor={`tt-price-${i}`}>
+									Price (£)
+								</Label>
+								<Input
+									id={`tt-price-${i}`}
+									type="number"
+									inputMode="decimal"
+									step="0.01"
+									min="0"
+									placeholder="10.00"
+									value={t.price_pounds}
+									onChange={(e) => update(i, { price_pounds: e.target.value })}
+								/>
+							</div>
+							<div className="space-y-1">
+								<Label className="text-xs" htmlFor={`tt-qty-${i}`}>
+									Cap (optional)
+								</Label>
+								<Input
+									id={`tt-qty-${i}`}
+									type="number"
+									min="1"
+									step="1"
+									placeholder="—"
+									value={t.max_quantity}
+									onChange={(e) => update(i, { max_quantity: e.target.value })}
+								/>
+							</div>
+							<Button
+								variant="ghost"
+								size="sm"
+								disabled={types.length === 1}
+								onClick={() => remove(i)}
+							>
+								Remove
+							</Button>
+						</div>
+					))}
+					<Button type="button" variant="outline" size="sm" onClick={addAnother}>
+						+ Add another type
+					</Button>
+				</div>
+			)}
+		</div>
+	);
+}
+
+function ModePill({ active, onClick, title, subtitle }) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className={`text-left rounded-lg border px-4 py-3 transition ${
+				active
+					? "border-primary bg-primary/5"
+					: "border-foreground/10 hover:border-foreground/30 bg-background"
+			}`}
+		>
+			<div className="font-medium text-sm">{title}</div>
+			<div className="text-xs text-muted-foreground mt-0.5">{subtitle}</div>
+		</button>
 	);
 }
 
@@ -1493,55 +1755,49 @@ function DiscountsStep({ discounts, selectedId, onChange }) {
 	);
 }
 
-function CustomerStep({ customer, onChange }) {
-	function set(field, value) {
-		onChange({ ...customer, [field]: value });
-	}
+function EventBriefStep({ value, onChange }) {
 	return (
 		<div className="space-y-5">
 			<div>
-				<h2 className="font-display text-2xl tracking-tight">Your details</h2>
+				<h2 className="font-display text-2xl tracking-tight">Tell us about your event</h2>
 				<p className="mt-1 text-sm text-muted-foreground">
-					So we can come back to you.
+					A few sentences is plenty — what you&apos;re putting on, expected
+					attendance, anything we should know.
 				</p>
 			</div>
-			<div className="grid gap-4 sm:grid-cols-2">
-				<div className="space-y-2">
-					<Label htmlFor="first_name">First name</Label>
-					<Input id="first_name" value={customer.first_name} onChange={(e) => set("first_name", e.target.value)} required />
-				</div>
-				<div className="space-y-2">
-					<Label htmlFor="last_name">Last name</Label>
-					<Input id="last_name" value={customer.last_name} onChange={(e) => set("last_name", e.target.value)} required />
-				</div>
-				<div className="space-y-2">
-					<Label htmlFor="email">Email</Label>
-					<Input id="email" type="email" value={customer.email} onChange={(e) => set("email", e.target.value)} required />
-				</div>
-				<div className="space-y-2">
-					<Label htmlFor="phone">Phone</Label>
-					<Input id="phone" type="tel" value={customer.phone} onChange={(e) => set("phone", e.target.value)} />
-				</div>
-				<div className="space-y-2 sm:col-span-2">
-					<Label htmlFor="organisation">Organisation (optional)</Label>
-					<Input id="organisation" value={customer.organisation} onChange={(e) => set("organisation", e.target.value)} />
-				</div>
-				<div className="space-y-2 sm:col-span-2">
-					<Label htmlFor="notes">Anything we should know?</Label>
-					<Textarea
-						id="notes"
-						rows={4}
-						value={customer.notes}
-						onChange={(e) => set("notes", e.target.value)}
-						placeholder="Headline act, attendee numbers, dietary notes, special AV requirements…"
-					/>
-				</div>
+			<div className="space-y-2">
+				<Label htmlFor="event-brief">In a few words, what&apos;s the event?</Label>
+				<Textarea
+					id="event-brief"
+					rows={6}
+					required
+					value={value}
+					onChange={(e) => onChange(e.target.value)}
+					placeholder="e.g. our annual choir concert — around 200 guests, doors at 7, performance 7.30–9.30. We'll bring our own staging."
+				/>
 			</div>
 		</div>
 	);
 }
 
-function ReviewStep({ rooms, room, bookingTypes, eventRows, setupRows, rehearsalRows, teardownRows, facilitySelections, facilityPackages, customer, quote }) {
+function ReviewStep({ rooms, room, bookingTypes, eventRows, setupRows, rehearsalRows, teardownRows, facilitySelections, facilityPackages, identity, eventBrief, quote, ticketingEnabled, ticketSetupMode, pendingTicketTypes }) {
+	const reviewWho = (() => {
+		const sessionEmail = identity.sessionUser?.email || identity.email;
+		if (identity.phase === "pick_org") {
+			const org = identity.myOrgs.find((o) => o.id === identity.selectedOrgId);
+			return { name: sessionEmail, org: org?.name || null };
+		}
+		if (identity.phase === "new_org") {
+			return { name: sessionEmail, org: identity.newOrgName };
+		}
+		if (identity.phase === "new_user") {
+			return {
+				name: `${identity.firstName} ${identity.lastName}`.trim() || identity.email,
+				org: identity.newOrgName,
+			};
+		}
+		return { name: sessionEmail || "—", org: null };
+	})();
 	const totals = quote
 		? {
 			subtotal: quote.subtotal_cents,
@@ -1607,14 +1863,51 @@ function ReviewStep({ rooms, room, bookingTypes, eventRows, setupRows, rehearsal
 						</ul>
 					</div>
 				)}
+				{ticketingEnabled && (
+					<div className="rounded-lg border border-foreground/10 bg-background p-4">
+						<div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+							Ticketing
+						</div>
+						{ticketSetupMode === "now" &&
+						pendingTicketTypes.some(ticketTypeDraftValid) ? (
+							<ul className="mt-2 space-y-1 text-sm">
+								{pendingTicketTypes
+									.filter(ticketTypeDraftValid)
+									.map((t, i) => {
+										const cents = Math.round(Number(t.price_pounds) * 100);
+										return (
+											<li
+												key={i}
+												className="flex items-baseline justify-between gap-4"
+											>
+												<span>
+													{t.name}
+													{t.max_quantity ? ` · cap ${t.max_quantity}` : ""}
+												</span>
+												<span className="font-mono text-muted-foreground">
+													{formatGbp(cents)}
+												</span>
+											</li>
+										);
+									})}
+							</ul>
+						) : (
+							<p className="mt-2 text-sm text-muted-foreground">
+								We&apos;ll set up the ticket types with you after approval.
+							</p>
+						)}
+					</div>
+				)}
+
 				<div className="rounded-lg border border-foreground/10 bg-background p-4">
 					<div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">You</div>
-					<div className="mt-1">
-						{customer.first_name} {customer.last_name}
-						{customer.organisation ? ` · ${customer.organisation}` : ""}
-					</div>
-					<div className="text-sm text-muted-foreground">{customer.email}</div>
-					{customer.notes && <p className="mt-2 text-sm whitespace-pre-line">{customer.notes}</p>}
+					<div className="mt-1">{reviewWho.name}</div>
+					{reviewWho.org && (
+						<div className="text-sm text-muted-foreground">{reviewWho.org}</div>
+					)}
+					{eventBrief && (
+						<p className="mt-2 text-sm whitespace-pre-line">{eventBrief}</p>
+					)}
 				</div>
 				{totals && (
 					<div className="rounded-lg border border-primary/30 bg-primary/5 p-4">

@@ -1,9 +1,8 @@
-import Link from "next/link";
-import Image from "next/image";
 import { Hero } from "@/site/ui/hero";
 import { Section } from "@/site/ui/section";
 import { CtaButton } from "@/site/ui/cta-button";
 import { RoomCard } from "@/site/ui/room-card";
+import { EventCard } from "@/site/ui/event-card";
 import { listPublishedRooms } from "@/db/queries/rooms";
 import { listPublishedEvents } from "@/db/queries/events";
 import { requireCurrentVenue } from "@/db/queries/venue";
@@ -17,18 +16,6 @@ export const metadata = {
 };
 
 export const dynamic = "force-dynamic";
-
-const dateFmt = new Intl.DateTimeFormat("en-GB", {
-	weekday: "short",
-	day: "numeric",
-	month: "short",
-	timeZone: "Europe/London",
-});
-const timeFmt = new Intl.DateTimeFormat("en-GB", {
-	hour: "2-digit",
-	minute: "2-digit",
-	timeZone: "Europe/London",
-});
 
 export default async function HomePage() {
 	const venue = await requireCurrentVenue();
@@ -65,6 +52,7 @@ export default async function HomePage() {
 				subtitle={hero.subtitle ?? "A 400-capacity concert hall, two flexible rooms, a working café, and a team that knows the room. Hire it. Perform in it. Get married in it."}
 				backgroundImage={hero.background_file_id_url ?? undefined}
 				backgroundAlt="Assembly Rooms"
+				backgroundGreyscale={false}
 				actions={
 					<>
 						<CtaButton href="/rooms" size="lg">
@@ -98,58 +86,9 @@ export default async function HomePage() {
 					intro={whatsOnSec.intro ?? "A taste of what's coming up. Some ours, some yours."}
 				>
 					<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-						{upcoming.map((ev) => {
-							const date = ev.starts_at ? new Date(ev.starts_at) : null;
-							const externalHref = ev.external_url || null;
-							const href = externalHref || `/events/${ev.slug}`;
-							return (
-								<Link
-									key={ev.id}
-									href={href}
-									{...(externalHref ? { target: "_blank", rel: "noreferrer" } : {})}
-									className="group relative flex flex-col overflow-hidden rounded-xl border border-foreground/10 bg-card transition hover:border-primary/40 hover:bg-card/80"
-								>
-									<div className="relative h-48 overflow-hidden bg-muted/40">
-										{ev.banner_url && (
-											<Image
-												src={ev.banner_url}
-												alt={ev.title}
-												fill
-												sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
-												className="object-cover grayscale-40 group-hover:grayscale-0 transition duration-500"
-											/>
-										)}
-										<div className="absolute inset-0 bg-linear-to-t from-card via-card/40 to-transparent" />
-										{date && (
-											<div className="absolute left-5 top-5 flex items-baseline gap-2 text-foreground">
-												<span className="font-display text-3xl tracking-tight">
-													{dateFmt.format(date)}
-												</span>
-												<span className="text-xs uppercase tracking-[0.22em] text-foreground/70">
-													{timeFmt.format(date)}
-												</span>
-											</div>
-										)}
-									</div>
-									<div className="flex flex-1 flex-col gap-3 p-6">
-										<div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-											<span className={ev.is_ticketed ? "text-primary" : ""}>
-												{ev.is_ticketed ? "Ticketed" : "Free entry"}
-											</span>
-										</div>
-										<h3 className="font-display text-2xl tracking-tight">{ev.title}</h3>
-										{ev.summary && (
-											<p className="text-sm text-muted-foreground leading-relaxed">
-												{ev.summary}
-											</p>
-										)}
-										<div className="mt-auto pt-4 text-sm font-medium text-primary group-hover:translate-x-0.5 transition">
-											{ev.is_ticketed ? "Get tickets →" : "More info →"}
-										</div>
-									</div>
-								</Link>
-							);
-						})}
+						{upcoming.map((ev) => (
+							<EventCard key={ev.id} event={ev} />
+						))}
 					</div>
 					<div className="mt-12 flex justify-center">
 						<CtaButton href="/whats-on" variant="outline">

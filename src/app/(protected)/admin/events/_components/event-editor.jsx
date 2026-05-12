@@ -23,9 +23,20 @@ import {
 	splitDateTime,
 	combineDateTime,
 } from "@/global/ui/components/date-time-picker";
+import { saveOrganisationAction } from "@/app/(protected)/admin/crm/actions";
+import { ORGANISATION_KINDS } from "@/db/schema/entities/organisation.js";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogDescription,
+} from "@/shadcn/components/ui/dialog";
+import { toast } from "sonner";
 import {
 	saveEventAction,
 	deleteEventAction,
+	cancelEventAction,
 	saveEventFaqsAction,
 	saveTicketTypesAction,
 } from "../actions";
@@ -38,6 +49,8 @@ import OverviewTab from "./overview-tab";
 const NO_VAT = "__none__";
 
 const NO_ORGANISER = "__none__";
+const NO_ORGANISATION = "__none__";
+const CREATE_ORGANISATION = "__create__";
 
 const STATUS_OPTIONS = [
 	{ value: "draft", label: "Draft" },
@@ -73,12 +86,17 @@ export default function EventEditor({
 	initialRoomIds = [],
 	initialOrders = [],
 	initialLinkedExpenses = [],
+	linkedBooking = null,
+	linkedOrganisation = null,
 	rooms = [],
 	vatRates = [],
 	organisers = [],
+	organisations = [],
 	surface = "admin", // "admin" | "hirer"
 	onSubmitForReview = null, // hirer-only: async () => void
 	onSaveBasics = saveEventAction, // override on hirer surface
+	bookingStatus = null, // booking row's status when the event is booking-linked
+	setupMode = false, // when true: render as a stepped post-wizard setup flow
 	backHref = "/admin/events",
 	backLabel = "← All events",
 }) {
@@ -94,12 +112,31 @@ export default function EventEditor({
 	const searchParams = useSearchParams();
 	const urlTab = searchParams?.get("tab");
 
-	const defaultTab = showOverview ? "overview" : "page";
+	// Setup mode flows through these tabs in order, ending at a "submit" step.
+	const SETUP_STEPS = [
+		{ key: "page", label: "Page" },
+		{ key: "tickets", label: "Tickets" },
+		{ key: "addons", label: "Add-ons" },
+		{ key: "discounts", label: "Discounts" },
+		{ key: "submit", label: "Submit" },
+	];
+
+	const defaultTab = setupMode
+		? "page"
+		: showOverview
+			? "overview"
+			: "page";
 	const initialTab =
-		urlTab && (urlTab === "page" || urlTab === "faqs" || TICKETING_TABS.includes(urlTab))
+		!setupMode &&
+		urlTab &&
+		(urlTab === "page" || urlTab === "faqs" || TICKETING_TABS.includes(urlTab))
 			? urlTab
 			: defaultTab;
 	const [tab, setTabState] = useState(initialTab);
+
+	const currentSetupStepIndex = setupMode
+		? Math.max(0, SETUP_STEPS.findIndex((s) => s.key === tab))
+		: -1;
 
 	function setTab(next) {
 		setTabState(next);
@@ -130,6 +167,7 @@ export default function EventEditor({
 		max_occupancy: initialEvent?.max_occupancy ?? "",
 		fee_pass_through: !!initialEvent?.fee_pass_through,
 		event_organiser_id: initialEvent?.event_organiser_id ?? null,
+		organiser_organisation_id: initialEvent?.organiser_organisation_id ?? null,
 		external_url: initialEvent?.external_url ?? "",
 	}));
 	const [banner, setBanner] = useState(initialBanner);
@@ -141,8 +179,37 @@ export default function EventEditor({
 	const [savedMsg, setSavedMsg] = useState(null);
 	const [error, setError] = useState(null);
 
+	const [orgList, setOrgList] = useState(organisations);
+	const [newOrgDraft, setNewOrgDraft] = useState(null);
+	const [creatingOrg, setCreatingOrg] = useState(false);
+
 	function update(field, value) {
 		setDraft((d) => ({ ...d, [field]: value }));
+	}
+
+	async function saveNewOrganisation() {
+		if (!newOrgDraft?.name?.trim()) return;
+		setCreatingOrg(true);
+		try {
+			const res = await saveOrganisationAction({
+				name: newOrgDraft.name.trim(),
+				kind: newOrgDraft.kind,
+				notes: newOrgDraft.notes?.trim() || null,
+			});
+			const created = {
+				id: res.id,
+				name: newOrgDraft.name.trim(),
+				kind: newOrgDraft.kind,
+			};
+			setOrgList((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+			update("organiser_organisation_id", created.id);
+			setNewOrgDraft(null);
+			toast.success("Organisation added");
+		} catch (err) {
+			toast.error(err?.message || "Couldn't create organisation");
+		} finally {
+			setCreatingOrg(false);
+		}
 	}
 
 	function addMinutesToTime(time, minutes) {
@@ -232,11 +299,19 @@ export default function EventEditor({
 	}
 
 	const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+	const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
 
 	async function performDelete() {
 		if (!draft.id) return;
 		await deleteEventAction(draft.id);
 		router.replace("/admin/events");
+	}
+
+	async function performCancel() {
+		if (!draft.id) return;
+		await cancelEventAction(draft.id);
+		setDraft((d) => ({ ...d, status: "cancelled" }));
+		router.refresh();
 	}
 
 	function handleBannerUploaded(record) {
@@ -267,6 +342,15 @@ export default function EventEditor({
 					</div>
 					<div className="flex items-center gap-2">
 						{savedMsg && <span className="text-xs text-muted-foreground">{savedMsg}</span>}
+						{!isHirer && !isNew && draft.status !== "cancelled" && (
+							<Button
+								variant="outline"
+								onClick={() => setConfirmCancelOpen(true)}
+								disabled={saving}
+							>
+								Cancel event
+							</Button>
+						)}
 						{!isHirer && !isNew && (
 							<Button variant="outline" onClick={() => setConfirmDeleteOpen(true)} disabled={saving}>
 								Delete
@@ -279,17 +363,34 @@ export default function EventEditor({
 						>
 							{saving ? "Saving…" : isHirer ? "Save draft" : "Save"}
 						</Button>
-						{isHirer && !isNew && onSubmitForReview && (
-							<Button
-								onClick={async () => {
-									await saveBasics();
-									await onSubmitForReview();
-								}}
-								disabled={saving || !draft.title}
-							>
-								Submit for review
-							</Button>
-						)}
+						{isHirer && !isNew && !setupMode && onSubmitForReview && (() => {
+							const bookingGated =
+								!!initialEvent?.booking_id &&
+								bookingStatus !== "confirmed" &&
+								bookingStatus !== "completed";
+							const gateMsg = bookingGated
+								? "Submit for approval is unlocked once your booking deposit is paid."
+								: null;
+							return (
+								<div className="flex flex-col items-end gap-1">
+									<Button
+										onClick={async () => {
+											await saveBasics();
+											await onSubmitForReview();
+										}}
+										disabled={saving || !draft.title || bookingGated}
+										title={gateMsg ?? undefined}
+									>
+										Submit for approval
+									</Button>
+									{gateMsg && (
+										<span className="text-xs text-muted-foreground max-w-56 text-right">
+											{gateMsg}
+										</span>
+									)}
+								</div>
+							);
+						})()}
 					</div>
 				</div>
 			</div>
@@ -300,8 +401,42 @@ export default function EventEditor({
 				</div>
 			)}
 
+			{setupMode && (
+				<div className="mb-6 rounded-lg border border-foreground/10 bg-card p-4">
+					<ol className="flex flex-wrap items-center gap-2 text-xs">
+						{SETUP_STEPS.map((s, i) => {
+							const done = i < currentSetupStepIndex;
+							const active = i === currentSetupStepIndex;
+							return (
+								<li key={s.key} className="flex items-center gap-2">
+									<span
+										className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${
+											active
+												? "bg-primary/15 text-primary font-medium"
+												: done
+													? "text-foreground/85"
+													: "text-muted-foreground"
+										}`}
+									>
+										<span className="font-mono">{i + 1}</span>
+										{s.label}
+									</span>
+									{i < SETUP_STEPS.length - 1 && (
+										<span aria-hidden className="text-muted-foreground/50">
+											→
+										</span>
+									)}
+								</li>
+							);
+						})}
+					</ol>
+				</div>
+			)}
+
 			<Tabs value={tab} onValueChange={setTab} className="space-y-8">
-				<TabsList className="flex flex-wrap items-center gap-1">
+				<TabsList
+					className={`flex flex-wrap items-center gap-1${setupMode ? " hidden" : ""}`}
+				>
 					{showOverview && (
 						<>
 							<TabsTrigger value="overview">Overview</TabsTrigger>
@@ -422,7 +557,49 @@ export default function EventEditor({
 							</div>
 							{!isHirer && (
 								<div className="space-y-2 sm:col-span-2">
-									<Label>Event organiser</Label>
+									<Label>
+										CRM organisation
+										{!initialEvent?.booking_id && (
+											<span className="text-destructive ml-0.5">*</span>
+										)}
+									</Label>
+									<Select
+										value={draft.organiser_organisation_id ?? NO_ORGANISATION}
+										onValueChange={(v) => {
+											if (v === CREATE_ORGANISATION) {
+												setNewOrgDraft({ name: "", kind: "business", notes: "" });
+												return;
+											}
+											update(
+												"organiser_organisation_id",
+												v === NO_ORGANISATION ? null : v,
+											);
+										}}
+									>
+										<SelectTrigger>
+											<SelectValue placeholder="Pick the organisation running this event" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value={NO_ORGANISATION}>None</SelectItem>
+											{orgList.map((o) => (
+												<SelectItem key={o.id} value={o.id}>
+													{o.name}
+												</SelectItem>
+											))}
+											<SelectItem value={CREATE_ORGANISATION}>+ Create new…</SelectItem>
+										</SelectContent>
+									</Select>
+									<p className="text-xs text-muted-foreground">
+										CRM link used for revenue roll-ups and director reports.
+										{initialEvent?.booking_id
+											? " Inherited from the linked booking; change if needed."
+											: " Required for events without a linked booking."}
+									</p>
+								</div>
+							)}
+							{!isHirer && (
+								<div className="space-y-2 sm:col-span-2">
+									<Label>Event organiser (public)</Label>
 									<Select
 										value={draft.event_organiser_id ?? NO_ORGANISER}
 										onValueChange={(v) =>
@@ -430,7 +607,7 @@ export default function EventEditor({
 										}
 									>
 										<SelectTrigger>
-											<SelectValue placeholder="Pick the organisation hosting this event" />
+											<SelectValue placeholder="Optional — public-facing branded organiser" />
 										</SelectTrigger>
 										<SelectContent>
 											<SelectItem value={NO_ORGANISER}>None</SelectItem>
@@ -442,8 +619,8 @@ export default function EventEditor({
 										</SelectContent>
 									</Select>
 									<p className="text-xs text-muted-foreground">
-										The organisation receiving the ticket revenue. Used when personalising
-										the booking-fee message on the public page.
+										Optional branded entity shown on the public event page (e.g. promoter
+										name and booking-fee copy).
 									</p>
 								</div>
 							)}
@@ -695,10 +872,84 @@ export default function EventEditor({
 							eventId={initialEvent?.id}
 							checkinCode={initialEvent?.checkin_code}
 							linkedExpenses={initialLinkedExpenses}
+							linkedBooking={linkedBooking}
+							linkedOrganisation={linkedOrganisation}
 						/>
 					</TabsContent>
 				)}
+
+				{setupMode && (
+					<TabsContent value="submit" className="space-y-4">
+						<div className="rounded-lg border bg-card p-6 space-y-3">
+							<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
+								Ready to go
+							</h2>
+							<p className="text-sm text-muted-foreground">
+								When you&apos;re happy with everything, submit the event for
+								approval. We&apos;ll review and publish it on the public site.
+								You can keep editing until that happens.
+							</p>
+							{(() => {
+								const bookingGated =
+									!!initialEvent?.booking_id &&
+									bookingStatus !== "confirmed" &&
+									bookingStatus !== "completed";
+								return (
+									<div className="space-y-2">
+										<Button
+											disabled={
+												!onSubmitForReview ||
+												saving ||
+												!draft.title ||
+												bookingGated
+											}
+											onClick={async () => {
+												await saveBasics();
+												await onSubmitForReview?.();
+											}}
+										>
+											Submit for approval
+										</Button>
+										{bookingGated && (
+											<p className="text-xs text-muted-foreground">
+												This event can be submitted once the booking is
+												confirmed (deposit paid).
+											</p>
+										)}
+									</div>
+								);
+							})()}
+						</div>
+					</TabsContent>
+				)}
 			</Tabs>
+
+			{setupMode && (
+				<div className="mt-8 flex items-center justify-between gap-3 border-t border-foreground/10 pt-6">
+					<Button
+						variant="outline"
+						onClick={() => {
+							const prev = SETUP_STEPS[currentSetupStepIndex - 1];
+							if (prev) setTab(prev.key);
+						}}
+						disabled={currentSetupStepIndex === 0}
+					>
+						Back
+					</Button>
+					<div className="text-xs text-muted-foreground">
+						Save your changes on this step before continuing.
+					</div>
+					<Button
+						onClick={() => {
+							const next = SETUP_STEPS[currentSetupStepIndex + 1];
+							if (next) setTab(next.key);
+						}}
+						disabled={currentSetupStepIndex >= SETUP_STEPS.length - 1}
+					>
+						Continue
+					</Button>
+				</div>
+			)}
 
 			<ConfirmDialog
 				open={confirmDeleteOpen}
@@ -709,6 +960,100 @@ export default function EventEditor({
 				destructive
 				onConfirm={performDelete}
 			/>
+
+			<ConfirmDialog
+				open={confirmCancelOpen}
+				onOpenChange={setConfirmCancelOpen}
+				title="Cancel this event?"
+				description={`"${draft.title || "Untitled"}" will be marked as cancelled and pulled from the public listings. The event row stays in place for reporting and refunds — use Delete to remove it entirely.`}
+				confirmLabel="Cancel event"
+				destructive
+				onConfirm={performCancel}
+			/>
+
+			<Dialog
+				open={!!newOrgDraft}
+				onOpenChange={(o) => !o && !creatingOrg && setNewOrgDraft(null)}
+			>
+				<DialogContent className="max-w-md">
+					<DialogHeader>
+						<DialogTitle>Add CRM organisation</DialogTitle>
+						<DialogDescription>
+							Used for revenue roll-ups and director reports.
+						</DialogDescription>
+					</DialogHeader>
+					<form
+						onSubmit={(e) => {
+							e.preventDefault();
+							saveNewOrganisation();
+						}}
+						className="space-y-4"
+					>
+						<div className="space-y-1.5">
+							<Label htmlFor="new-org-name">Name</Label>
+							<Input
+								id="new-org-name"
+								required
+								autoFocus
+								value={newOrgDraft?.name ?? ""}
+								onChange={(e) =>
+									setNewOrgDraft((d) => ({ ...d, name: e.target.value }))
+								}
+								disabled={creatingOrg}
+							/>
+						</div>
+						<div className="space-y-1.5">
+							<Label htmlFor="new-org-kind">Kind</Label>
+							<Select
+								value={newOrgDraft?.kind ?? "business"}
+								onValueChange={(v) =>
+									setNewOrgDraft((d) => ({ ...d, kind: v }))
+								}
+								disabled={creatingOrg}
+							>
+								<SelectTrigger id="new-org-kind">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{ORGANISATION_KINDS.map((k) => (
+										<SelectItem key={k} value={k}>
+											{k.replace(/^./, (c) => c.toUpperCase())}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="space-y-1.5">
+							<Label htmlFor="new-org-notes">Notes (optional)</Label>
+							<Textarea
+								id="new-org-notes"
+								rows={3}
+								value={newOrgDraft?.notes ?? ""}
+								onChange={(e) =>
+									setNewOrgDraft((d) => ({ ...d, notes: e.target.value }))
+								}
+								disabled={creatingOrg}
+							/>
+						</div>
+						<div className="flex justify-end gap-2 pt-2">
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setNewOrgDraft(null)}
+								disabled={creatingOrg}
+							>
+								Cancel
+							</Button>
+							<Button
+								type="submit"
+								disabled={creatingOrg || !newOrgDraft?.name?.trim()}
+							>
+								{creatingOrg ? "Saving…" : "Add organisation"}
+							</Button>
+						</div>
+					</form>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

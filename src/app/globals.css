@@ -185,3 +185,12 @@
   --font-display: var(--font-fraunces);
 }
 
+/* Italic text on the public site is treated as a "highlight" — same intent
+   as a coloured callout span — since the CMS WYSIWYG only exposes bold /
+   italic / link, no colour picker. Authors mark important phrases italic
+   and they pick up the venue's primary colour automatically. */
+.theme-site em,
+.theme-site i {
+  color: var(--primary);
+}
+

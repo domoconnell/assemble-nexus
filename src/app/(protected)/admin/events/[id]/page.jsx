@@ -14,9 +14,11 @@ import {
 	listEventRooms,
 } from "@/db/queries/events";
 import { listEventOrganisers } from "@/db/queries/organisers";
+import { listOrganisations, getOrganisationById } from "@/db/queries/crm";
 import { listRoomsForAdmin } from "@/db/queries/rooms";
 import { listOrdersForEvent } from "@/db/queries/orders";
 import { listExpensesForEvent } from "@/db/queries/finance";
+import { getBookingById } from "@/db/queries/bookings";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import { getFileRecord } from "@/utils/files/files.server";
 import EventEditor from "../_components/event-editor";
@@ -39,6 +41,7 @@ export default async function AdminEventEditPage({ params }) {
 		discounts,
 		vatRates,
 		organisers,
+		organisations,
 		eventRoomLinks,
 		rooms,
 		orders,
@@ -52,11 +55,18 @@ export default async function AdminEventEditPage({ params }) {
 		listTicketDiscounts(ev.id),
 		db.select().from(vat_rate).where(isNull(vat_rate.deletedAt)),
 		listEventOrganisers(venue.id),
+		listOrganisations(venue.id),
 		listEventRooms(ev.id),
 		listRoomsForAdmin(venue.id),
 		listOrdersForEvent(ev.id),
 	]);
-	const linkedExpenses = await listExpensesForEvent(ev.id);
+	const [linkedExpenses, linkedBooking, linkedOrganisation] = await Promise.all([
+		listExpensesForEvent(ev.id),
+		ev.booking_id ? getBookingById(ev.booking_id) : Promise.resolve(null),
+		ev.organiser_organisation_id
+			? getOrganisationById(ev.organiser_organisation_id)
+			: Promise.resolve(null),
+	]);
 	const banner = ev.banner_file_id ? await getFileRecord(ev.banner_file_id) : null;
 	const galleryPhoto = ev.gallery_photo_file_id ? await getFileRecord(ev.gallery_photo_file_id) : null;
 	const evWithExtras = { ...ev, gallery_photo_url: galleryPhoto?.public_url ?? null };
@@ -84,9 +94,12 @@ export default async function AdminEventEditPage({ params }) {
 			initialRoomIds={eventRoomLinks.map((l) => l.room_id)}
 			initialOrders={orders}
 			initialLinkedExpenses={linkedExpenses}
+			linkedBooking={linkedBooking}
+			linkedOrganisation={linkedOrganisation}
 			rooms={rooms}
 			vatRates={vatRates}
 			organisers={organisers}
+			organisations={organisations}
 		/>
 	);
 }

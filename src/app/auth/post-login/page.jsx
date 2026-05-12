@@ -11,7 +11,7 @@ export default async function PostLoginPage() {
 	const { roles } = await getUserAccess(session.user.id);
 
 	if (roles.includes("admin") || roles.includes("staff")) redirect("/admin");
-	if (roles.includes("hirer")) redirect("/my-events");
+	if (roles.includes("hirer")) redirect("/my-bookings");
 	if (roles.includes("delegate")) redirect("/my-tickets");
 
 	redirect("/");

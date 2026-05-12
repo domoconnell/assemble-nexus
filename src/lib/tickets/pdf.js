@@ -110,14 +110,16 @@ const styles = StyleSheet.create({
 	},
 });
 
-export async function buildTicketPdfBuffer(ticket) {
-	const qrDataUrl = await QRCode.toDataURL(ticket.code, {
+async function ticketQrDataUrl(code) {
+	return QRCode.toDataURL(code, {
 		errorCorrectionLevel: "M",
 		margin: 0,
 		width: 800,
 		color: { dark: "#0f172a", light: "#ffffff" },
 	});
+}
 
+function buildTicketPage(ticket, qrDataUrl) {
 	const startDate = ticket.event_starts_at ? new Date(ticket.event_starts_at) : null;
 	const endDate = ticket.event_ends_at ? new Date(ticket.event_ends_at) : null;
 	const doorsDate = ticket.event_doors_open_at ? new Date(ticket.event_doors_open_at) : null;
@@ -132,62 +134,77 @@ export async function buildTicketPdfBuffer(ticket) {
 
 	const invalid = ticket.status !== "valid";
 
-	const doc = React.createElement(
-		Document,
-		null,
+	return React.createElement(
+		Page,
+		{ size: "A4", style: styles.page, key: ticket.code },
+		React.createElement(Text, { style: styles.kicker }, "Ticket"),
+		React.createElement(Text, { style: styles.venue }, ticket.venue_name || "The Assembly Rooms"),
+		React.createElement(Text, { style: styles.eventTitle }, ticket.event_title),
+		React.createElement(Text, { style: styles.dateLine }, dateLabel),
+		timeLabel && React.createElement(Text, { style: styles.timeLine }, doorsLabel ? `${timeLabel} · ${doorsLabel}` : timeLabel),
+
+		React.createElement(View, { style: styles.rule }),
+
 		React.createElement(
-			Page,
-			{ size: "A4", style: styles.page },
-			React.createElement(Text, { style: styles.kicker }, "Ticket"),
-			React.createElement(Text, { style: styles.venue }, ticket.venue_name || "The Assembly Rooms"),
-			React.createElement(Text, { style: styles.eventTitle }, ticket.event_title),
-			React.createElement(Text, { style: styles.dateLine }, dateLabel),
-			timeLabel && React.createElement(Text, { style: styles.timeLine }, doorsLabel ? `${timeLabel} · ${doorsLabel}` : timeLabel),
+			View,
+			{ style: styles.infoRow },
+			React.createElement(Text, { style: styles.infoLabel }, "Ticket"),
+			React.createElement(Text, { style: styles.infoValue }, ticket.ticket_type_label || "—"),
+		),
+		ticket.holder_name && React.createElement(
+			View,
+			{ style: styles.infoRow },
+			React.createElement(Text, { style: styles.infoLabel }, "Holder"),
+			React.createElement(Text, { style: styles.infoValue }, ticket.holder_name),
+		),
+		React.createElement(
+			View,
+			{ style: styles.infoRow },
+			React.createElement(Text, { style: styles.infoLabel }, "Order"),
+			React.createElement(Text, { style: styles.infoValue }, ticket.order_reference),
+		),
 
-			React.createElement(View, { style: styles.rule }),
-
+		React.createElement(
+			View,
+			{ style: styles.qrWrap },
 			React.createElement(
 				View,
-				{ style: styles.infoRow },
-				React.createElement(Text, { style: styles.infoLabel }, "Ticket"),
-				React.createElement(Text, { style: styles.infoValue }, ticket.ticket_type_label || "—"),
+				{ style: styles.qrFrame },
+				React.createElement(Image, { src: qrDataUrl, style: styles.qrImage }),
 			),
-			ticket.holder_name && React.createElement(
-				View,
-				{ style: styles.infoRow },
-				React.createElement(Text, { style: styles.infoLabel }, "Holder"),
-				React.createElement(Text, { style: styles.infoValue }, ticket.holder_name),
-			),
-			React.createElement(
-				View,
-				{ style: styles.infoRow },
-				React.createElement(Text, { style: styles.infoLabel }, "Order"),
-				React.createElement(Text, { style: styles.infoValue }, ticket.order_reference),
-			),
-
-			React.createElement(
-				View,
-				{ style: styles.qrWrap },
-				React.createElement(
-					View,
-					{ style: styles.qrFrame },
-					React.createElement(Image, { src: qrDataUrl, style: styles.qrImage }),
-				),
-				React.createElement(Text, { style: styles.qrCaption }, ticket.code),
-				invalid && React.createElement(
-					Text,
-					{ style: styles.statusBadge },
-					ticket.status === "used" ? "Used" : ticket.status === "refunded" ? "Refunded" : "Void",
-				),
-			),
-
-			React.createElement(
+			React.createElement(Text, { style: styles.qrCaption }, ticket.code),
+			invalid && React.createElement(
 				Text,
-				{ style: styles.footer },
-				"Present this QR at the door — staff will scan to admit you.",
+				{ style: styles.statusBadge },
+				ticket.status === "used" ? "Used" : ticket.status === "refunded" ? "Refunded" : "Void",
 			),
 		),
-	);
 
+		React.createElement(
+			Text,
+			{ style: styles.footer },
+			"Present this QR at the door — staff will scan to admit you.",
+		),
+	);
+}
+
+export async function buildTicketPdfBuffer(ticket) {
+	const qrDataUrl = await ticketQrDataUrl(ticket.code);
+	const doc = React.createElement(Document, null, buildTicketPage(ticket, qrDataUrl));
+	return renderToBuffer(doc);
+}
+
+/**
+ * One PDF, one page per ticket — the customer's bundle for a whole order.
+ * Each ticket has its own QR / holder / status, but they share event + venue
+ * meta. Order is preserved as passed in.
+ */
+export async function buildOrderTicketsPdfBuffer(tickets) {
+	if (!Array.isArray(tickets) || tickets.length === 0) {
+		throw new Error("buildOrderTicketsPdfBuffer requires at least one ticket");
+	}
+	const qrUrls = await Promise.all(tickets.map((t) => ticketQrDataUrl(t.code)));
+	const pages = tickets.map((t, i) => buildTicketPage(t, qrUrls[i]));
+	const doc = React.createElement(Document, null, ...pages);
 	return renderToBuffer(doc);
 }

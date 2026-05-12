@@ -1,0 +1,1 @@
+ALTER TABLE "booking" DROP COLUMN "pending_ticket_types";

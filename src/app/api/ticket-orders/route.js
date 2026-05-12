@@ -5,11 +5,15 @@ import { db } from "@/db/index.js";
 import { ticket_order } from "@/db/schema/entities/ticket_order.js";
 import { ticket_order_line } from "@/db/schema/entities/ticket_order_line.js";
 import { customer as customerTable } from "@/db/schema/entities/customer.js";
+import { user as userTable } from "@/db/schema/entities/user.js";
+import { user_role } from "@/db/schema/entities/user_role.js";
+import { role as roleTable } from "@/db/schema/entities/role.js";
 import { quoteTicketOrder } from "@/lib/ticketing/pricing.js";
 import { generateOrderReference } from "@/lib/ticketing/codes.js";
 import { requireCurrentVenue } from "@/db/queries/venue.js";
 import { getActivePsp } from "@/lib/psp/index.js";
-import { findOrCreateUserForCustomer } from "@/utils/auth/account-linking.js";
+import { getServerSession } from "@/utils/auth/server-guard.js";
+import { startAutoSession, findUserByEmail } from "@/utils/auth/auto-session.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,12 +29,17 @@ const TicketEntrySchema = z.object({
 	addons: z.array(AddonSchema).optional().default([]),
 });
 
-const CustomerSchema = z.object({
+const NewBuyerSchema = z.object({
 	first_name: z.string().min(1).max(120),
 	last_name: z.string().min(1).max(120),
 	email: z.string().email().max(254),
 	phone: z.string().max(80).optional().nullable(),
 });
+
+const IdentitySchema = z.discriminatedUnion("mode", [
+	z.object({ mode: z.literal("session") }),
+	z.object({ mode: z.literal("new_user"), new_user: NewBuyerSchema }),
+]);
 
 const BodySchema = z.object({
 	event_id: z.string().uuid(),
@@ -39,7 +48,7 @@ const BodySchema = z.object({
 	}),
 	codes: z.array(z.string().max(80)).optional().default([]),
 	customer_covers_fee: z.coerce.boolean().optional().default(false),
-	customer: CustomerSchema,
+	identity: IdentitySchema,
 });
 
 function nullify(v) {
@@ -78,23 +87,90 @@ export async function POST(request) {
 		return json(400, { error: "Total must be greater than zero." });
 	}
 
-	// Find or create the buyer's user account + customer row.
-	const c = parsed.data.customer;
-	const user = await findOrCreateUserForCustomer({
-		email: c.email,
-		first_name: c.first_name,
-		last_name: c.last_name,
-		phone: c.phone,
-		roleKey: "delegate",
-	});
+	// Resolve the buyer's user + customer row from the identity payload.
+	// Two modes:
+	//  - session: trust the existing session; reject if absent (dialog enforces this).
+	//  - new_user: brand-new account; reject if email already exists (dialog
+	//    would have routed them through magic-link instead). We create the
+	//    user, generate a session, and return the cookie so the next page
+	//    request is authenticated.
+	let setCookieHeaders = [];
+	let buyerUser = null;
+	let buyerDetails = null;
+
+	if (parsed.data.identity.mode === "session") {
+		const session = await getServerSession();
+		if (!session?.user) {
+			return json(401, { error: "Sign in to complete your purchase." });
+		}
+		buyerUser = session.user;
+		buyerDetails = {
+			first_name: session.user.first_name ?? "",
+			last_name: session.user.last_name ?? "",
+			email: session.user.email,
+			phone: session.user.mobile_number ?? null,
+		};
+	} else {
+		// new_user mode
+		const nu = parsed.data.identity.new_user;
+		const existing = await findUserByEmail(nu.email);
+		if (existing) {
+			return json(409, {
+				error:
+					"An account already exists for that email — sign in with the magic link instead.",
+			});
+		}
+		const [createdUser] = await db
+			.insert(userTable)
+			.values({
+				first_name: nu.first_name.trim(),
+				last_name: nu.last_name.trim(),
+				email: nu.email.trim().toLowerCase(),
+				mobile_number: nullify(nu.phone),
+			})
+			.returning();
+		buyerUser = createdUser;
+		buyerDetails = {
+			first_name: nu.first_name,
+			last_name: nu.last_name,
+			email: nu.email.trim().toLowerCase(),
+			phone: nu.phone ?? null,
+		};
+		// Assign the delegate role so future role-gated pages work.
+		const [delegateRole] = await db
+			.select({ id: roleTable.id })
+			.from(roleTable)
+			.where(eq(roleTable.key, "delegate"))
+			.limit(1);
+		if (delegateRole) {
+			await db
+				.insert(user_role)
+				.values({ user_id: createdUser.id, role_id: delegateRole.id })
+				.onConflictDoNothing();
+		}
+		const ua = request.headers.get("user-agent") ?? null;
+		const ipAddress =
+			request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+		const session = await startAutoSession({
+			userId: createdUser.id,
+			ipAddress,
+			userAgent: ua,
+		});
+		setCookieHeaders = session.setCookieHeaders;
+	}
 
 	// Reuse a customer row for this user if one already exists; otherwise create.
 	let cust = null;
-	if (user?.id) {
+	if (buyerUser?.id) {
 		const rows = await db
 			.select()
 			.from(customerTable)
-			.where(and(eq(customerTable.user_id, user.id), isNull(customerTable.deletedAt)))
+			.where(
+				and(
+					eq(customerTable.user_id, buyerUser.id),
+					isNull(customerTable.deletedAt),
+				),
+			)
 			.limit(1);
 		cust = rows[0] ?? null;
 	}
@@ -103,11 +179,11 @@ export async function POST(request) {
 		[cust] = await db
 			.insert(customerTable)
 			.values({
-				first_name: c.first_name,
-				last_name: c.last_name,
-				email: c.email,
-				phone: nullify(c.phone),
-				user_id: user?.id ?? null,
+				first_name: buyerDetails.first_name,
+				last_name: buyerDetails.last_name,
+				email: buyerDetails.email,
+				phone: nullify(buyerDetails.phone),
+				user_id: buyerUser?.id ?? null,
 			})
 			.returning();
 	}
@@ -130,6 +206,8 @@ export async function POST(request) {
 					total_cents: quote.customer_total_cents ?? quote.total_cents,
 					booking_fee_cents: quote.booking_fee?.cents ?? 0,
 					booking_fee_borne_by: quote.booking_fee?.borne_by ?? "organiser",
+					organiser_net_cents: quote.organiser_receives_cents ?? 0,
+					stripe_fee_estimate_cents: quote.stripe_fee?.estimate_cents ?? 0,
 				})
 				.returning();
 		} catch (err) {
@@ -242,9 +320,13 @@ export async function POST(request) {
 		ticket_order_id: createdOrder.id,
 	});
 
-	return json(201, {
+	const response = json(201, {
 		reference: createdOrder.reference,
 		intent,
 		provider: psp.key,
 	});
+	for (const cookie of setCookieHeaders) {
+		response.headers.append("Set-Cookie", cookie);
+	}
+	return response;
 }

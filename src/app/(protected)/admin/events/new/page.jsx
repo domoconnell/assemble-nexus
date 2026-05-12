@@ -2,6 +2,7 @@ import { isNull } from "drizzle-orm";
 import { db } from "@/db/index.js";
 import { vat_rate } from "@/db/schema/entities/vat_rate.js";
 import { listEventOrganisers } from "@/db/queries/organisers";
+import { listOrganisations } from "@/db/queries/crm";
 import { listRoomsForAdmin } from "@/db/queries/rooms";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import EventEditor from "../_components/event-editor";
@@ -10,9 +11,10 @@ export const dynamic = "force-dynamic";
 
 export default async function NewEventPage() {
 	const venue = await requireCurrentVenue();
-	const [vatRates, organisers, rooms] = await Promise.all([
+	const [vatRates, organisers, organisations, rooms] = await Promise.all([
 		db.select().from(vat_rate).where(isNull(vat_rate.deletedAt)),
 		listEventOrganisers(venue.id),
+		listOrganisations(venue.id),
 		listRoomsForAdmin(venue.id),
 	]);
 	return (
@@ -25,6 +27,7 @@ export default async function NewEventPage() {
 			rooms={rooms}
 			vatRates={vatRates}
 			organisers={organisers}
+			organisations={organisations}
 		/>
 	);
 }

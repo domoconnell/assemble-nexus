@@ -32,7 +32,7 @@ export function RoomCard({ room }) {
 				<div className="absolute inset-0 bg-[radial-gradient(50%_60%_at_30%_30%,oklch(1_0_0/0.05)_0%,transparent_70%)]" />
 				<div className="absolute inset-x-0 bottom-0 h-24 bg-linear-to-t from-card to-transparent" />
 				{capacityLine && (
-					<div className="absolute left-5 top-5 text-[10px] uppercase tracking-[0.22em] text-foreground/70">
+					<div className="absolute left-5 top-5 inline-flex items-center rounded-full border border-foreground/15 bg-background/70 backdrop-blur-sm px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-foreground">
 						{capacityLine}
 					</div>
 				)}

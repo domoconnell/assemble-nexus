@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { json } from "@/utils/auth/auth-guard.js";
 import { db } from "@/db/index.js";
 import { customer } from "@/db/schema/entities/customer.js";
@@ -8,6 +8,10 @@ import { booking_segment } from "@/db/schema/entities/booking_segment.js";
 import { booking_status_event } from "@/db/schema/entities/booking_status_event.js";
 import { booking_facility_selection } from "@/db/schema/entities/booking_facility_selection.js";
 import { room } from "@/db/schema/entities/room.js";
+import { user } from "@/db/schema/entities/user.js";
+import { contact } from "@/db/schema/entities/contact.js";
+import { organisation } from "@/db/schema/entities/organisation.js";
+import { organisation_contact } from "@/db/schema/entities/organisation_contact.js";
 import { priceQuote, computeDeposit } from "@/lib/booking/pricing.js";
 import { generateBookingReference } from "@/lib/booking/reference.js";
 import { requireCurrentVenue } from "@/db/queries/venue.js";
@@ -22,6 +26,8 @@ import {
 	sendStaffNotificationEmail,
 } from "@/utils/email/booking-emails.js";
 import { findOrCreateUserForCustomer } from "@/utils/auth/account-linking.js";
+import { getServerSession } from "@/utils/auth/server-guard.js";
+import { ensureDraftEventForBooking } from "@/lib/events/draft-event.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,18 +45,58 @@ const FacilitySelectionSchema = z.object({
 	quantity: z.coerce.number().int().min(1).max(50).default(1),
 });
 
-const CustomerSchema = z.object({
+const NewOrgSchema = z.object({
+	name: z.string().min(1).max(200),
+	description: z.string().min(1).max(2000),
+});
+
+const NewUserSchema = z.object({
 	first_name: z.string().min(1).max(120),
 	last_name: z.string().min(1).max(120),
 	email: z.string().email().max(254),
 	phone: z.string().max(80).optional().nullable(),
-	organisation: z.string().max(200).optional().nullable(),
 	marketing_opt_in: z.coerce.boolean().optional().default(false),
 });
+
+const AdminCustomerSchema = z.object({
+	first_name: z.string().min(1).max(120),
+	last_name: z.string().min(1).max(120),
+	email: z.string().email().max(254),
+	phone: z.string().max(80).optional().nullable(),
+});
+
+const IdentitySchema = z.discriminatedUnion("mode", [
+	z.object({
+		mode: z.literal("existing_org"),
+		organisation_id: z.string().uuid(),
+	}),
+	z.object({
+		mode: z.literal("new_org_existing_user"),
+		new_org: NewOrgSchema,
+	}),
+	z.object({
+		mode: z.literal("new_user_new_org"),
+		new_user: NewUserSchema,
+		new_org: NewOrgSchema,
+	}),
+	z.object({
+		mode: z.literal("admin_create"),
+		customer: AdminCustomerSchema,
+		organisation_id: z.string().uuid().optional(),
+		new_org: NewOrgSchema.optional(),
+	}),
+]);
 
 const TicketingSchema = z.object({
 	enabled: z.coerce.boolean().optional().default(false),
 	room_id: z.string().uuid().optional().nullable(),
+});
+
+const PendingTicketTypeSchema = z.object({
+	name: z.string().min(1).max(200),
+	price_cents: z.coerce.number().int().min(0).max(100_000_00),
+	max_quantity: z.coerce.number().int().min(1).max(100_000).optional().nullable(),
+	sort_order: z.coerce.number().int().min(0).max(100).optional().default(0),
 });
 
 // `recurrence_rule` is captured client-side after the customer toggled
@@ -69,13 +115,14 @@ const RecurrenceRuleSchema = z
 	.passthrough();
 
 const BodySchema = z.object({
-	customer: CustomerSchema,
+	identity: IdentitySchema,
 	segments: z.array(SegmentSchema).min(1).max(200),
 	facility_selections: z.array(FacilitySelectionSchema).max(40).optional().default([]),
 	discount_id: z.string().uuid().optional().nullable(),
 	ticketing: TicketingSchema.optional().nullable(),
 	customer_notes: z.string().max(2000).optional().nullable(),
 	recurrence_rule: RecurrenceRuleSchema.optional().nullable(),
+	pending_ticket_types: z.array(PendingTicketTypeSchema).max(20).optional().nullable(),
 });
 
 function nullify(v) {
@@ -162,24 +209,23 @@ export async function POST(request) {
 	const depositPolicy = await getActiveDepositPolicy(venue.id);
 	const deposit = computeDeposit({ totalCents: quote.total_cents, depositPolicy });
 
-	const c = parsed.data.customer;
-	const linkedUser = await findOrCreateUserForCustomer({
-		email: c.email,
-		first_name: c.first_name,
-		last_name: c.last_name,
-		phone: c.phone,
-		roleKey: "hirer",
+	const resolved = await resolveIdentity({
+		identity: parsed.data.identity,
+		venueId: venue.id,
 	});
+	if (resolved.error) return json(resolved.status ?? 400, { error: resolved.error });
+
+	const { linkedUser, organisationId, customerSnapshot } = resolved;
 
 	const [createdCustomer] = await db
 		.insert(customer)
 		.values({
-			first_name: c.first_name,
-			last_name: c.last_name,
-			email: c.email,
-			phone: nullify(c.phone),
-			organisation: nullify(c.organisation),
-			marketing_opt_in: !!c.marketing_opt_in,
+			first_name: customerSnapshot.first_name,
+			last_name: customerSnapshot.last_name,
+			email: customerSnapshot.email,
+			phone: nullify(customerSnapshot.phone),
+			organisation: nullify(customerSnapshot.organisation),
+			marketing_opt_in: !!customerSnapshot.marketing_opt_in,
 			user_id: linkedUser.id,
 		})
 		.returning();
@@ -194,6 +240,7 @@ export async function POST(request) {
 					venue_id: venue.id,
 					reference,
 					customer_id: createdCustomer.id,
+					organisation_id: organisationId,
 					status: "pending",
 					subtotal_cents: quote.subtotal_cents,
 					vat_cents: quote.vat_cents,
@@ -282,10 +329,294 @@ export async function POST(request) {
 		note: "Submitted by customer.",
 	});
 
+	const draftEvent = await ensureDraftEventForBooking({
+		booking: createdBooking,
+		customer: createdCustomer,
+		pendingTicketTypes: parsed.data.pending_ticket_types ?? null,
+	});
+
 	await Promise.all([
 		sendEnquiryReceivedEmail({ booking: createdBooking, customer: createdCustomer }),
 		sendStaffNotificationEmail({ booking: createdBooking, customer: createdCustomer }),
 	]);
 
-	return json(201, { reference: createdBooking.reference, id: createdBooking.id });
+	return json(201, {
+		reference: createdBooking.reference,
+		id: createdBooking.id,
+		event_id: draftEvent?.id ?? null,
+	});
+}
+
+/**
+ * Resolve the booking's user + organisation from the identity payload.
+ * - existing_org / new_org_existing_user: require a live session (the user
+ *   identified via magic link earlier in the wizard).
+ * - new_user_new_org: no session needed; user is created from the form.
+ *
+ * Returns { error, status? } on failure; otherwise { linkedUser, organisationId,
+ * customerSnapshot } for the caller to insert customer + booking rows.
+ */
+async function resolveIdentity({ identity, venueId }) {
+	if (identity.mode === "existing_org") {
+		const session = await getServerSession();
+		if (!session?.user) {
+			return { error: "Sign-in expired — please re-verify your email.", status: 401 };
+		}
+		const linkedUser = await loadUserById(session.user.id);
+		if (!linkedUser) return { error: "Account not found.", status: 401 };
+
+		const orgRow = await loadOrgIfOwnedByUser({
+			organisationId: identity.organisation_id,
+			userId: linkedUser.id,
+			venueId,
+		});
+		if (!orgRow) return { error: "Organisation not available.", status: 403 };
+
+		return {
+			linkedUser,
+			organisationId: orgRow.id,
+			customerSnapshot: {
+				first_name: linkedUser.first_name || "",
+				last_name: linkedUser.last_name || "",
+				email: linkedUser.email,
+				phone: linkedUser.mobile_number || null,
+				organisation: orgRow.name,
+				marketing_opt_in: false,
+			},
+		};
+	}
+
+	if (identity.mode === "new_org_existing_user") {
+		const session = await getServerSession();
+		if (!session?.user) {
+			return { error: "Sign-in expired — please re-verify your email.", status: 401 };
+		}
+		const linkedUser = await loadUserById(session.user.id);
+		if (!linkedUser) return { error: "Account not found.", status: 401 };
+
+		const contactRow = await findOrCreateContactForUser({ userRow: linkedUser, venueId });
+		const [orgRow] = await db
+			.insert(organisation)
+			.values({
+				venue_id: venueId,
+				name: identity.new_org.name.trim(),
+				notes: identity.new_org.description.trim(),
+				primary_contact_id: contactRow.id,
+			})
+			.returning();
+		await db
+			.insert(organisation_contact)
+			.values({
+				organisation_id: orgRow.id,
+				contact_id: contactRow.id,
+				role: "primary_booker",
+			})
+			.onConflictDoNothing();
+
+		return {
+			linkedUser,
+			organisationId: orgRow.id,
+			customerSnapshot: {
+				first_name: linkedUser.first_name || "",
+				last_name: linkedUser.last_name || "",
+				email: linkedUser.email,
+				phone: linkedUser.mobile_number || null,
+				organisation: orgRow.name,
+				marketing_opt_in: false,
+			},
+		};
+	}
+
+	if (identity.mode === "admin_create") {
+		const session = await getServerSession();
+		if (!session?.user) {
+			return { error: "Sign in to create bookings.", status: 401 };
+		}
+		const { hasAnyRole, getUserAccess } = await import("@/utils/auth/rbac.js");
+		const access = await getUserAccess(session.user.id);
+		if (!hasAnyRole(access, ["admin", "staff"])) {
+			return { error: "Not authorised to create bookings.", status: 403 };
+		}
+
+		const c = identity.customer;
+		const linkedUser = await findOrCreateUserForCustomer({
+			email: c.email,
+			first_name: c.first_name,
+			last_name: c.last_name,
+			phone: c.phone,
+			roleKey: "hirer",
+		});
+
+		let orgId = identity.organisation_id ?? null;
+		let orgName = null;
+		if (orgId) {
+			const [orgRow] = await db
+				.select({ id: organisation.id, name: organisation.name })
+				.from(organisation)
+				.where(
+					and(
+						eq(organisation.id, orgId),
+						eq(organisation.venue_id, venueId),
+						isNull(organisation.deletedAt),
+					),
+				)
+				.limit(1);
+			if (!orgRow) return { error: "Selected organisation not found.", status: 404 };
+			orgName = orgRow.name;
+			// Make sure the booker is on the contacts for this org so /my-bookings
+			// works for them later.
+			const contactRow = await findOrCreateContactForUser({
+				userRow: linkedUser,
+				venueId,
+			});
+			await db
+				.insert(organisation_contact)
+				.values({
+					organisation_id: orgId,
+					contact_id: contactRow.id,
+					role: "primary_booker",
+				})
+				.onConflictDoNothing();
+		} else if (identity.new_org) {
+			const contactRow = await findOrCreateContactForUser({
+				userRow: linkedUser,
+				venueId,
+			});
+			const [orgRow] = await db
+				.insert(organisation)
+				.values({
+					venue_id: venueId,
+					name: identity.new_org.name.trim(),
+					notes: identity.new_org.description.trim(),
+					primary_contact_id: contactRow.id,
+				})
+				.returning();
+			orgId = orgRow.id;
+			orgName = orgRow.name;
+			await db
+				.insert(organisation_contact)
+				.values({
+					organisation_id: orgId,
+					contact_id: contactRow.id,
+					role: "primary_booker",
+				})
+				.onConflictDoNothing();
+		} else {
+			return {
+				error: "Pick an organisation or create one for this booking.",
+				status: 400,
+			};
+		}
+
+		return {
+			linkedUser,
+			organisationId: orgId,
+			customerSnapshot: {
+				first_name: c.first_name,
+				last_name: c.last_name,
+				email: c.email,
+				phone: c.phone,
+				organisation: orgName,
+				marketing_opt_in: false,
+			},
+		};
+	}
+
+	// new_user_new_org
+	const nu = identity.new_user;
+	const linkedUser = await findOrCreateUserForCustomer({
+		email: nu.email,
+		first_name: nu.first_name,
+		last_name: nu.last_name,
+		phone: nu.phone,
+		roleKey: "hirer",
+	});
+
+	const contactRow = await findOrCreateContactForUser({ userRow: linkedUser, venueId });
+	const [orgRow] = await db
+		.insert(organisation)
+		.values({
+			venue_id: venueId,
+			name: identity.new_org.name.trim(),
+			notes: identity.new_org.description.trim(),
+			primary_contact_id: contactRow.id,
+		})
+		.returning();
+	await db
+		.insert(organisation_contact)
+		.values({
+			organisation_id: orgRow.id,
+			contact_id: contactRow.id,
+			role: "primary_booker",
+		})
+		.onConflictDoNothing();
+
+	return {
+		linkedUser,
+		organisationId: orgRow.id,
+		customerSnapshot: {
+			first_name: nu.first_name,
+			last_name: nu.last_name,
+			email: nu.email,
+			phone: nu.phone,
+			organisation: orgRow.name,
+			marketing_opt_in: nu.marketing_opt_in,
+		},
+	};
+}
+
+async function loadUserById(userId) {
+	const [u] = await db
+		.select()
+		.from(user)
+		.where(eq(user.id, userId))
+		.limit(1);
+	return u ?? null;
+}
+
+async function loadOrgIfOwnedByUser({ organisationId, userId, venueId }) {
+	const rows = await db
+		.select({ id: organisation.id, name: organisation.name })
+		.from(organisation)
+		.innerJoin(organisation_contact, eq(organisation_contact.organisation_id, organisation.id))
+		.innerJoin(contact, eq(contact.id, organisation_contact.contact_id))
+		.where(
+			and(
+				eq(organisation.id, organisationId),
+				eq(organisation.venue_id, venueId),
+				eq(contact.user_id, userId),
+				isNull(organisation.deletedAt),
+				isNull(contact.deletedAt),
+			),
+		)
+		.limit(1);
+	return rows[0] ?? null;
+}
+
+async function findOrCreateContactForUser({ userRow, venueId }) {
+	const [existing] = await db
+		.select()
+		.from(contact)
+		.where(
+			and(
+				eq(contact.venue_id, venueId),
+				eq(contact.user_id, userRow.id),
+				isNull(contact.deletedAt),
+			),
+		)
+		.limit(1);
+	if (existing) return existing;
+
+	const [created] = await db
+		.insert(contact)
+		.values({
+			venue_id: venueId,
+			first_name: userRow.first_name || "",
+			last_name: userRow.last_name || "",
+			email: userRow.email,
+			phone: userRow.mobile_number || null,
+			user_id: userRow.id,
+		})
+		.returning();
+	return created;
 }

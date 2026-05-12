@@ -1,0 +1,1 @@
+ALTER TABLE "booking" ADD COLUMN "pending_ticket_types" jsonb;

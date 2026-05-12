@@ -9,7 +9,6 @@ import {
 	getSucceededIntentForOrder,
 	getPendingIntentForOrder,
 } from "@/db/queries/orders";
-import { getTicketingSettings } from "@/db/queries/settings";
 import { customer } from "@/db/schema/entities/customer.js";
 import { event } from "@/db/schema/entities/event.js";
 import OrderRefundActions from "../../../_components/order-refund-actions";
@@ -58,6 +57,9 @@ export default async function AdminOrderDetailPage({ params }) {
 			total_cents: ticket_order.total_cents,
 			booking_fee_cents: ticket_order.booking_fee_cents,
 			booking_fee_borne_by: ticket_order.booking_fee_borne_by,
+			organiser_net_cents: ticket_order.organiser_net_cents,
+			stripe_fee_estimate_cents: ticket_order.stripe_fee_estimate_cents,
+			stripe_fee_actual_cents: ticket_order.stripe_fee_actual_cents,
 			createdAt: ticket_order.createdAt,
 			paid_at: ticket_order.paid_at,
 			cancelled_at: ticket_order.cancelled_at,
@@ -95,27 +97,17 @@ export default async function AdminOrderDetailPage({ params }) {
 	const usedTickets = tickets.filter((t) => t.status === "used").length;
 	const voidTickets = tickets.filter((t) => t.status !== "valid").length;
 
-	// Resolve booking fee for display. Use the stored snapshot when present;
-	// otherwise project from current ticketing settings (older orders predate the
-	// snapshot column, but the user still expects to see the organiser's net).
-	const ticketingSettings = await getTicketingSettings(row.venue_id);
-	const orderValue = row.subtotal_cents + row.vat_cents;
-	let feeCents = row.booking_fee_cents ?? 0;
-	let feeIsEstimate = false;
-	if (
-		feeCents === 0 &&
-		(row.status === "paid" || row.status === "partially_refunded") &&
-		ticketingSettings
-	) {
-		const pct = ticketingSettings.platform_fee_pct_x100 ?? 0;
-		const flat = ticketingSettings.platform_fee_flat_cents ?? 0;
-		if (orderValue > 0 && (pct > 0 || flat > 0)) {
-			feeCents = Math.round((orderValue * pct) / 10000) + flat;
-			feeIsEstimate = true;
-		}
-	}
+	// Display reads from stored snapshot only — what the customer was actually
+	// charged at order time. We deliberately don't project current ticketing
+	// settings onto historical orders, otherwise the organiser-net captured at
+	// order time and the projected fee would contradict each other on screen.
+	const feeCents = row.booking_fee_cents ?? 0;
 	const organiserPaidFee = row.booking_fee_borne_by !== "customer";
-	const organiserReceives = organiserPaidFee ? orderValue - feeCents : orderValue;
+	const organiserReceives = row.organiser_net_cents ?? 0;
+	const stripeFee = row.stripe_fee_actual_cents ?? row.stripe_fee_estimate_cents ?? 0;
+	const stripeIsActual = row.stripe_fee_actual_cents != null;
+	const isPaid = row.status === "paid" || row.status === "partially_refunded";
+	const venueProfit = isPaid ? feeCents - stripeFee : null;
 
 	const activeIntent = succeededIntent ?? pendingIntent;
 	const canRefund = row.status === "paid" || row.status === "partially_refunded";
@@ -245,7 +237,7 @@ export default async function AdminOrderDetailPage({ params }) {
 
 				<aside className="space-y-6">
 					<section className="rounded-lg border border-primary/30 bg-primary/5 p-6 space-y-3">
-						<h2 className="text-xs uppercase tracking-[0.22em] text-primary">Total paid</h2>
+						<h2 className="text-xs uppercase tracking-[0.22em] text-primary">Customer paid</h2>
 						<div className="font-display text-3xl tracking-tight">
 							{formatGbp(row.total_cents)}
 						</div>
@@ -269,26 +261,68 @@ export default async function AdminOrderDetailPage({ params }) {
 							{feeCents > 0 && (
 								<div className="flex justify-between">
 									<dt className="text-muted-foreground">
-										Booking fee ({organiserPaidFee ? "absorbed" : "added"})
-										{feeIsEstimate && (
-											<span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 ml-1">
-												est.
-											</span>
-										)}
+										Booking fee{" "}
+										{organiserPaidFee
+											? "(deducted from organiser)"
+											: "(added to customer total)"}
 									</dt>
-									<dd className="font-mono">
-										{organiserPaidFee ? "−" : ""}
-										{formatGbp(feeCents)}
-									</dd>
+									<dd className="font-mono">{formatGbp(feeCents)}</dd>
+								</div>
+							)}
+							{feeCents === 0 && isPaid && (
+								<div className="flex justify-between text-muted-foreground">
+									<dt>Booking fee</dt>
+									<dd className="font-mono italic">none charged</dd>
 								</div>
 							)}
 						</dl>
-						<div className="pt-3 border-t border-foreground/10 text-sm">
-							<div className="flex justify-between">
-								<span className="text-muted-foreground">Organiser receives</span>
-								<span className="font-mono">{formatGbp(organiserReceives)}</span>
+					</section>
+
+					<section className="rounded-lg border bg-card p-6 space-y-3">
+						<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+							Where the money goes
+						</h2>
+						<dl className="space-y-2 text-sm">
+							<div className="flex items-baseline justify-between gap-3">
+								<dt className="min-w-0">
+									Organiser net
+									<span className="block text-xs text-muted-foreground">
+										Owed to the event organiser
+									</span>
+								</dt>
+								<dd className="font-mono shrink-0">{formatGbp(organiserReceives)}</dd>
 							</div>
-						</div>
+							<div className="flex items-baseline justify-between gap-3 text-muted-foreground">
+								<dt className="min-w-0">
+									{stripeIsActual ? "Stripe fee" : "Stripe fee (est.)"}
+									<span className="block text-xs text-muted-foreground/80">
+										{stripeIsActual ? "Actual from Stripe" : "Estimate until webhook lands"}
+									</span>
+								</dt>
+								<dd className="font-mono shrink-0">
+									{isPaid ? `−${formatGbp(stripeFee)}` : "—"}
+								</dd>
+							</div>
+							<div
+								className={`border-t border-foreground/10 pt-2 flex items-baseline justify-between gap-3 font-medium ${
+									venueProfit == null
+										? "text-muted-foreground"
+										: venueProfit >= 0
+											? "text-primary"
+											: "text-destructive"
+								}`}
+							>
+								<dt>Venue profit</dt>
+								<dd className="font-mono">
+									{venueProfit == null ? "—" : formatGbp(venueProfit)}
+								</dd>
+							</div>
+						</dl>
+						{!isPaid && (
+							<p className="text-xs text-muted-foreground">
+								Breakdown locks in when the order is paid.
+							</p>
+						)}
 					</section>
 
 					<section className="rounded-lg border bg-card p-6 space-y-3">

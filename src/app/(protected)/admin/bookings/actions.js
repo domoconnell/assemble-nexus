@@ -14,11 +14,7 @@ import {
 	listBookingSegments,
 } from "@/db/queries/bookings.js";
 import { room } from "@/db/schema/entities/room.js";
-import {
-	findOrganiserByEmailDomain,
-	linkUserToOrganiser,
-} from "@/db/queries/organisers.js";
-import { generateUniqueEventSlug } from "@/lib/events/slug.js";
+import { ensureDraftEventForBooking } from "@/lib/events/draft-event.js";
 import { expandWeeklyPattern } from "@/lib/booking/recurrence.js";
 import { booking_segment } from "@/db/schema/entities/booking_segment.js";
 import { requireServerSession } from "@/utils/auth/server-guard.js";
@@ -26,43 +22,6 @@ import {
 	sendBookingApprovedEmail,
 	sendBookingRejectedEmail,
 } from "@/utils/email/booking-emails.js";
-
-async function maybeCreateDraftEvent({ booking: b, customer: cust }) {
-	if (!b.ticketing_enabled) return null;
-
-	// Match an organiser by the customer's email domain (e.g. assemblechurch.com).
-	let organiserId = null;
-	if (cust?.email) {
-		const org = await findOrganiserByEmailDomain(b.venue_id, cust.email);
-		if (org) organiserId = org.id;
-	}
-
-	// Link the booker's user to the matched organiser so they can edit the event.
-	if (organiserId && cust?.user_id) {
-		await linkUserToOrganiser({
-			userId: cust.user_id,
-			organiserId,
-			role: "member",
-		});
-	}
-
-	const seedTitle = `Event for ${b.reference}`;
-	const slug = await generateUniqueEventSlug(b.venue_id, seedTitle);
-	const [inserted] = await db
-		.insert(event)
-		.values({
-			venue_id: b.venue_id,
-			slug,
-			title: seedTitle,
-			status: "draft",
-			visibility: "private",
-			is_ticketed: true,
-			booking_id: b.id,
-			event_organiser_id: organiserId,
-		})
-		.returning();
-	return inserted;
-}
 
 async function gateAdmin() {
 	return requireServerSession({ redirectTo: "/auth/login" });
@@ -147,7 +106,12 @@ export async function approveBookingAction(input) {
 	});
 
 	const [cust] = await db.select().from(customer).where(eq(customer.id, b.customer_id)).limit(1);
-	const draftEvent = await maybeCreateDraftEvent({ booking: updated, customer: cust });
+	// Safety net for older bookings that pre-date the submission-time hook —
+	// the helper is a no-op when an event already exists.
+	const draftEvent = await ensureDraftEventForBooking({
+		booking: updated,
+		customer: cust,
+	});
 
 	if (cust) {
 		await sendBookingApprovedEmail({
@@ -162,6 +126,7 @@ export async function approveBookingAction(input) {
 	revalidatePath(`/admin/bookings/${b.id}`);
 	revalidatePath(`/booking/${b.reference}`);
 	revalidatePath("/admin/events");
+	revalidatePath("/my-bookings");
 	revalidatePath("/my-events");
 }
 

@@ -220,6 +220,19 @@ function feeOn(amount_cents, settings) {
 	return Math.round((amount_cents * pctX100) / 10000) + flat;
 }
 
+/**
+ * Expected Stripe processing fee for a given customer-charge amount.
+ * Defaults to UK standard card rate (1.4% + 20p) when no setting is configured.
+ * Replaced by the real value from the Stripe webhook's `balance_transaction`
+ * when that lands.
+ */
+export function estimateStripeFee(amount_cents, settings) {
+	if (amount_cents <= 0) return 0;
+	const pctX100 = settings?.stripe_fee_pct_x100 ?? 140;
+	const flat = settings?.stripe_fee_flat_cents ?? 20;
+	return Math.round((amount_cents * pctX100) / 10000) + flat;
+}
+
 function customerCoversFeeAmount(orderValue_cents, settings) {
 	const pctX100 = settings?.platform_fee_pct_x100 ?? 0;
 	const flat = settings?.platform_fee_flat_cents ?? 0;
@@ -508,6 +521,11 @@ export async function quoteTicketOrder({ eventId, cart, codes = [], customerCove
 			fee_if_customer_pays_cents,
 			pct_x100: ticketingSettings?.platform_fee_pct_x100 ?? 0,
 			flat_cents: ticketingSettings?.platform_fee_flat_cents ?? 0,
+		},
+		stripe_fee: {
+			estimate_cents: estimateStripeFee(customer_total_cents, ticketingSettings),
+			pct_x100: ticketingSettings?.stripe_fee_pct_x100 ?? 140,
+			flat_cents: ticketingSettings?.stripe_fee_flat_cents ?? 20,
 		},
 		organiser: organiser
 			? { id: organiser.id, name: organiser.name }

@@ -388,12 +388,69 @@ export async function sumBookingIncomeForMonth(venueId, monthStartDate, monthEnd
 	return Number(deposits?.total ?? 0) + Number(balances?.total ?? 0);
 }
 
+/**
+ * Gross ticket income for the month — the full `total_cents` of every paid
+ * order at this venue. The waterfall view treats this as "money in" and
+ * deducts organiser payouts + Stripe fees from it via the cost-of-delivery
+ * line below.
+ */
 export async function sumTicketIncomeForMonth(venueId, monthStartDate, monthEndDate) {
-	// Sum of ticket_order.total_cents for orders paid in the target month, for
-	// events at this venue.
 	const endIso = monthEndDate.toISOString();
 	const [r] = await db
-		.select({ total: sql`coalesce(sum(${ticket_order.total_cents}), 0)` })
+		.select({
+			total: sql`coalesce(sum(${ticket_order.total_cents}), 0)::int`,
+		})
+		.from(ticket_order)
+		.innerJoin(event, eq(event.id, ticket_order.event_id))
+		.where(
+			and(
+				eq(event.venue_id, venueId),
+				gte(ticket_order.paid_at, monthStartDate),
+				sql`${ticket_order.paid_at} < ${endIso}`,
+				sql`${ticket_order.status} in ('paid', 'partially_refunded')`,
+				isNull(ticket_order.deletedAt),
+			),
+		);
+	return Number(r?.total ?? 0);
+}
+
+/**
+ * Money owed to event organisers from paid orders this month. Only counts
+ * events with a CRM organiser linked — events without one keep the cash on
+ * the venue's books.
+ */
+export async function sumOrganiserPayoutsForMonth(venueId, monthStartDate, monthEndDate) {
+	const endIso = monthEndDate.toISOString();
+	const [r] = await db
+		.select({
+			total: sql`coalesce(sum(${ticket_order.organiser_net_cents}), 0)::int`,
+		})
+		.from(ticket_order)
+		.innerJoin(event, eq(event.id, ticket_order.event_id))
+		.where(
+			and(
+				eq(event.venue_id, venueId),
+				sql`${event.organiser_organisation_id} is not null`,
+				gte(ticket_order.paid_at, monthStartDate),
+				sql`${ticket_order.paid_at} < ${endIso}`,
+				sql`${ticket_order.status} in ('paid', 'partially_refunded')`,
+				isNull(ticket_order.deletedAt),
+			),
+		);
+	return Number(r?.total ?? 0);
+}
+
+/**
+ * Stripe processing fees on paid orders this month. Uses
+ * `stripe_fee_actual_cents` when known (set by the webhook once that's
+ * wired) and the estimate otherwise.
+ */
+export async function sumStripeFeesForMonth(venueId, monthStartDate, monthEndDate) {
+	const endIso = monthEndDate.toISOString();
+	const [r] = await db
+		.select({
+			total: sql`coalesce(sum(coalesce(${ticket_order.stripe_fee_actual_cents}, ${ticket_order.stripe_fee_estimate_cents}, 0)), 0)::int`,
+		})
 		.from(ticket_order)
 		.innerJoin(event, eq(event.id, ticket_order.event_id))
 		.where(
@@ -418,6 +475,47 @@ export async function sumTicketIncomeForMonth(venueId, monthStartDate, monthEndD
  * `monthStartDate` / `monthEndDate` are JS Date instances for the same
  * boundaries (used against timestamptz columns).
  */
+/**
+ * Roll-up of monthly P&L for the last `monthsBack` months ending at `endYm`
+ * (inclusive). Returns an array oldest-first, each row matching
+ * `getMonthlyPnl`'s shape plus a `ym` identifier so the dashboard chart can
+ * key by month.
+ *
+ * Currently iterates per-month — fine for the 12-month dashboard window.
+ */
+export async function listMonthlyPnlForRange(venueId, { endYm, monthsBack = 12 } = {}) {
+	const [endYear, endMonth] = endYm.split("-").map(Number);
+	const months = [];
+	let year = endYear;
+	let month1 = endMonth;
+	for (let i = 0; i < monthsBack; i++) {
+		months.unshift({ year, month1, ym: `${year}-${String(month1).padStart(2, "0")}` });
+		if (month1 === 1) {
+			month1 = 12;
+			year -= 1;
+		} else {
+			month1 -= 1;
+		}
+	}
+	const results = [];
+	for (const m of months) {
+		const next =
+			m.month1 === 12
+				? { year: m.year + 1, month1: 1 }
+				: { year: m.year, month1: m.month1 + 1 };
+		const ymdStart = `${m.year}-${String(m.month1).padStart(2, "0")}-01`;
+		const ymdEnd = `${next.year}-${String(next.month1).padStart(2, "0")}-01`;
+		const pnl = await getMonthlyPnl(venueId, {
+			ymdFirstOfMonth: ymdStart,
+			ymdFirstOfNextMonth: ymdEnd,
+			monthStartDate: new Date(`${ymdStart}T00:00:00Z`),
+			monthEndDate: new Date(`${ymdEnd}T00:00:00Z`),
+		});
+		results.push({ ym: m.ym, year: m.year, month1: m.month1, ...pnl });
+	}
+	return results;
+}
+
 export async function getMonthlyPnl(venueId, {
 	ymdFirstOfMonth,
 	ymdFirstOfNextMonth,
@@ -431,6 +529,8 @@ export async function getMonthlyPnl(venueId, {
 		manual,
 		expenses_delivery,
 		recurring,
+		organiser_payouts,
+		stripe_fees,
 	] = await Promise.all([
 		sumTicketIncomeForMonth(venueId, monthStartDate, monthEndDate),
 		sumBookingIncomeForMonth(venueId, monthStartDate, monthEndDate),
@@ -438,6 +538,8 @@ export async function getMonthlyPnl(venueId, {
 		sumManualIncomeForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth),
 		sumExpensesForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth),
 		getAllMonthlyRecurringAmounts(venueId, ymdFirstOfMonth),
+		sumOrganiserPayoutsForMonth(venueId, monthStartDate, monthEndDate),
+		sumStripeFeesForMonth(venueId, monthStartDate, monthEndDate),
 	]);
 
 	const income = {
@@ -448,7 +550,17 @@ export async function getMonthlyPnl(venueId, {
 		total: ticket_income + booking_income + pos.net + manual,
 	};
 
-	const cost_of_delivery = expenses_delivery + pos.cogs;
+	// Cost of delivery now includes organiser payouts + Stripe fees so the
+	// waterfall reads as "money in → minus everything we have to spend to
+	// deliver the service → what's left for fixed costs and ministry gift".
+	const cost_of_delivery_breakdown = {
+		expenses: expenses_delivery,
+		pos_cogs: pos.cogs,
+		organiser_payouts,
+		stripe_fees,
+	};
+	const cost_of_delivery =
+		expenses_delivery + pos.cogs + organiser_payouts + stripe_fees;
 
 	const fixed = {
 		utilities: recurring.utilities ?? 0,
@@ -463,8 +575,11 @@ export async function getMonthlyPnl(venueId, {
 	return {
 		income,
 		cost_of_delivery,
+		cost_of_delivery_breakdown,
 		expenses_delivery,
 		pos_cogs: pos.cogs,
+		organiser_payouts,
+		stripe_fees,
 		fixed,
 		fixed_total,
 		ministry_gift,

@@ -56,6 +56,7 @@ const EventBaseSchema = z.object({
 	max_occupancy: z.coerce.number().int().min(0).optional().nullable(),
 	fee_pass_through: z.coerce.boolean().optional().default(false),
 	event_organiser_id: z.string().uuid().optional().nullable(),
+	organiser_organisation_id: z.string().uuid().optional().nullable(),
 	external_url: z.string().max(500).optional().nullable(),
 	commission_pct_x100: z.coerce.number().int().min(0).max(10000).optional().nullable(),
 	commission_flat_cents: z.coerce.number().int().min(0).optional().nullable(),
@@ -82,8 +83,17 @@ export async function saveEventAction(input) {
 		doors_open_at: nullify(input.doors_open_at),
 		booking_id: nullify(input.booking_id),
 		event_organiser_id: nullify(input.event_organiser_id),
+		organiser_organisation_id: nullify(input.organiser_organisation_id),
 		external_url: nullify(input.external_url),
 	});
+
+	// Events without a linked booking must have a CRM organisation set so the
+	// ministry-gift formula and per-org roll-ups have a clear owner.
+	if (!parsed.booking_id && !parsed.organiser_organisation_id) {
+		throw new Error(
+			"Pick a CRM organisation for this event — required when it isn't linked to a booking.",
+		);
+	}
 
 	const venue = await requireCurrentVenue();
 
@@ -120,6 +130,7 @@ export async function saveEventAction(input) {
 		max_occupancy: parsed.max_occupancy ?? null,
 		fee_pass_through: !!parsed.fee_pass_through,
 		event_organiser_id: parsed.event_organiser_id ?? null,
+		organiser_organisation_id: parsed.organiser_organisation_id ?? null,
 		external_url: parsed.external_url ?? null,
 		commission_pct_x100: parsed.commission_pct_x100 ?? null,
 		commission_flat_cents: parsed.commission_flat_cents ?? null,
@@ -162,6 +173,29 @@ export async function deleteEventAction(id) {
 	await db.update(event).set({ deletedAt: new Date(), status: "cancelled" }).where(eq(event.id, id));
 	revalidatePath("/admin/events");
 	revalidatePath("/whats-on");
+}
+
+/**
+ * Cancel (soft-cancel) an event without deleting it — leaves the row in
+ * place for historical reporting but flips status to "cancelled". The
+ * public page is removed from listings (filter excludes cancelled), and
+ * the ledger / orders still link to it for refund-friendly accounting.
+ */
+export async function cancelEventAction(id) {
+	await gateAdmin();
+	const [e] = await db.select().from(event).where(eq(event.id, id)).limit(1);
+	if (!e) return;
+	if (e.status === "cancelled") return e;
+	const [updated] = await db
+		.update(event)
+		.set({ status: "cancelled" })
+		.where(eq(event.id, id))
+		.returning();
+	revalidatePath("/admin/events");
+	revalidatePath(`/admin/events/${id}`);
+	revalidatePath("/whats-on");
+	revalidatePath(`/events/${e.slug}`);
+	return updated;
 }
 
 const FaqRowSchema = z.object({

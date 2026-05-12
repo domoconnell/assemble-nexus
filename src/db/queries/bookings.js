@@ -284,6 +284,177 @@ export async function countPendingBookings(venueId) {
 	return rows.length;
 }
 
+/**
+ * Total outstanding across approved/confirmed bookings — what hirers
+ * still owe the venue. Excludes pending (not yet approved) and finished
+ * statuses.
+ */
+export async function sumOutstandingBalances(venueId) {
+	const [row] = await db
+		.select({
+			total_cents: sql`coalesce(sum(${booking.total_cents}), 0)::int`,
+			paid_cents: sql`coalesce(sum(${booking.deposit_paid_cents} + ${booking.balance_paid_cents}), 0)::int`,
+		})
+		.from(booking)
+		.where(
+			and(
+				eq(booking.venue_id, venueId),
+				inArray(booking.status, ["approved", "confirmed"]),
+				isNull(booking.deletedAt),
+			),
+		);
+	const total = Number(row?.total_cents ?? 0);
+	const paid = Number(row?.paid_cents ?? 0);
+	return Math.max(0, total - paid);
+}
+
+/**
+ * Booking segments overlapping the [start, end) window. Used by the
+ * admin dashboard's "today" and "next 7 days" views. Joins through to
+ * room and booking so the UI can render meaningfully.
+ */
+export async function listSegmentsInRange(venueId, start, end) {
+	return db
+		.select({
+			segment_id: booking_segment.id,
+			starts_at: booking_segment.starts_at,
+			ends_at: booking_segment.ends_at,
+			booking_id: booking.id,
+			booking_reference: booking.reference,
+			booking_status: booking.status,
+			room_id: room.id,
+			room_name: room.name,
+		})
+		.from(booking_segment)
+		.innerJoin(booking, eq(booking_segment.booking_id, booking.id))
+		.innerJoin(room, eq(booking_segment.room_id, room.id))
+		.where(
+			and(
+				eq(booking.venue_id, venueId),
+				isNull(booking.deletedAt),
+				notInArray(booking.status, ["rejected", "cancelled"]),
+				lt(booking_segment.starts_at, end),
+				gt(booking_segment.ends_at, start),
+			),
+		)
+		.orderBy(asc(booking_segment.starts_at));
+}
+
+/**
+ * Events (with their picked rooms) whose start falls inside the window.
+ * Dashboard pairs this with `listSegmentsInRange` for a unified view.
+ */
+/**
+ * Blockouts whose window overlaps [start, end). The room link is left-joined
+ * so venue-wide blockouts (no rooms linked) still come through with a null
+ * room_name.
+ */
+export async function listBlockoutsInRange(venueId, start, end) {
+	return db
+		.select({
+			id: room_blockout.id,
+			starts_at: room_blockout.starts_at,
+			ends_at: room_blockout.ends_at,
+			reason: room_blockout.reason,
+			is_public: room_blockout.is_public,
+			room_id: room.id,
+			room_name: room.name,
+		})
+		.from(room_blockout)
+		.leftJoin(room_blockout_room, eq(room_blockout_room.blockout_id, room_blockout.id))
+		.leftJoin(room, eq(room.id, room_blockout_room.room_id))
+		.where(
+			and(
+				eq(room_blockout.venue_id, venueId),
+				isNull(room_blockout.deletedAt),
+				lt(room_blockout.starts_at, end),
+				gt(room_blockout.ends_at, start),
+			),
+		)
+		.orderBy(asc(room_blockout.starts_at));
+}
+
+/**
+ * Per-day activity counts for the dashboard's calendar heatmap. Returns a
+ * map keyed by ISO date (London local) with counts of bookings, events,
+ * and blockouts that touch that day.
+ */
+export async function listDayActivityForMonth(venueId, monthStartDate, monthEndDate) {
+	const start = monthStartDate;
+	const end = monthEndDate;
+	const [segments, events, blockouts] = await Promise.all([
+		listSegmentsInRange(venueId, start, end),
+		listEventsInRange(venueId, start, end),
+		db
+			.select({
+				id: room_blockout.id,
+				starts_at: room_blockout.starts_at,
+				ends_at: room_blockout.ends_at,
+			})
+			.from(room_blockout)
+			.where(
+				and(
+					eq(room_blockout.venue_id, venueId),
+					isNull(room_blockout.deletedAt),
+					lt(room_blockout.starts_at, end),
+					gt(room_blockout.ends_at, start),
+				),
+			),
+	]);
+
+	const map = new Map();
+	const touch = (key, type) => {
+		const e = map.get(key) ?? { bookings: 0, events: 0, blockouts: 0, total: 0 };
+		e[type] += 1;
+		e.total += 1;
+		map.set(key, e);
+	};
+	const dayKey = (d) =>
+		new Intl.DateTimeFormat("en-CA", {
+			timeZone: "Europe/London",
+			year: "numeric",
+			month: "2-digit",
+			day: "2-digit",
+		}).format(d);
+
+	for (const s of segments) {
+		touch(dayKey(new Date(s.starts_at)), "bookings");
+	}
+	for (const ev of events) {
+		if (ev.starts_at) touch(dayKey(new Date(ev.starts_at)), "events");
+	}
+	for (const b of blockouts) {
+		touch(dayKey(new Date(b.starts_at)), "blockouts");
+	}
+	return Object.fromEntries(map);
+}
+
+export async function listEventsInRange(venueId, start, end) {
+	return db
+		.select({
+			event_id: event.id,
+			title: event.title,
+			starts_at: event.starts_at,
+			ends_at: event.ends_at,
+			status: event.status,
+			room_id: room.id,
+			room_name: room.name,
+		})
+		.from(event)
+		.leftJoin(event_room, eq(event_room.event_id, event.id))
+		.leftJoin(room, eq(event_room.room_id, room.id))
+		.where(
+			and(
+				eq(event.venue_id, venueId),
+				isNull(event.deletedAt),
+				notInArray(event.status, ["cancelled", "past"]),
+				lt(event.starts_at, end),
+				gt(event.ends_at, start),
+			),
+		)
+		.orderBy(asc(event.starts_at));
+}
+
 export async function getPendingIntentForBooking(bookingId, kind = "deposit") {
 	const rows = await db
 		.select()

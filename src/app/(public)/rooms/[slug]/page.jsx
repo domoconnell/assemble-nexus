@@ -6,6 +6,7 @@ import { byPrefixAndName } from "@awesome.me/kit-71c392801a/icons";
 import { Hero } from "@/site/ui/hero";
 import { Section } from "@/site/ui/section";
 import { CtaButton } from "@/site/ui/cta-button";
+import { EventCard } from "@/site/ui/event-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shadcn/components/ui/tabs";
 import { ProseBlock } from "@/site/ui/blocks/prose-block";
 import { FacilityPackageBlock } from "@/site/ui/blocks/facility-package-block";
@@ -250,7 +251,7 @@ export default async function RoomPage({ params }) {
 				<Section kicker="What's on here" title={`Coming up in ${room.name}`}>
 					<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
 						{upcomingEvents.map((ev) => (
-							<UpcomingEventCard key={ev.id} ev={ev} />
+							<EventCard key={ev.id} event={ev} variant="compact" />
 						))}
 					</div>
 				</Section>
@@ -266,67 +267,6 @@ export default async function RoomPage({ params }) {
 				</Section>
 			)}
 		</>
-	);
-}
-
-const upcomingDateFmt = new Intl.DateTimeFormat("en-GB", {
-	weekday: "short",
-	day: "numeric",
-	month: "short",
-	timeZone: "Europe/London",
-});
-const upcomingTimeFmt = new Intl.DateTimeFormat("en-GB", {
-	hour: "2-digit",
-	minute: "2-digit",
-	timeZone: "Europe/London",
-});
-
-function UpcomingEventCard({ ev }) {
-	const date = ev.starts_at ? new Date(ev.starts_at) : null;
-	const externalHref = ev.external_url || null;
-	const href = externalHref || `/events/${ev.slug}`;
-	return (
-		<Link
-			href={href}
-			{...(externalHref ? { target: "_blank", rel: "noreferrer" } : {})}
-			className="group relative flex flex-col overflow-hidden rounded-xl border border-foreground/10 bg-card transition hover:border-primary/40"
-		>
-			<div className="relative h-44 overflow-hidden bg-muted/40">
-				{ev.banner_url && (
-					<Image
-						src={ev.banner_url}
-						alt={ev.title}
-						fill
-						sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
-						className="object-cover grayscale-40 group-hover:grayscale-0 transition duration-500"
-					/>
-				)}
-				<div className="absolute inset-0 bg-linear-to-t from-card via-card/40 to-transparent" />
-				{date && (
-					<div className="absolute left-4 top-4 flex items-baseline gap-2 text-foreground">
-						<span className="font-display text-2xl tracking-tight">
-							{upcomingDateFmt.format(date)}
-						</span>
-						<span className="text-[10px] uppercase tracking-[0.22em] text-foreground/70">
-							{upcomingTimeFmt.format(date)}
-						</span>
-					</div>
-				)}
-			</div>
-			<div className="flex flex-1 flex-col gap-2 p-5">
-				<div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-					<span className={ev.is_ticketed ? "text-primary" : ""}>
-						{ev.is_ticketed ? "Ticketed" : "Free entry"}
-					</span>
-				</div>
-				<h3 className="font-display text-lg tracking-tight">{ev.title}</h3>
-				{ev.summary && (
-					<p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
-						{ev.summary}
-					</p>
-				)}
-			</div>
-		</Link>
 	);
 }
 

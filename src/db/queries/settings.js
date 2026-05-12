@@ -43,6 +43,35 @@ export async function getPaymentsSettings(venueId) {
 	return getSetting(venueId, "payments", { provider: "fake" });
 }
 
+export async function getAppleWalletSettings(venueId) {
+	return getSetting(venueId, "apple_wallet", null);
+}
+
+export async function getGoogleWalletSettings(venueId) {
+	return getSetting(venueId, "google_wallet", null);
+}
+
+/**
+ * Cheap "is this venue configured to issue wallet passes?" check used by
+ * the ticket-detail UI to decide whether to render the Add to Wallet
+ * buttons.
+ */
+export async function getWalletProvidersStatus(venueId) {
+	const [apple, google] = await Promise.all([
+		getAppleWalletSettings(venueId),
+		getGoogleWalletSettings(venueId),
+	]);
+	return {
+		apple_ready: Boolean(
+			apple?.pass_type_identifier &&
+				apple?.team_identifier &&
+				apple?.signer_cert_pem &&
+				apple?.signer_key_pem,
+		),
+		google_ready: Boolean(google?.issuer_id && google?.service_account_json),
+	};
+}
+
 export const DEFAULT_HOURLY_BANDS = [
 	{ label: "Early", from: "07:00", to: "09:00", modifier_x100: 12000 },
 	{ label: "Standard", from: "09:00", to: "17:00", modifier_x100: 10000 },

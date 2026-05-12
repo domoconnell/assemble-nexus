@@ -13,6 +13,11 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/shadcn/components/ui/dialog";
+import BuyerIdentity, {
+	EMPTY_BUYER_IDENTITY,
+	buyerIdentityComplete,
+	buildBuyerIdentityPayload,
+} from "./buyer-identity";
 
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 const formatGbp = (c) => gbp.format((c ?? 0) / 100);
@@ -96,19 +101,8 @@ export default function TicketSelector({
 	const [checkoutOpen, setCheckoutOpen] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [submitError, setSubmitError] = useState(null);
-	const [buyer, setBuyer] = useState({
-		first_name: "",
-		last_name: "",
-		email: "",
-		phone: "",
-	});
-
-	const buyerValid = Boolean(
-		buyer.first_name.trim() &&
-			buyer.last_name.trim() &&
-			buyer.email.trim() &&
-			buyer.email.includes("@"),
-	);
+	const [identity, setIdentity] = useState(EMPTY_BUYER_IDENTITY);
+	const buyerValid = buyerIdentityComplete(identity);
 
 	async function submitOrder() {
 		setSubmitting(true);
@@ -122,12 +116,7 @@ export default function TicketSelector({
 					cart: cartShape,
 					codes,
 					customer_covers_fee: coverFee,
-					customer: {
-						first_name: buyer.first_name.trim(),
-						last_name: buyer.last_name.trim(),
-						email: buyer.email.trim(),
-						phone: buyer.phone.trim() || null,
-					},
+					identity: buildBuyerIdentityPayload(identity),
 				}),
 			});
 			const data = await res.json();
@@ -135,7 +124,7 @@ export default function TicketSelector({
 				setSubmitError(data?.error || "Could not start checkout.");
 				return;
 			}
-			router.push(`/my-orders/${data.reference}`);
+			router.push(`/orders/${data.reference}/pay`);
 		} catch (err) {
 			setSubmitError(err?.message || "Could not start checkout.");
 		} finally {
@@ -526,9 +515,10 @@ export default function TicketSelector({
 			<Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
 				<DialogContent className="max-w-md p-6 sm:p-8 space-y-6">
 					<DialogHeader>
-						<DialogTitle>Your details</DialogTitle>
+						<DialogTitle>Who&apos;s buying?</DialogTitle>
 						<DialogDescription>
-							Tickets are emailed to this address. We&apos;ll process payment next.
+							Tickets are emailed to this address — and you&apos;ll be signed in
+							so you can come back any time to see them.
 						</DialogDescription>
 					</DialogHeader>
 					{submitError && (
@@ -536,42 +526,7 @@ export default function TicketSelector({
 							{submitError}
 						</div>
 					)}
-					<div className="grid gap-4 sm:grid-cols-2">
-						<div className="space-y-2">
-							<Label>First name</Label>
-							<Input
-								value={buyer.first_name}
-								onChange={(e) => setBuyer({ ...buyer, first_name: e.target.value })}
-								autoComplete="given-name"
-							/>
-						</div>
-						<div className="space-y-2">
-							<Label>Last name</Label>
-							<Input
-								value={buyer.last_name}
-								onChange={(e) => setBuyer({ ...buyer, last_name: e.target.value })}
-								autoComplete="family-name"
-							/>
-						</div>
-						<div className="space-y-2 sm:col-span-2">
-							<Label>Email</Label>
-							<Input
-								type="email"
-								value={buyer.email}
-								onChange={(e) => setBuyer({ ...buyer, email: e.target.value })}
-								autoComplete="email"
-							/>
-						</div>
-						<div className="space-y-2 sm:col-span-2">
-							<Label>Phone (optional)</Label>
-							<Input
-								type="tel"
-								value={buyer.phone}
-								onChange={(e) => setBuyer({ ...buyer, phone: e.target.value })}
-								autoComplete="tel"
-							/>
-						</div>
-					</div>
+					<BuyerIdentity value={identity} onChange={setIdentity} />
 					<div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2 border-t border-foreground/10">
 						<Button
 							variant="outline"

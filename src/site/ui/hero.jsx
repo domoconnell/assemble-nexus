@@ -11,13 +11,15 @@ export function Hero({
 	height = "tall",
 	backgroundImage,
 	backgroundAlt = "",
+	backgroundGreyscale = true,
+	backgroundOverlay = true,
 	children,
 }) {
 	const alignWrap = align === "center" ? "items-center text-center" : "items-start text-left";
 	const heights = {
-		tall: "py-32 lg:py-40",
-		medium: "py-24 lg:py-32",
-		short: "py-16 lg:py-24",
+		tall: "py-24 lg:py-32",
+		medium: "py-20 lg:py-24",
+		short: "py-12 lg:py-20",
 	};
 	return (
 		<section className={`relative overflow-hidden ${heights[height]}`}>
@@ -29,14 +31,14 @@ export function Hero({
 						fill
 						priority
 						sizes="100vw"
-						className="object-cover grayscale opacity-60"
+						className={`object-cover object-left opacity-60 ${backgroundGreyscale ? "grayscale" : ""}`}
 					/>
 				</div>
 			)}
-			{backgroundImage && (
+			{backgroundImage && backgroundOverlay && (
 				<div
 					aria-hidden
-					className="absolute inset-0 bg-linear-to-r from-background via-background/85 to-transparent pointer-events-none"
+					className="absolute inset-0 bg-linear-to-r from-background from-0% via-background/90 via-55% to-transparent pointer-events-none"
 				/>
 			)}
 			<div

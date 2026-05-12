@@ -134,6 +134,16 @@ export const EMAIL_TEMPLATES = {
 		},
 	},
 
+	"apple-wallet-ticket": {
+		templateId: "d-2eddfe82946043219b3af5c4cd6d8ee4",
+		description: "Delivers a signed .pkpass to the ticket holder so they can tap-to-add to Apple Wallet on their iPhone. Pass file is sent as an attachment.",
+		audience: "delegate",
+		fields: {
+			firstName: "Ticket holder's first name.",
+			eventName: "Title of the event.",
+		},
+	},
+
 	"ticket-order-confirmation": {
 		templateId: null,
 		description: "Sent to a delegate after they successfully pay for a ticket order. Includes the order reference and a link to view tickets.",

@@ -4,6 +4,7 @@ import { Container } from "@/site/ui/container";
 import { Hero } from "@/site/ui/hero";
 import { getServerSession } from "@/utils/auth/server-guard";
 import {
+	getOrderByReference,
 	getOrderForUserByReference,
 	listOrderLines,
 	listOrderTickets,
@@ -89,7 +90,30 @@ export default async function MyOrderDetailPage({ params }) {
 	}
 
 	const order = await getOrderForUserByReference(reference, session.user.id);
-	if (!order) notFound();
+	if (!order) {
+		// Order may exist but be tied to a different user (common right after a
+		// purchase made while signed in as someone else — admin testing,
+		// shared device, etc.). Surface a magic-link prompt rather than 404.
+		const publicOrder = await getOrderByReference(reference);
+		if (!publicOrder) notFound();
+		return (
+			<>
+				<Hero
+					height="short"
+					kicker="Your order"
+					title="Sign in as the buyer to see this order."
+					subtitle="The order is held against a different email. Sign in with the email you used to buy."
+				/>
+				<Container className="pt-6 pb-12 lg:pb-16">
+					<MagicLinkForm
+						callbackURL={`/my-orders/${reference}`}
+						heading={`Sign in as ${publicOrder.customer_email}`}
+						body="Pop the email you used at checkout in — we'll send a one-click sign-in link."
+					/>
+				</Container>
+			</>
+		);
+	}
 
 	const [lines, tickets] = await Promise.all([
 		listOrderLines(order.id),

@@ -35,6 +35,16 @@ export const ticket_order = pgTable(
 		booking_fee_cents: integer("booking_fee_cents").default(0).notNull(),
 		booking_fee_borne_by: text("booking_fee_borne_by").default("organiser").notNull(),
 
+		// Money breakdown snapshot — captured at order creation, surfaces in
+		// both admin and organiser views. `organiser_net_cents` = what we owe
+		// the organiser for this order; `stripe_fee_estimate_cents` =
+		// venue's expected PSP cost from the configured Stripe rate;
+		// `stripe_fee_actual_cents` lands when the Stripe webhook fires
+		// (currently unwired — falls back to the estimate everywhere).
+		organiser_net_cents: integer("organiser_net_cents").default(0).notNull(),
+		stripe_fee_estimate_cents: integer("stripe_fee_estimate_cents").default(0).notNull(),
+		stripe_fee_actual_cents: integer("stripe_fee_actual_cents"),
+
 		commission_cents: integer("commission_cents"),
 		commission_pct_snapshot_x100: integer("commission_pct_snapshot_x100"),
 

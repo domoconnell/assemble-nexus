@@ -218,6 +218,27 @@
       "when": 1778577545695,
       "tag": "0030_flaky_eternals",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1778587962836,
+      "tag": "0031_woozy_killer_shrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1778590502900,
+      "tag": "0032_open_vanisher",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1778599154616,
+      "tag": "0033_natural_nightcrawler",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
 	ChartContainer,
@@ -92,7 +93,30 @@ const chartConfig = {
 	},
 };
 
-export default function OverviewTab({ orders = [], eventId, checkinCode, linkedExpenses = [] }) {
+function bookingStatusClass(status) {
+	switch (status) {
+		case "pending":
+			return "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+		case "approved":
+		case "confirmed":
+		case "completed":
+			return "border-primary/30 bg-primary/10 text-primary";
+		case "rejected":
+		case "cancelled":
+			return "border-destructive/30 bg-destructive/10 text-destructive";
+		default:
+			return "border-foreground/15 bg-muted text-muted-foreground";
+	}
+}
+
+export default function OverviewTab({
+	orders = [],
+	eventId,
+	checkinCode,
+	linkedExpenses = [],
+	linkedBooking = null,
+	linkedOrganisation = null,
+}) {
 	const paid = orders.filter(
 		(o) => o.status === "paid" || o.status === "partially_refunded",
 	);
@@ -118,6 +142,61 @@ export default function OverviewTab({ orders = [], eventId, checkinCode, linkedE
 
 	return (
 		<div className="space-y-6">
+			<section className="rounded-lg border bg-card p-6 space-y-3">
+				<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+					Who & where
+				</h2>
+				<div className="grid gap-4 sm:grid-cols-2 text-sm">
+					<div>
+						<div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+							Organisation
+						</div>
+						<div className="mt-1">
+							{linkedOrganisation ? (
+								<Link
+									href={`/admin/crm/${linkedOrganisation.id}`}
+									className="font-medium hover:underline"
+								>
+									{linkedOrganisation.name}
+								</Link>
+							) : (
+								<span className="font-medium">Internal — The Assembly Rooms</span>
+							)}
+						</div>
+						{linkedOrganisation?.notes && (
+							<div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+								{linkedOrganisation.notes}
+							</div>
+						)}
+					</div>
+					<div>
+						<div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+							Linked booking
+						</div>
+						<div className="mt-1">
+							{linkedBooking ? (
+								<div className="flex items-center gap-2 flex-wrap">
+									<Link
+										href={`/admin/bookings/${linkedBooking.id}`}
+										className="font-mono font-medium hover:underline"
+									>
+										{linkedBooking.reference}
+									</Link>
+									<span
+										className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] ${bookingStatusClass(linkedBooking.status)}`}
+									>
+										{linkedBooking.status}
+									</span>
+								</div>
+							) : (
+								<span className="text-muted-foreground italic">
+									No booking — internal event
+								</span>
+							)}
+						</div>
+					</div>
+				</div>
+			</section>
 			{eventId && (
 				<CheckinLinkCard eventId={eventId} initialCheckinCode={checkinCode} />
 			)}

@@ -1,7 +1,11 @@
 "use client";
 
-import Image from "next/image";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { byPrefixAndName } from "@awesome.me/kit-71c392801a/icons";
 import { QRCodeSVG } from "qrcode.react";
+
+const appleIcon = byPrefixAndName.fab["apple"];
+const googleIcon = byPrefixAndName.fab["google-wallet"];
 
 /**
  * Themed QR card. QR modules themselves are painted with a linear gradient
@@ -10,7 +14,13 @@ import { QRCodeSVG } from "qrcode.react";
  * fill attribute — works because browsers resolve fill="url(#id)" against
  * any same-document SVG defs.
  */
-export default function TicketQrCard({ name, code, status }) {
+export default function TicketQrCard({
+	name,
+	code,
+	status,
+	appleReady = false,
+	googleReady = false,
+}) {
 	const valid = status === "valid";
 	return (
 		<div
@@ -65,38 +75,42 @@ export default function TicketQrCard({ name, code, status }) {
 					>
 						Download PDF
 					</a>
-					<div className="grid grid-cols-2 gap-2">
-						<button
-							type="button"
-							disabled
-							title="Coming soon — wallet passes are configured per venue."
-							className="inline-flex items-center justify-center rounded-md overflow-hidden disabled:cursor-not-allowed disabled:opacity-60"
+					{(appleReady || googleReady) && (
+						<div
+							className={`grid gap-2 ${
+								appleReady && googleReady ? "grid-cols-2" : "grid-cols-1"
+							}`}
 						>
-							<Image
-								src="/wallet/add-to-apple-wallet.svg"
-								alt="Add to Apple Wallet"
-								width={170}
-								height={44}
-								className="h-11 w-auto"
-							/>
-						</button>
-						<button
-							type="button"
-							disabled
-							title="Coming soon — wallet passes are configured per venue."
-							className="inline-flex items-center justify-center rounded-md overflow-hidden disabled:cursor-not-allowed disabled:opacity-60"
-						>
-							<Image
-								src="/wallet/add-to-google-wallet.svg"
-								alt="Add to Google Wallet"
-								width={170}
-								height={44}
-								className="h-11 w-auto"
-							/>
-						</button>
-					</div>
+							{appleReady && (
+								<WalletButton
+									href={`/wallet/apple/${code}`}
+									icon={appleIcon}
+									label="Add to Apple Wallet"
+								/>
+							)}
+							{googleReady && (
+								<WalletButton
+									href={`/wallet/google/${code}`}
+									icon={googleIcon}
+									label="Add to Google Wallet"
+								/>
+							)}
+						</div>
+					)}
 				</div>
 			)}
 		</div>
+	);
+}
+
+function WalletButton({ href, icon, label }) {
+	return (
+		<a
+			href={href}
+			className="inline-flex items-center justify-center gap-2 rounded-md bg-foreground text-background px-3 py-2.5 text-sm font-medium hover:opacity-90 transition"
+		>
+			{icon && <FontAwesomeIcon icon={icon} className="h-4 w-4" />}
+			<span>{label}</span>
+		</a>
 	);
 }

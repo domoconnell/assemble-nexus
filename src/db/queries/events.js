@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/index.js";
 import { event } from "@/db/schema/entities/event.js";
 import { event_room } from "@/db/schema/entities/event_room.js";
@@ -60,6 +60,67 @@ export async function getEventById(id) {
 		.select()
 		.from(event)
 		.where(and(eq(event.id, id), notDeleted(event)))
+		.limit(1);
+	return e ?? null;
+}
+
+/**
+ * Next upcoming events for the admin dashboard. Future-only, ordered by
+ * start time ascending. Default limit 10. Excludes cancelled events.
+ */
+export async function listUpcomingEvents(venueId, { limit = 10, fromDate = new Date() } = {}) {
+	return db
+		.select({
+			id: event.id,
+			slug: event.slug,
+			title: event.title,
+			status: event.status,
+			starts_at: event.starts_at,
+			ends_at: event.ends_at,
+		})
+		.from(event)
+		.where(
+			and(
+				eq(event.venue_id, venueId),
+				notDeleted(event),
+				inArray(event.status, ["draft", "pending_review", "published"]),
+				gte(event.starts_at, fromDate),
+			),
+		)
+		.orderBy(asc(event.starts_at))
+		.limit(limit);
+}
+
+/**
+ * Events sitting in pending_review for an admin to publish. Used by the
+ * dashboard widget — keep the column set lean.
+ */
+export async function listEventsAwaitingApproval(venueId) {
+	return db
+		.select({
+			id: event.id,
+			slug: event.slug,
+			title: event.title,
+			starts_at: event.starts_at,
+			updatedAt: event.updatedAt,
+		})
+		.from(event)
+		.where(
+			and(
+				eq(event.venue_id, venueId),
+				eq(event.status, "pending_review"),
+				notDeleted(event),
+			),
+		)
+		.orderBy(desc(event.updatedAt));
+}
+
+export async function getEventByBookingId(bookingId) {
+	if (!bookingId) return null;
+	const [e] = await db
+		.select()
+		.from(event)
+		.where(and(eq(event.booking_id, bookingId), notDeleted(event)))
 		.limit(1);
 	return e ?? null;
 }

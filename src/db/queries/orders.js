@@ -11,6 +11,38 @@ import { file } from "@/db/schema/entities/file.js";
 import { contact } from "@/db/schema/entities/contact.js";
 import { organisation_contact } from "@/db/schema/entities/organisation_contact.js";
 
+/**
+ * Public-access order lookup by ID for the no-auth ticket gallery at
+ * `/tickets/[id]`. The URL acts as the capability — the unguessable UUID
+ * is what makes the page secure-enough for tickets emailed to buyers.
+ */
+export async function getOrderForTicketGallery(orderId) {
+	const [row] = await db
+		.select({
+			id: ticket_order.id,
+			reference: ticket_order.reference,
+			status: ticket_order.status,
+			total_cents: ticket_order.total_cents,
+			createdAt: ticket_order.createdAt,
+			paid_at: ticket_order.paid_at,
+			event_id: event.id,
+			event_slug: event.slug,
+			event_title: event.title,
+			event_starts_at: event.starts_at,
+			event_ends_at: event.ends_at,
+			event_doors_open_at: event.doors_open_at,
+			venue_id: event.venue_id,
+			venue_name: sql`(select name from "venue" where id = ${event.venue_id})`,
+			customer_first_name: customer.first_name,
+		})
+		.from(ticket_order)
+		.innerJoin(event, eq(ticket_order.event_id, event.id))
+		.innerJoin(customer, eq(ticket_order.customer_id, customer.id))
+		.where(and(eq(ticket_order.id, orderId), isNull(ticket_order.deletedAt)))
+		.limit(1);
+	return row ?? null;
+}
+
 export async function getOrderByReference(reference) {
 	const [row] = await db
 		.select({
@@ -367,6 +399,9 @@ export async function listOrdersForEvent(eventId) {
 			discount_cents: ticket_order.discount_cents,
 			booking_fee_cents: ticket_order.booking_fee_cents,
 			booking_fee_borne_by: ticket_order.booking_fee_borne_by,
+			organiser_net_cents: ticket_order.organiser_net_cents,
+			stripe_fee_estimate_cents: ticket_order.stripe_fee_estimate_cents,
+			stripe_fee_actual_cents: ticket_order.stripe_fee_actual_cents,
 			createdAt: ticket_order.createdAt,
 			paid_at: ticket_order.paid_at,
 			cancelled_at: ticket_order.cancelled_at,

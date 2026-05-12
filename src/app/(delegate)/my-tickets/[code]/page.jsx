@@ -4,6 +4,8 @@ import { Container } from "@/site/ui/container";
 import { Hero } from "@/site/ui/hero";
 import { getServerSession } from "@/utils/auth/server-guard";
 import { getTicketForUserByCode } from "@/db/queries/orders";
+import { getWalletProvidersStatus } from "@/db/queries/settings";
+import { requireCurrentVenue } from "@/db/queries/venue";
 import MagicLinkForm from "../../_components/magic-link-form";
 import DelegateNav from "../../_components/delegate-nav";
 import TicketQrCard from "@/site/events/ticket-qr-card";
@@ -56,6 +58,9 @@ export default async function MyTicketDetailPage({ params }) {
 
 	const ticket = await getTicketForUserByCode(code, session.user.id);
 	if (!ticket) notFound();
+
+	const venue = await requireCurrentVenue();
+	const walletStatus = await getWalletProvidersStatus(venue.id);
 
 	const start = ticket.event_starts_at ? new Date(ticket.event_starts_at) : null;
 	const end = ticket.event_ends_at ? new Date(ticket.event_ends_at) : null;
@@ -121,6 +126,8 @@ export default async function MyTicketDetailPage({ params }) {
 					name={ticket.ticket_type_label}
 					code={ticket.code}
 					status={ticket.status}
+					appleReady={walletStatus.apple_ready}
+					googleReady={walletStatus.google_ready}
 				/>
 			</Container>
 		</>
