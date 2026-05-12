@@ -176,6 +176,29 @@ export async function deleteEventAction(id) {
 }
 
 /**
+ * One-click approve & publish for the pending-events dashboard widget.
+ * Only flips events sitting at `pending_review`; everything else is a no-op
+ * so accidental re-clicks on already-published rows can't change state.
+ */
+export async function publishEventAction(id) {
+	await gateAdmin();
+	const [e] = await db.select().from(event).where(eq(event.id, id)).limit(1);
+	if (!e) return;
+	if (e.status !== "pending_review") return e;
+	const [updated] = await db
+		.update(event)
+		.set({ status: "published" })
+		.where(eq(event.id, id))
+		.returning();
+	revalidatePath("/admin");
+	revalidatePath("/admin/events");
+	revalidatePath(`/admin/events/${id}`);
+	revalidatePath("/whats-on");
+	revalidatePath(`/events/${e.slug}`);
+	return updated;
+}
+
+/**
  * Cancel (soft-cancel) an event without deleting it — leaves the row in
  * place for historical reporting but flips status to "cancelled". The
  * public page is removed from listings (filter excludes cancelled), and

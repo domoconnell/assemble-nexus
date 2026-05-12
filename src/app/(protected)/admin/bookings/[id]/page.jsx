@@ -224,25 +224,62 @@ export default async function AdminBookingDetailPage({ params }) {
 
 					<InternalNotesEditor bookingId={booking.id} initialValue={booking.internal_notes ?? ""} />
 
-					<section className="rounded-lg border bg-card p-6 space-y-3">
+					<section className="rounded-lg border bg-card p-6 space-y-4">
 						<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Activity</h2>
 						{statusEvents.length === 0 ? (
 							<p className="text-sm text-muted-foreground">No activity yet.</p>
 						) : (
-							<ol className="space-y-2 text-sm">
-								{statusEvents.map((e) => (
-									<li key={e.id} className="flex items-baseline justify-between gap-4">
-										<div>
-											<span className="font-medium">{e.to_status}</span>
-											{e.note && (
-												<span className="text-muted-foreground"> · {e.note}</span>
+							<ol className="relative space-y-4">
+								{statusEvents.map((e, idx) => {
+									const actorName =
+										e.actor_first_name || e.actor_last_name
+											? `${e.actor_first_name ?? ""} ${e.actor_last_name ?? ""}`.trim()
+											: null;
+									const isLast = idx === statusEvents.length - 1;
+									return (
+										<li key={e.id} className="relative pl-6">
+											<span
+												className="absolute left-1.25 top-1.5 inline-block h-2 w-2 rounded-full bg-primary"
+												aria-hidden
+											/>
+											{!isLast && (
+												<span
+													className="absolute left-2.25 top-3.5 -bottom-4 w-px bg-foreground/10"
+													aria-hidden
+												/>
 											)}
-										</div>
-										<span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
-											{stampFmt.format(new Date(e.at))}
-										</span>
-									</li>
-								))}
+											<div className="flex items-baseline justify-between gap-3 flex-wrap">
+												<div className="flex items-baseline gap-2 flex-wrap">
+													{e.from_status && (
+														<>
+															<span
+																className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] ${statusClass(e.from_status)}`}
+															>
+																{e.from_status}
+															</span>
+															<span className="text-muted-foreground text-xs">→</span>
+														</>
+													)}
+													<span
+														className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] ${statusClass(e.to_status)}`}
+													>
+														{e.to_status}
+													</span>
+												</div>
+												<span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
+													{stampFmt.format(new Date(e.at))}
+												</span>
+											</div>
+											{(actorName || e.note) && (
+												<div className="mt-1.5 text-xs text-muted-foreground">
+													{actorName && <span className="text-foreground">{actorName}</span>}
+													{actorName && e.note && " · "}
+													{e.note}
+												</div>
+											)}
+										</li>
+									);
+								})}
 							</ol>
 						)}
 					</section>

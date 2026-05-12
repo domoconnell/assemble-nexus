@@ -14,6 +14,7 @@ import { deposit_policy } from "@/db/schema/entities/deposit_policy.js";
 import { event } from "@/db/schema/entities/event.js";
 import { event_room } from "@/db/schema/entities/event_room.js";
 import { psp_intent } from "@/db/schema/entities/psp_intent.js";
+import { user } from "@/db/schema/entities/user.js";
 
 export async function getActiveDepositPolicy(venueId) {
 	const [row] = await db
@@ -153,8 +154,19 @@ export async function listBookingFacilitySelections(bookingId) {
 
 export async function listBookingStatusEvents(bookingId) {
 	return db
-		.select()
+		.select({
+			id: booking_status_event.id,
+			booking_id: booking_status_event.booking_id,
+			from_status: booking_status_event.from_status,
+			to_status: booking_status_event.to_status,
+			actor_user_id: booking_status_event.actor_user_id,
+			note: booking_status_event.note,
+			at: booking_status_event.at,
+			actor_first_name: user.first_name,
+			actor_last_name: user.last_name,
+		})
 		.from(booking_status_event)
+		.leftJoin(user, eq(user.id, booking_status_event.actor_user_id))
 		.where(eq(booking_status_event.booking_id, bookingId))
 		.orderBy(asc(booking_status_event.at));
 }

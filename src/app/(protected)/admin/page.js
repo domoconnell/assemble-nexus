@@ -13,6 +13,7 @@ import { currentMonthLondon, resolveMonth, monthLabel } from "@/lib/finance/mont
 import { getServerSession } from "@/utils/auth/server-guard";
 import PnlTrendChart from "./_components/pnl-trend-chart";
 import ActivityCalendar from "./_components/activity-calendar";
+import PublishEventButton from "./_components/publish-event-button";
 
 export const dynamic = "force-dynamic";
 
@@ -246,19 +247,20 @@ function PendingEventsWidget({ events }) {
 			) : (
 				<ul className="space-y-1">
 					{events.slice(0, 5).map((e) => (
-						<li key={e.id}>
+						<li
+							key={e.id}
+							className="flex items-center gap-2 rounded-md border border-foreground/10 bg-background pl-2.5 pr-1.5 py-1.5 hover:border-foreground/30 transition text-xs"
+						>
 							<Link
 								href={`/admin/events/${e.id}`}
-								className="flex items-baseline justify-between gap-2 rounded-md border border-foreground/10 bg-background px-2.5 py-1.5 hover:border-foreground/30 transition text-xs"
+								className="min-w-0 flex-1"
 							>
-								<div className="min-w-0 flex-1">
-									<div className="font-medium truncate">{e.title}</div>
-									<div className="text-[10px] text-muted-foreground">
-										Submitted {stampFmt.format(new Date(e.updatedAt))}
-									</div>
+								<div className="font-medium truncate">{e.title}</div>
+								<div className="text-[10px] text-muted-foreground">
+									Submitted {stampFmt.format(new Date(e.updatedAt))}
 								</div>
-								<span className="text-muted-foreground shrink-0">→</span>
 							</Link>
+							<PublishEventButton eventId={e.id} />
 						</li>
 					))}
 					{count > 5 && (
