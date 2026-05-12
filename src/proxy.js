@@ -34,11 +34,22 @@ export function proxy(req) {
     if (CANONICAL_URL && CANONICAL_URL.hostname !== "localhost") {
         const host = req.headers.get("host") || "";
         const proto = req.headers.get("x-forwarded-proto") || "https";
-        const wrongHost = host !== CANONICAL_URL.host;
-        const wrongProto = proto !== CANONICAL_URL.protocol.replace(":", "");
-        if (wrongHost || wrongProto) {
-            const target = new URL(req.nextUrl.pathname + req.nextUrl.search, CANONICAL_URL);
-            return NextResponse.redirect(target, 308);
+        // Skip on internal/loopback requests — Next's image optimizer fetches
+        // local files via HTTP and the request arrives with host=localhost:PORT,
+        // no x-forwarded-* headers. Redirecting it to the public URL breaks the
+        // optimizer's fetch.
+        const isInternal =
+            host.startsWith("localhost") ||
+            host.startsWith("127.") ||
+            host.startsWith("[::1]") ||
+            !req.headers.get("x-forwarded-proto");
+        if (!isInternal) {
+            const wrongHost = host !== CANONICAL_URL.host;
+            const wrongProto = proto !== CANONICAL_URL.protocol.replace(":", "");
+            if (wrongHost || wrongProto) {
+                const target = new URL(req.nextUrl.pathname + req.nextUrl.search, CANONICAL_URL);
+                return NextResponse.redirect(target, 308);
+            }
         }
     }
 
