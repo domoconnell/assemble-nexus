@@ -43,8 +43,13 @@ export async function startAutoSession({ userId, ipAddress = null, userAgent = n
 	});
 
 	const cookieValue = await signCookieValue(token, secret);
-	const cookieName = `${process.env.APP_SHORT_NAME || "app"}.session_token`;
 	const isProd = process.env.NODE_ENV === "production";
+	const cookiePrefix = process.env.APP_SHORT_NAME || "app";
+	// Match better-auth's prod-mode `__Secure-` cookie-name prefix, otherwise
+	// auth.api.getSession won't find sessions we created here.
+	const cookieName = isProd
+		? `__Secure-${cookiePrefix}.session_token`
+		: `${cookiePrefix}.session_token`;
 
 	const attributes = [
 		`${cookieName}=${cookieValue}`,

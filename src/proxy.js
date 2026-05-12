@@ -10,7 +10,14 @@ const LOGIN_PATH = "/auth/login";
 // pass through so better-auth can finish its handshake.
 const REDIRECT_AWAY_PATHS = new Set(["/auth/login"]);
 
-const SESSION_COOKIE_NAME = (process.env.APP_SHORT_NAME || "better-auth") + ".session_token";
+// Better-auth adds the `__Secure-` cookie-name prefix when running over HTTPS
+// (production). Without checking both names the proxy can't see the session
+// in prod and admin pages bounce-loop through /auth/login.
+const COOKIE_PREFIX = process.env.APP_SHORT_NAME || "app";
+const SESSION_COOKIE_NAMES = [
+    `${COOKIE_PREFIX}.session_token`,
+    `__Secure-${COOKIE_PREFIX}.session_token`,
+];
 
 // Canonical host derived from BASE_URL — every request is rewritten to this
 // host + https. Apex (`assembly-rooms.com`) bounces to `www.assembly-rooms.com`,
@@ -36,7 +43,9 @@ export function proxy(req) {
     }
 
     const { pathname, searchParams } = req.nextUrl;
-    const hasSessionCookie = !!req.cookies.get(SESSION_COOKIE_NAME)?.value;
+    const hasSessionCookie = SESSION_COOKIE_NAMES.some(
+        (name) => !!req.cookies.get(name)?.value,
+    );
     const isProtected = PROTECTED_PREFIXES.some(
         (p) => pathname === p || pathname.startsWith(p + "/"),
     );
