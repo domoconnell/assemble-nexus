@@ -12,7 +12,29 @@ const REDIRECT_AWAY_PATHS = new Set(["/auth/login"]);
 
 const SESSION_COOKIE_NAME = (process.env.APP_SHORT_NAME || "better-auth") + ".session_token";
 
+// Canonical host derived from BASE_URL — every request is rewritten to this
+// host + https. Apex (`assembly-rooms.com`) bounces to `www.assembly-rooms.com`,
+// http bounces to https. Dev (localhost) is skipped.
+const CANONICAL_URL = (() => {
+    try {
+        return new URL(process.env.BASE_URL || "");
+    } catch {
+        return null;
+    }
+})();
+
 export function proxy(req) {
+    if (CANONICAL_URL && CANONICAL_URL.hostname !== "localhost") {
+        const host = req.headers.get("host") || "";
+        const proto = req.headers.get("x-forwarded-proto") || "https";
+        const wrongHost = host !== CANONICAL_URL.host;
+        const wrongProto = proto !== CANONICAL_URL.protocol.replace(":", "");
+        if (wrongHost || wrongProto) {
+            const target = new URL(req.nextUrl.pathname + req.nextUrl.search, CANONICAL_URL);
+            return NextResponse.redirect(target, 308);
+        }
+    }
+
     const { pathname, searchParams } = req.nextUrl;
     const hasSessionCookie = !!req.cookies.get(SESSION_COOKIE_NAME)?.value;
     const isProtected = PROTECTED_PREFIXES.some(
@@ -41,5 +63,5 @@ export function proxy(req) {
 }
 
 export const config = {
-    matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|api).*)"],
+    matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png).*)"],
 };

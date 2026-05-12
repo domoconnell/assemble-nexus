@@ -8,10 +8,11 @@ import * as authSchema from "@/db/schema/auth_schema.js";
 import { user } from "@/db/schema/entities/user.js";
 import { eq } from "drizzle-orm";
 
-const isProd = process.env.NODE_ENV === "production";
+const baseUrl = process.env.BASE_URL || "http://localhost:3000";
+const baseUrlParsed = new URL(baseUrl);
 
 export const auth = betterAuth({
-    trustedOrigins: ["http://localhost:3000"],
+    trustedOrigins: [baseUrlParsed.origin],
     advanced: {
         cookiePrefix: process.env.APP_SHORT_NAME || "app",
     },
@@ -58,9 +59,9 @@ export const auth = betterAuth({
             },
         }),
         passkey({
-            rpID: isProd ? "nexus.app" : "localhost",
+            rpID: baseUrlParsed.hostname,
             rpName: "Nexus",
-            origin: isProd ? "https://nexus.app" : "http://localhost:3000",
+            origin: baseUrlParsed.origin,
 
             authenticatorSelection: {
                 authenticatorAttachment: "platform",

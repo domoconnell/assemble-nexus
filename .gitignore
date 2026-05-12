@@ -45,7 +45,10 @@ next-env.d.ts
 /claude-tasks
 /claude.md
 
-# wallet signing material (the README in this dir is committed; the certs aren't)
+# wallet signing material (signer certs aren't committed, but Apple's public
+# WWDR intermediate is — it's a public Apple cert and the runtime needs it on
+# disk to sign passes)
 /secrets/wallets/*.pem
 /secrets/wallets/*.cer
 /secrets/wallets/*.p12
+!/secrets/wallets/apple-wwdr.pem
