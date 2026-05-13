@@ -30,30 +30,10 @@ const CANONICAL_URL = (() => {
     }
 })();
 
-console.log("[proxy:boot]", {
-    BASE_URL: process.env.BASE_URL || null,
-    canonicalHost: CANONICAL_URL?.host ?? null,
-    canonicalProto: CANONICAL_URL?.protocol ?? null,
-    cookiePrefix: COOKIE_PREFIX,
-    sessionCookieNames: SESSION_COOKIE_NAMES,
-});
-
 export function proxy(req) {
-    const host = req.headers.get("host") || "";
-    const proto = req.headers.get("x-forwarded-proto") || "https";
-    const xfHost = req.headers.get("x-forwarded-host");
-
-    console.log("[proxy:entry]", {
-        pathname: req.nextUrl.pathname,
-        search: req.nextUrl.search || "",
-        host,
-        proto,
-        xfHost,
-        method: req.method,
-        canonical: CANONICAL_URL?.host ?? null,
-    });
-
     if (CANONICAL_URL && CANONICAL_URL.hostname !== "localhost") {
+        const host = req.headers.get("host") || "";
+        const proto = req.headers.get("x-forwarded-proto") || "https";
         // Treat empty/loopback hosts as internal — Next's image optimizer
         // builds its source fetch via a mocked request with no host header,
         // and we must never redirect that.
@@ -62,17 +42,11 @@ export function proxy(req) {
             host.startsWith("localhost") ||
             host.startsWith("127.") ||
             host.startsWith("[::1]");
-        if (isInternal) {
-            console.log("[proxy:internal-skip]", { pathname: req.nextUrl.pathname, host });
-        } else {
+        if (!isInternal) {
             const wrongHost = host !== CANONICAL_URL.host;
             const wrongProto = proto !== CANONICAL_URL.protocol.replace(":", "");
             if (wrongHost || wrongProto) {
                 const target = new URL(req.nextUrl.pathname + req.nextUrl.search, CANONICAL_URL);
-                console.log("[proxy:canonical-redirect]", {
-                    from: `${proto}://${host}${req.nextUrl.pathname}`,
-                    to: target.toString(),
-                });
                 return NextResponse.redirect(target, 308);
             }
         }
@@ -94,7 +68,6 @@ export function proxy(req) {
             "callbackURL",
             pathname + (searchParams.toString() ? `?${searchParams}` : ""),
         );
-        console.log("[proxy:auth-redirect→login]", { from: pathname });
         return NextResponse.redirect(url);
     }
 
@@ -102,11 +75,9 @@ export function proxy(req) {
         const url = req.nextUrl.clone();
         url.pathname = "/auth/post-login";
         url.search = "";
-        console.log("[proxy:auth-redirect→post-login]");
         return NextResponse.redirect(url);
     }
 
-    console.log("[proxy:pass-through]", { pathname });
     return NextResponse.next();
 }
 
