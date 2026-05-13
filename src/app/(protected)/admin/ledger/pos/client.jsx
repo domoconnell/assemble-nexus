@@ -49,7 +49,7 @@ export default function PosClient({
 	);
 	const totalNet = takings.reduce((s, t) => s + (t.net_cents ?? 0), 0);
 	const totalGross = takings.reduce((s, t) => s + (t.gross_cents ?? 0), 0);
-	const totalCogs = takings.reduce((s, t) => s + (t.cogs_cents ?? 0), 0);
+	const totalVat = takings.reduce((s, t) => s + (t.vat_cents ?? 0), 0);
 
 	const cells = buildCalendar(monthYear, monthMonth1);
 
@@ -81,24 +81,28 @@ export default function PosClient({
 		<div className="space-y-6">
 			<section className="rounded-lg border bg-card p-6 space-y-4">
 				<div className="flex items-baseline justify-between gap-4 flex-wrap">
-					<div className="grid gap-4 sm:grid-cols-3 flex-1">
-						<KpiCard label="Net (excl. VAT)" value={fmt(totalNet)} />
-						<KpiCard label="Gross" value={fmt(totalGross)} />
-						<KpiCard label="Cost of goods" value={fmt(totalCogs)} hint={totalCogs === 0 ? "Set cost prices in Square to enable" : null} />
-					</div>
-					<div className="flex flex-col items-end gap-1">
+					<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
+						Totals
+					</h2>
+					<div className="flex items-center gap-3">
+						{squareConfigured && (
+							<span className="text-[11px] text-muted-foreground">
+								Square · {squareEnv}
+							</span>
+						)}
 						<Button
 							onClick={() => resync(monthStart, monthEnd, "Sync month")}
 							disabled={pending || !squareConfigured}
+							className="w-36"
 						>
 							{pending ? "Syncing…" : "Sync this month"}
 						</Button>
-						{squareConfigured && (
-							<span className="text-[11px] text-muted-foreground">
-								Square: {squareEnv}
-							</span>
-						)}
 					</div>
+				</div>
+				<div className="grid gap-4 grid-cols-3">
+					<KpiCard label="Gross" value={fmt(totalGross)} />
+					<KpiCard label="VAT" value={fmt(totalVat)} />
+					<KpiCard label="Net (excl. VAT)" value={fmt(totalNet)} />
 				</div>
 			</section>
 
