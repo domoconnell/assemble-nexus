@@ -55,6 +55,10 @@ export async function getStarlingSettings(venueId) {
 	return getSetting(venueId, "starling", null);
 }
 
+export async function getSquareSettings(venueId) {
+	return getSetting(venueId, "square", null);
+}
+
 /**
  * Cheap "is this venue configured to issue wallet passes?" check used by
  * the ticket-detail UI to decide whether to render the Add to Wallet

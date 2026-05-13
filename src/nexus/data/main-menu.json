@@ -58,7 +58,8 @@
 					{ "title": "Recurring costs", "url": "/admin/ledger/recurring" },
 					{ "title": "Expenses", "url": "/admin/ledger/expenses" },
 					{ "title": "POS takings", "url": "/admin/ledger/pos" },
-					{ "title": "Manual income", "url": "/admin/ledger/income" }
+					{ "title": "Manual income", "url": "/admin/ledger/income" },
+					{ "title": "VAT return", "url": "/admin/ledger/vat" }
 				]
 			},
 			{
@@ -73,6 +74,7 @@
 					{ "title": "Ticketing", "url": "/admin/settings/ticketing" },
 					{ "title": "Payments", "url": "/admin/settings/payments" },
 					{ "title": "Bank account", "url": "/admin/settings/bank-account" },
+					{ "title": "POS", "url": "/admin/settings/pos" },
 					{ "title": "Hours & rate bands", "url": "/admin/settings/hours" }
 				]
 			}

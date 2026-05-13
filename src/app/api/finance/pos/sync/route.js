@@ -2,6 +2,7 @@ import { z } from "zod";
 import { auth } from "@/utils/auth/auth.js";
 import { requireCurrentVenue } from "@/db/queries/venue.js";
 import { upsertPosDailyTakings } from "@/db/queries/finance.js";
+import { getSquareSettings } from "@/db/queries/settings.js";
 import { syncSquareDailyTakings, squareConfig } from "@/lib/finance/square.js";
 
 export const runtime = "nodejs";
@@ -35,17 +36,6 @@ export async function POST(request) {
 	const ok = await authorise(request);
 	if (!ok) return json(401, { error: "Unauthorised" });
 
-	const cfg = squareConfig();
-	if (!cfg.configured) {
-		return json(412, {
-			error: "Square not configured",
-			missing: {
-				token: !cfg.token,
-				location: !cfg.locationId,
-			},
-		});
-	}
-
 	let body;
 	try {
 		body = await request.json();
@@ -61,10 +51,23 @@ export async function POST(request) {
 	}
 
 	const venue = await requireCurrentVenue();
+	const squareSettings = await getSquareSettings(venue.id);
+	const cfg = squareConfig(squareSettings);
+	if (!cfg.configured) {
+		return json(412, {
+			error: "Square not configured",
+			missing: {
+				token: !cfg.token,
+				location: !cfg.locationId,
+			},
+		});
+	}
+
 	try {
 		const days = await syncSquareDailyTakings({
 			fromYmd: parsed.data.from,
 			toYmd: parsed.data.to,
+			settings: squareSettings,
 		});
 		for (const day of days) {
 			await upsertPosDailyTakings(venue.id, day);

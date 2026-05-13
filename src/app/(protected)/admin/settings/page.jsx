@@ -37,6 +37,11 @@ const cards = [
 		href: "/admin/settings/bank-account",
 	},
 	{
+		title: "POS",
+		description: "Connect Square so daily café & bar takings flow into the ledger.",
+		href: "/admin/settings/pos",
+	},
+	{
 		title: "Hours & rate bands",
 		description: "Operating hours and unsociable-hour rate modifiers (e.g. evening +20%).",
 		href: "/admin/settings/hours",

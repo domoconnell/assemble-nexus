@@ -15,7 +15,7 @@ import {
 } from "@/db/queries/bookings.js";
 import { room } from "@/db/schema/entities/room.js";
 import { ensureDraftEventForBooking } from "@/lib/events/draft-event.js";
-import { expandWeeklyPattern } from "@/lib/booking/recurrence.js";
+import { expandPattern } from "@/lib/booking/recurrence.js";
 import { booking_segment } from "@/db/schema/entities/booking_segment.js";
 import { requireServerSession } from "@/utils/auth/server-guard.js";
 import {
@@ -288,13 +288,26 @@ export async function saveBookingInternalNotesAction(input) {
 const AddRecurrenceSchema = z.object({
 	booking_id: z.string().uuid(),
 	template_segment_id: z.string().uuid(),
-	kind: z.literal("weekly"),
-	interval: z.coerce.number().int().min(1).max(8).default(1),
+	kind: z.enum(["weekly", "monthly_day", "monthly_weekday"]),
+	interval: z.coerce.number().int().min(1).max(12).default(1),
 	count: z.coerce.number().int().min(2).max(156).optional().nullable(),
 	until_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+	// monthly_day
+	day_of_month: z.coerce.number().int().min(1).max(31).optional().nullable(),
+	// monthly_weekday
+	weekday: z.coerce.number().int().min(0).max(6).optional().nullable(),
+	position: z.coerce.number().int().refine((n) => [1, 2, 3, 4, -1].includes(n), {
+		message: "Position must be 1, 2, 3, 4, or -1",
+	}).optional().nullable(),
 }).refine((d) => d.count || d.until_date, {
 	message: "Provide either count or until_date",
-});
+}).refine(
+	(d) => d.kind !== "monthly_day" || d.day_of_month != null,
+	{ message: "monthly_day requires day_of_month" },
+).refine(
+	(d) => d.kind !== "monthly_weekday" || (d.weekday != null && d.position != null),
+	{ message: "monthly_weekday requires weekday and position" },
+);
 
 /**
  * Extend an existing booking with additional occurrences generated from a
@@ -330,12 +343,18 @@ export async function addRecurringSegmentsAction(input) {
 		throw new Error("Template segment is from a different booking.");
 	}
 
-	const occurrences = expandWeeklyPattern({
+	const occurrences = expandPattern({
 		templateStart: template.starts_at,
 		templateEnd: template.ends_at,
-		interval: parsed.interval,
-		count: parsed.count ?? null,
-		untilDate: parsed.until_date ?? null,
+		pattern: {
+			kind: parsed.kind,
+			interval: parsed.interval,
+			count: parsed.count ?? null,
+			until_date: parsed.until_date ?? null,
+			day_of_month: parsed.day_of_month ?? null,
+			weekday: parsed.weekday ?? null,
+			position: parsed.position ?? null,
+		},
 	});
 	if (occurrences.length === 0) {
 		throw new Error("Recurrence produced no occurrences. Check count / until date.");

@@ -1,10 +1,9 @@
 /**
  * Minimal Square REST client for daily-takings sync.
  *
- * Env vars required:
- *   SQUARE_ACCESS_TOKEN    — Personal Access Token from Square Developer Dashboard
- *   SQUARE_LOCATION_ID     — Location to pull orders from
- *   SQUARE_ENVIRONMENT     — "sandbox" or "production"
+ * Credentials live in the per-venue `square` setting (access_token, location_id,
+ * environment). Legacy env-var values are honoured as a fallback so existing
+ * deploys keep working until the new settings page is filled in.
  *
  * We deliberately avoid the SDK to keep deps lean — REST against the public
  * Orders / Payments / Refunds endpoints is enough.
@@ -18,21 +17,24 @@ const ENV_BASE_URLS = {
 	sandbox: "https://connect.squareupsandbox.com",
 };
 
-export function squareConfig() {
-	const token = process.env.SQUARE_ACCESS_TOKEN;
-	const locationId = process.env.SQUARE_LOCATION_ID;
-	const env = (process.env.SQUARE_ENVIRONMENT || "sandbox").toLowerCase();
+export function squareConfig(settings) {
+	const token = settings?.access_token || process.env.SQUARE_ACCESS_TOKEN || null;
+	const locationId = settings?.location_id || process.env.SQUARE_LOCATION_ID || null;
+	const env = (
+		settings?.environment ||
+		process.env.SQUARE_ENVIRONMENT ||
+		"sandbox"
+	).toLowerCase();
 	return {
-		token: token || null,
-		locationId: locationId || null,
+		token,
+		locationId,
 		env,
 		baseUrl: ENV_BASE_URLS[env] || ENV_BASE_URLS.sandbox,
 		configured: !!(token && locationId),
 	};
 }
 
-async function squareFetch(path, init = {}) {
-	const cfg = squareConfig();
+async function squareFetch(cfg, path, init = {}) {
 	if (!cfg.configured) throw new Error("Square not configured");
 	const res = await fetch(`${cfg.baseUrl}${path}`, {
 		...init,
@@ -52,6 +54,49 @@ async function squareFetch(path, init = {}) {
 	return res.json();
 }
 
+/**
+ * Probe that the supplied credentials work — used by the settings page's
+ * "Test connection" button. Calls /v2/locations/{id} which is a cheap
+ * sanity check that doesn't pull large lists.
+ */
+export async function probeSquare(settings) {
+	const cfg = squareConfig(settings);
+	if (!cfg.configured) {
+		return { ok: false, error: "Missing access token or location ID." };
+	}
+	try {
+		const res = await fetch(`${cfg.baseUrl}/v2/locations/${cfg.locationId}`, {
+			headers: {
+				Authorization: `Bearer ${cfg.token}`,
+				"Square-Version": "2025-06-18",
+			},
+			cache: "no-store",
+		});
+		if (!res.ok) {
+			const text = await res.text().catch(() => "");
+			return {
+				ok: false,
+				status: res.status,
+				error:
+					res.status === 401
+						? "Square rejected the access token."
+						: res.status === 404
+							? "Location ID not found for this token."
+							: `Square returned ${res.status}${text ? `: ${text.slice(0, 200)}` : ""}`,
+			};
+		}
+		const data = await res.json();
+		return {
+			ok: true,
+			location_name: data.location?.name ?? null,
+			currency: data.location?.currency ?? "GBP",
+			env: cfg.env,
+		};
+	} catch (err) {
+		return { ok: false, error: err?.message || "Square probe failed" };
+	}
+}
+
 const londonDateFmt = new Intl.DateTimeFormat("en-CA", {
 	timeZone: "Europe/London",
 	year: "numeric",
@@ -67,8 +112,7 @@ function londonDateOf(iso) {
  * Walk all orders in [startIso, endIso) for the configured location, returning
  * a normalised array of order summaries.
  */
-async function fetchOrdersInRange(startIso, endIso) {
-	const cfg = squareConfig();
+async function fetchOrdersInRange(cfg, startIso, endIso) {
 	const orders = [];
 	let cursor = null;
 	let safety = 0;
@@ -87,7 +131,7 @@ async function fetchOrdersInRange(startIso, endIso) {
 			limit: 500,
 			...(cursor ? { cursor } : {}),
 		};
-		const data = await squareFetch("/v2/orders/search", {
+		const data = await squareFetch(cfg, "/v2/orders/search", {
 			method: "POST",
 			body: JSON.stringify(body),
 		});
@@ -113,8 +157,7 @@ async function fetchOrdersInRange(startIso, endIso) {
 /**
  * Walk all refunds in the same window so refunds are netted out of gross.
  */
-async function fetchRefundsInRange(startIso, endIso) {
-	const cfg = squareConfig();
+async function fetchRefundsInRange(cfg, startIso, endIso) {
 	const refunds = [];
 	let cursor = null;
 	let safety = 0;
@@ -125,7 +168,7 @@ async function fetchRefundsInRange(startIso, endIso) {
 			end_time: endIso,
 			...(cursor ? { cursor } : {}),
 		});
-		const data = await squareFetch(`/v2/refunds?${params.toString()}`);
+		const data = await squareFetch(cfg, `/v2/refunds?${params.toString()}`);
 		for (const r of data.refunds || data.payment_refunds || []) {
 			refunds.push({
 				id: r.id,
@@ -153,7 +196,9 @@ async function fetchRefundsInRange(startIso, endIso) {
  * net    = gross − vat
  * cogs   = 0 in v1 (Catalog cost lookup added later)
  */
-export async function syncSquareDailyTakings({ fromYmd, toYmd }) {
+export async function syncSquareDailyTakings({ fromYmd, toYmd, settings }) {
+	const cfg = squareConfig(settings);
+	if (!cfg.configured) throw new Error("Square not configured");
 	const startIso = new Date(`${fromYmd}T00:00:00.000Z`).toISOString();
 	// One extra day on the end to safely cover late-evening UK transactions
 	// that close after midnight UTC.
@@ -161,8 +206,8 @@ export async function syncSquareDailyTakings({ fromYmd, toYmd }) {
 	const endIso = new Date(`${toPlusOne}T00:00:00.000Z`).toISOString();
 
 	const [orders, refunds] = await Promise.all([
-		fetchOrdersInRange(startIso, endIso),
-		fetchRefundsInRange(startIso, endIso),
+		fetchOrdersInRange(cfg, startIso, endIso),
+		fetchRefundsInRange(cfg, startIso, endIso),
 	]);
 
 	const byDay = new Map();

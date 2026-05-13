@@ -86,12 +86,23 @@ export default function RecurrencePanel({
 	const [open, setOpen] = useState(false);
 	const [confirmId, setConfirmId] = useState(null);
 	const [pending, startTransition] = useTransition();
+	const templateDefault = segments[0];
 	const [form, setForm] = useState({
-		template_segment_id: segments[0]?.id ?? "",
+		template_segment_id: templateDefault?.id ?? "",
+		kind: "weekly",
 		interval: 1,
 		limit_kind: "count",
 		count: 12,
 		until_date: "",
+		day_of_month: templateDefault?.starts_at
+			? new Date(templateDefault.starts_at).getDate()
+			: 1,
+		weekday: templateDefault?.starts_at
+			? new Date(templateDefault.starts_at).getDay()
+			: 1,
+		position: templateDefault?.starts_at
+			? Math.min(4, Math.ceil(new Date(templateDefault.starts_at).getDate() / 7))
+			: 1,
 	});
 
 	const canAddRecurrence = bookingStatus === "pending" || bookingStatus === "approved";
@@ -108,10 +119,13 @@ export default function RecurrencePanel({
 				const result = await addRecurringSegmentsAction({
 					booking_id: bookingId,
 					template_segment_id: form.template_segment_id,
-					kind: "weekly",
+					kind: form.kind,
 					interval: Number(form.interval) || 1,
 					count: form.limit_kind === "count" ? Number(form.count) || null : null,
 					until_date: form.limit_kind === "until" ? form.until_date || null : null,
+					day_of_month: form.kind === "monthly_day" ? Number(form.day_of_month) || null : null,
+					weekday: form.kind === "monthly_weekday" ? Number(form.weekday) : null,
+					position: form.kind === "monthly_weekday" ? Number(form.position) : null,
 				});
 				toast.success(
 					`Added ${result.added} occurrence${result.added === 1 ? "" : "s"}` +
@@ -206,20 +220,95 @@ export default function RecurrencePanel({
 							</Select>
 						</div>
 						<div className="space-y-1.5">
+							<Label>Pattern</Label>
+							<Select
+								value={form.kind}
+								onValueChange={(v) => setForm({ ...form, kind: v })}
+							>
+								<SelectTrigger>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="weekly">Weekly</SelectItem>
+									<SelectItem value="monthly_day">Monthly · same date</SelectItem>
+									<SelectItem value="monthly_weekday">Monthly · same weekday position</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="space-y-1.5">
 							<Label htmlFor="rec-interval">Repeat every</Label>
 							<div className="flex items-center gap-2">
 								<Input
 									id="rec-interval"
 									type="number"
 									min="1"
-									max="8"
+									max={form.kind === "weekly" ? "8" : "12"}
 									value={form.interval}
 									onChange={(e) => setForm({ ...form, interval: e.target.value })}
 									className="w-20"
 								/>
-								<span className="text-sm">week(s)</span>
+								<span className="text-sm">
+									{form.kind === "weekly" ? "week(s)" : "month(s)"}
+								</span>
 							</div>
 						</div>
+						{form.kind === "monthly_day" && (
+							<div className="space-y-1.5">
+								<Label htmlFor="rec-dom">Day of month</Label>
+								<Input
+									id="rec-dom"
+									type="number"
+									min="1"
+									max="31"
+									value={form.day_of_month}
+									onChange={(e) => setForm({ ...form, day_of_month: e.target.value })}
+									className="w-24"
+								/>
+								<p className="text-[11px] text-muted-foreground">
+									Months without that day (e.g. Feb 30th) are skipped automatically.
+								</p>
+							</div>
+						)}
+						{form.kind === "monthly_weekday" && (
+							<div className="grid grid-cols-2 gap-3">
+								<div className="space-y-1.5">
+									<Label>Position</Label>
+									<Select
+										value={String(form.position)}
+										onValueChange={(v) => setForm({ ...form, position: v })}
+									>
+										<SelectTrigger>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="1">First</SelectItem>
+											<SelectItem value="2">Second</SelectItem>
+											<SelectItem value="3">Third</SelectItem>
+											<SelectItem value="4">Fourth</SelectItem>
+											<SelectItem value="-1">Last</SelectItem>
+										</SelectContent>
+									</Select>
+								</div>
+								<div className="space-y-1.5">
+									<Label>Weekday</Label>
+									<Select
+										value={String(form.weekday)}
+										onValueChange={(v) => setForm({ ...form, weekday: v })}
+									>
+										<SelectTrigger>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{WEEKDAY_LABELS.map((w, i) => (
+												<SelectItem key={i} value={String(i)}>
+													{w}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
+							</div>
+						)}
 						<div className="space-y-1.5">
 							<Label>Until</Label>
 							<div className="flex gap-3">

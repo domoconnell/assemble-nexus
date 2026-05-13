@@ -9,6 +9,7 @@ import {
 	nextMonth,
 } from "@/lib/finance/months";
 import { squareConfig } from "@/lib/finance/square";
+import { getSquareSettings } from "@/db/queries/settings";
 import PosClient from "./client";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,8 @@ export default async function PosPage({ searchParams }) {
 		month.ymdFirstOfMonth,
 		month.ymdFirstOfNextMonth,
 	);
-	const cfg = squareConfig();
+	const squareSettings = await getSquareSettings(venue.id);
+	const cfg = squareConfig(squareSettings);
 
 	const prev = prevMonth(month.year, month.month1);
 	const next = nextMonth(month.year, month.month1);
@@ -75,14 +77,13 @@ export default async function PosPage({ searchParams }) {
 				<section className="rounded-lg border border-dashed bg-muted/30 p-6 text-sm space-y-2">
 					<div className="font-medium">Square not connected</div>
 					<p className="text-muted-foreground">
-						Set these env vars and restart to enable sync:
+						<Link
+							href="/admin/settings/pos"
+							className="text-foreground underline underline-offset-2 hover:text-primary"
+						>
+							Connect Square →
+						</Link>
 					</p>
-					<ul className="list-disc pl-5 text-muted-foreground space-y-0.5 font-mono text-xs">
-						<li>SQUARE_ACCESS_TOKEN</li>
-						<li>SQUARE_LOCATION_ID</li>
-						<li>SQUARE_ENVIRONMENT (sandbox | production)</li>
-						<li>POS_SYNC_TOKEN (optional, for cron-triggered sync)</li>
-					</ul>
 				</section>
 			)}
 		</div>
