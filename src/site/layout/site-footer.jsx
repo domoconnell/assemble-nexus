@@ -31,6 +31,7 @@ export function SiteFooter({ rooms = [], hasUpcomingEvents = false }) {
 	columns.push({
 		title: "Connect",
 		links: [
+			{ label: "Help", href: "/help" },
 			{ label: "Contact", href: "/contact" },
 			{ label: "Assemble Church", href: "https://www.assemblechurch.com", external: true },
 		],
