@@ -74,7 +74,7 @@ export default function ActivityCalendar({ year, month1, activity = {}, todayKey
 					return (
 						<div
 							key={c.key}
-							className={`aspect-square rounded-md border text-[11px] flex flex-col justify-between p-1.5 ${
+							className={`relative aspect-square rounded-[2px] border ${
 								isToday
 									? "border-primary/60 ring-1 ring-primary/40"
 									: intensity > 0
@@ -88,9 +88,11 @@ export default function ActivityCalendar({ year, month1, activity = {}, todayKey
 									: undefined
 							}
 						>
-							<span className="font-mono tabular-nums">{c.day}</span>
+							<span className="absolute top-1 left-1.5 font-mono tabular-nums text-[10px] text-muted-foreground leading-none">
+								{c.day}
+							</span>
 							{c.activity && c.activity.total > 0 && (
-								<span className="text-[9px] text-muted-foreground">
+								<span className="absolute inset-0 flex items-center justify-center font-mono tabular-nums text-sm text-foreground">
 									{c.activity.total}
 								</span>
 							)}
