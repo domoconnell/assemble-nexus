@@ -30,24 +30,49 @@ const CANONICAL_URL = (() => {
     }
 })();
 
+console.log("[proxy:boot]", {
+    BASE_URL: process.env.BASE_URL || null,
+    canonicalHost: CANONICAL_URL?.host ?? null,
+    canonicalProto: CANONICAL_URL?.protocol ?? null,
+    cookiePrefix: COOKIE_PREFIX,
+    sessionCookieNames: SESSION_COOKIE_NAMES,
+});
+
 export function proxy(req) {
+    const host = req.headers.get("host") || "";
+    const proto = req.headers.get("x-forwarded-proto") || "https";
+    const xfHost = req.headers.get("x-forwarded-host");
+
+    console.log("[proxy:entry]", {
+        pathname: req.nextUrl.pathname,
+        search: req.nextUrl.search || "",
+        host,
+        proto,
+        xfHost,
+        method: req.method,
+        canonical: CANONICAL_URL?.host ?? null,
+    });
+
     if (CANONICAL_URL && CANONICAL_URL.hostname !== "localhost") {
-        const host = req.headers.get("host") || "";
-        const proto = req.headers.get("x-forwarded-proto") || "https";
-        // Skip on internal/loopback requests — Next's image optimizer fetches
-        // local files via HTTP and the request arrives with host=localhost:PORT,
-        // no x-forwarded-* headers. Redirecting it to the public URL breaks the
-        // optimizer's fetch.
+        // Treat empty/loopback hosts as internal — Next's image optimizer
+        // builds its source fetch via a mocked request with no host header,
+        // and we must never redirect that.
         const isInternal =
+            !host ||
             host.startsWith("localhost") ||
             host.startsWith("127.") ||
-            host.startsWith("[::1]") ||
-            !req.headers.get("x-forwarded-proto");
-        if (!isInternal) {
+            host.startsWith("[::1]");
+        if (isInternal) {
+            console.log("[proxy:internal-skip]", { pathname: req.nextUrl.pathname, host });
+        } else {
             const wrongHost = host !== CANONICAL_URL.host;
             const wrongProto = proto !== CANONICAL_URL.protocol.replace(":", "");
             if (wrongHost || wrongProto) {
                 const target = new URL(req.nextUrl.pathname + req.nextUrl.search, CANONICAL_URL);
+                console.log("[proxy:canonical-redirect]", {
+                    from: `${proto}://${host}${req.nextUrl.pathname}`,
+                    to: target.toString(),
+                });
                 return NextResponse.redirect(target, 308);
             }
         }
@@ -69,6 +94,7 @@ export function proxy(req) {
             "callbackURL",
             pathname + (searchParams.toString() ? `?${searchParams}` : ""),
         );
+        console.log("[proxy:auth-redirect→login]", { from: pathname });
         return NextResponse.redirect(url);
     }
 
@@ -76,12 +102,22 @@ export function proxy(req) {
         const url = req.nextUrl.clone();
         url.pathname = "/auth/post-login";
         url.search = "";
+        console.log("[proxy:auth-redirect→post-login]");
         return NextResponse.redirect(url);
     }
 
+    console.log("[proxy:pass-through]", { pathname });
     return NextResponse.next();
 }
 
 export const config = {
-    matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png).*)"],
+    // Exclude Next internals AND any path that looks like a static asset.
+    // The trailing extension check matters because Next's image optimizer
+    // makes an *internal* mock request to the source file (e.g.
+    // `/assembly-rooms-white.png`) when optimising local images — if the
+    // middleware ran on that and issued any redirect, the optimizer would
+    // see a non-image body and fail with "isn't a valid image".
+    matcher: [
+        "/((?!_next/static|_next/image|favicon\\.ico|icon\\.png|apple-icon\\.png|.*\\.(?:png|jpg|jpeg|gif|webp|avif|svg|ico|woff|woff2|ttf|otf|eot|css|js|map|pdf|txt|xml|json|mp4|webm|mp3)$).*)",
+    ],
 };
