@@ -9,6 +9,7 @@ import {
 	monthLabel,
 } from "@/lib/finance/months";
 import { getStarlingBalance } from "@/lib/finance/starling";
+import { getStarlingSettings } from "@/db/queries/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function LedgerDashboardPage({ searchParams }) {
 	const ym = /^\d{4}-\d{2}$/.test(requested ?? "") ? requested : fallback.ym;
 
 	const month = resolveMonth(ym);
+	const starlingSettings = await getStarlingSettings(venue.id);
 	const [pnl, bank] = await Promise.all([
 		getMonthlyPnl(venue.id, {
 			ymdFirstOfMonth: month.ymdFirstOfMonth,
@@ -35,7 +37,7 @@ export default async function LedgerDashboardPage({ searchParams }) {
 			monthStartDate: month.monthStartDate,
 			monthEndDate: month.monthEndDate,
 		}),
-		getStarlingBalance(),
+		getStarlingBalance(starlingSettings),
 	]);
 
 	const prev = prevMonth(month.year, month.month1);

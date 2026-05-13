@@ -32,6 +32,11 @@ const cards = [
 		href: "/admin/settings/payments",
 	},
 	{
+		title: "Bank account",
+		description: "Connect the venue's Starling Bank account to surface the cleared balance on the ledger.",
+		href: "/admin/settings/bank-account",
+	},
+	{
 		title: "Hours & rate bands",
 		description: "Operating hours and unsociable-hour rate modifiers (e.g. evening +20%).",
 		href: "/admin/settings/hours",

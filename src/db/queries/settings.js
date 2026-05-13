@@ -51,6 +51,10 @@ export async function getGoogleWalletSettings(venueId) {
 	return getSetting(venueId, "google_wallet", null);
 }
 
+export async function getStarlingSettings(venueId) {
+	return getSetting(venueId, "starling", null);
+}
+
 /**
  * Cheap "is this venue configured to issue wallet passes?" check used by
  * the ticket-detail UI to decide whether to render the Add to Wallet

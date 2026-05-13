@@ -54,6 +54,7 @@
 				"icon": "chart-line",
 				"items": [
 					{ "title": "Overview", "url": "/admin/ledger/overview" },
+					{ "title": "Banking", "url": "/admin/ledger/banking" },
 					{ "title": "Recurring costs", "url": "/admin/ledger/recurring" },
 					{ "title": "Expenses", "url": "/admin/ledger/expenses" },
 					{ "title": "POS takings", "url": "/admin/ledger/pos" },
@@ -71,6 +72,7 @@
 					{ "title": "Discounts", "url": "/admin/settings/discounts" },
 					{ "title": "Ticketing", "url": "/admin/settings/ticketing" },
 					{ "title": "Payments", "url": "/admin/settings/payments" },
+					{ "title": "Bank account", "url": "/admin/settings/bank-account" },
 					{ "title": "Hours & rate bands", "url": "/admin/settings/hours" }
 				]
 			}

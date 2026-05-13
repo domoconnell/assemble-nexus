@@ -334,6 +334,7 @@ export async function getTicketForPdf(code) {
 			ticket_type_label: ticket_order_line.name_snapshot,
 			order_reference: ticket_order.reference,
 			order_status: ticket_order.status,
+			event_id: event.id,
 			event_title: event.title,
 			event_starts_at: event.starts_at,
 			event_ends_at: event.ends_at,

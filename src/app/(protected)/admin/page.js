@@ -9,6 +9,7 @@ import {
 	listDayActivityForMonth,
 } from "@/db/queries/bookings";
 import { getMonthlyPnl, listMonthlyPnlForRange } from "@/db/queries/finance";
+import { getLatestBalanceSnapshot, getBankInOutBetween } from "@/db/queries/bank";
 import { currentMonthLondon, resolveMonth, monthLabel } from "@/lib/finance/months";
 import { getServerSession } from "@/utils/auth/server-guard";
 import PnlTrendChart from "./_components/pnl-trend-chart";
@@ -68,6 +69,8 @@ export default async function HomePage() {
 		dayActivity,
 		monthlyTrend,
 		upcomingEvents,
+		bankSnapshot,
+		bankInOut,
 	] = await Promise.all([
 		getMonthlyPnl(venue.id, {
 			ymdFirstOfMonth: month.ymdFirstOfMonth,
@@ -83,6 +86,8 @@ export default async function HomePage() {
 		listDayActivityForMonth(venue.id, month.monthStartDate, month.monthEndDate),
 		listMonthlyPnlForRange(venue.id, { endYm: month.ym, monthsBack: 12 }),
 		listUpcomingEvents(venue.id, { limit: 10 }),
+		getLatestBalanceSnapshot(venue.id),
+		getBankInOutBetween(venue.id, month.monthStartDate, month.monthEndDate),
 	]);
 
 	const todayItems = combineScheduleItems(segments, blockouts, todayKey, true);
@@ -113,6 +118,10 @@ export default async function HomePage() {
 					sub="Across approved & confirmed bookings"
 				/>
 			</div>
+
+			{bankSnapshot && (
+				<BankBalanceWidget snapshot={bankSnapshot} inOut={bankInOut} monthName={monthLabel(month.year, month.month1)} />
+			)}
 
 			<section className="rounded-xl border bg-card p-6 space-y-4">
 				<div className="flex items-baseline justify-between gap-3 flex-wrap">
@@ -221,6 +230,58 @@ function PendingBookingsWidget({ bookings }) {
 				</ul>
 			)}
 		</div>
+	);
+}
+
+function BankBalanceWidget({ snapshot, inOut, monthName }) {
+	const cleared = (snapshot.cleared_minor ?? 0) / 100;
+	const inDelta = (inOut?.in_minor ?? 0) / 100;
+	const outDelta = (inOut?.out_minor ?? 0) / 100;
+	const net = (inOut?.net_minor ?? 0) / 100;
+	const captured = new Date(snapshot.captured_at);
+	const fmt = new Intl.NumberFormat("en-GB", {
+		style: "currency",
+		currency: snapshot.currency || "GBP",
+	});
+	return (
+		<Link
+			href="/admin/ledger/banking"
+			className="block rounded-xl border border-foreground/10 bg-card p-5 hover:border-foreground/30 transition"
+		>
+			<div className="flex items-baseline justify-between gap-3 flex-wrap">
+				<div>
+					<div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+						Bank balance
+					</div>
+					<div className="font-display text-3xl tracking-tight mt-1">{fmt.format(cleared)}</div>
+					<div className="text-[10px] text-muted-foreground mt-1">
+						As at {stampFmt.format(captured)}
+					</div>
+				</div>
+				<div className="grid grid-cols-3 gap-4 text-right text-sm">
+					<div>
+						<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+							In · {monthName}
+						</div>
+						<div className="font-mono tabular-nums text-primary mt-0.5">+{fmt.format(inDelta)}</div>
+					</div>
+					<div>
+						<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+							Out · {monthName}
+						</div>
+						<div className="font-mono tabular-nums text-destructive mt-0.5">−{fmt.format(outDelta)}</div>
+					</div>
+					<div>
+						<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+							Net
+						</div>
+						<div className={`font-mono tabular-nums mt-0.5 ${net >= 0 ? "text-primary" : "text-destructive"}`}>
+							{net >= 0 ? "+" : "−"}{fmt.format(Math.abs(net))}
+						</div>
+					</div>
+				</div>
+			</div>
+		</Link>
 	);
 }
 

@@ -239,6 +239,13 @@
       "when": 1778599154616,
       "tag": "0033_natural_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1778670370276,
+      "tag": "0034_classy_betty_ross",
+      "breakpoints": true
     }
   ]
 }
