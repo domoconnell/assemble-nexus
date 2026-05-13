@@ -21,12 +21,28 @@ function ruleForType(rules, bookingTypeId) {
 	return rules.find((r) => r.booking_type_id === bookingTypeId) ?? null;
 }
 
+function centsToPoundsStr(cents) {
+	if (cents == null) return "";
+	const n = Number(cents) / 100;
+	if (!Number.isFinite(n)) return "";
+	// Trim trailing zeros after the decimal point so "50" stays "50", not "50.00",
+	// while preserving "50.5" → "50.5".
+	return n.toString();
+}
+
+function poundsStrToCents(s) {
+	if (s == null || s === "") return null;
+	const n = Number(s);
+	if (!Number.isFinite(n) || n < 0) return null;
+	return Math.round(n * 100);
+}
+
 function defaultsFor(bookingTypeId) {
 	return {
 		id: null,
 		booking_type_id: bookingTypeId,
-		amount_cents: 0,
-		daily_cap_cents: "",
+		amount_pounds: "",
+		daily_cap_pounds: "",
 		min_hours: "",
 		vat_rate_id: null,
 		vat_inclusive: false,
@@ -43,9 +59,9 @@ export default function RoomPricingEditor({ roomId, offeredTypes, vatRates, init
 			map.set(t.id, existing ? {
 				id: existing.id,
 				booking_type_id: t.id,
-				amount_cents: existing.amount_cents ?? 0,
-				daily_cap_cents: existing.daily_cap_cents ?? "",
-				min_hours: existing.min_hours ?? "",
+				amount_pounds: centsToPoundsStr(existing.amount_cents ?? 0),
+				daily_cap_pounds: centsToPoundsStr(existing.daily_cap_cents),
+				min_hours: existing.min_hours == null ? "" : String(existing.min_hours),
 				vat_rate_id: existing.vat_rate_id ?? null,
 				vat_inclusive: !!existing.vat_inclusive,
 			} : defaultsFor(t.id));
@@ -73,8 +89,8 @@ export default function RoomPricingEditor({ roomId, offeredTypes, vatRates, init
 				return {
 					id: d.id,
 					booking_type_id: t.id,
-					amount_cents: d.amount_cents,
-					daily_cap_cents: d.daily_cap_cents === "" ? null : d.daily_cap_cents,
+					amount_cents: poundsStrToCents(d.amount_pounds) ?? 0,
+					daily_cap_cents: poundsStrToCents(d.daily_cap_pounds),
 					min_hours: d.min_hours === "" ? null : d.min_hours,
 					vat_rate_id: d.vat_rate_id,
 					vat_inclusive: !!d.vat_inclusive,
@@ -130,36 +146,23 @@ export default function RoomPricingEditor({ roomId, offeredTypes, vatRates, init
 									<Label>Hourly rate (£)</Label>
 									<Input
 										type="number"
+										inputMode="decimal"
 										min="0"
 										step="0.01"
-										value={(d.amount_cents / 100).toString()}
-										onChange={(e) =>
-											update(t.id, {
-												amount_cents: Math.round(Number(e.target.value || 0) * 100),
-											})
-										}
+										value={d.amount_pounds}
+										onChange={(e) => update(t.id, { amount_pounds: e.target.value })}
 									/>
 								</div>
 								<div className="space-y-2">
 									<Label>Daily cap (£, optional)</Label>
 									<Input
 										type="number"
+										inputMode="decimal"
 										min="0"
 										step="0.01"
 										placeholder="—"
-										value={
-											d.daily_cap_cents === "" || d.daily_cap_cents == null
-												? ""
-												: (Number(d.daily_cap_cents) / 100).toString()
-										}
-										onChange={(e) =>
-											update(t.id, {
-												daily_cap_cents:
-													e.target.value === ""
-														? ""
-														: Math.round(Number(e.target.value || 0) * 100),
-											})
-										}
+										value={d.daily_cap_pounds}
+										onChange={(e) => update(t.id, { daily_cap_pounds: e.target.value })}
 									/>
 								</div>
 								<div className="space-y-2">

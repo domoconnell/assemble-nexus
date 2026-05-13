@@ -17,9 +17,7 @@ const OPTIONS = [
 		key: "stripe",
 		title: "Stripe",
 		blurb:
-			"Production payment provider. The driver is plumbed but currently stubbed — pick this once the Stripe go-live phase ships and your account + keys are configured.",
-		disabled: true,
-		comingSoon: true,
+			"Live card payments. Saves processing fees against each order. Requires credentials in the Stripe section below — switching here without keys saved will fall back to FakePSP until they are.",
 	},
 ];
 

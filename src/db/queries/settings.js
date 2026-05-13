@@ -59,6 +59,10 @@ export async function getSquareSettings(venueId) {
 	return getSetting(venueId, "square", null);
 }
 
+export async function getStripeSettings(venueId) {
+	return getSetting(venueId, "stripe", null);
+}
+
 /**
  * Cheap "is this venue configured to issue wallet passes?" check used by
  * the ticket-detail UI to decide whether to render the Add to Wallet

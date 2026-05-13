@@ -1,13 +1,17 @@
 import Link from "next/link";
 import { requireCurrentVenue } from "@/db/queries/venue";
-import { getPaymentsSettings } from "@/db/queries/settings";
+import { getPaymentsSettings, getStripeSettings } from "@/db/queries/settings";
 import PaymentsEditor from "./_components/payments-editor";
+import StripeEditor from "./_components/stripe-editor";
 
 export const dynamic = "force-dynamic";
 
 export default async function PaymentsSettingsPage() {
 	const venue = await requireCurrentVenue();
-	const initial = await getPaymentsSettings(venue.id);
+	const [initial, stripeInitial] = await Promise.all([
+		getPaymentsSettings(venue.id),
+		getStripeSettings(venue.id),
+	]);
 
 	return (
 		<div className="mx-auto p-6 lg:p-10 max-w-3xl space-y-8">
@@ -23,6 +27,7 @@ export default async function PaymentsSettingsPage() {
 				</p>
 			</div>
 			<PaymentsEditor initial={initial} />
+			<StripeEditor initial={stripeInitial} />
 		</div>
 	);
 }

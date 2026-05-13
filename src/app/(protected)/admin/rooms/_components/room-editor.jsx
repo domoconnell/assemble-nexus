@@ -384,9 +384,17 @@ export default function RoomEditor({
 								Delete
 							</Button>
 						)}
-						<Button onClick={handleSave} disabled={saving || !room.name || !room.slug}>
-							{saving ? "Saving…" : "Save"}
-						</Button>
+						{/* Top Save is for Details-tab fields only — every other tab
+						    has its own save mechanism (pricing's "Save pricing" at
+						    the bottom, packages save per-card, blocks per-block,
+						    gallery on blur). Hiding it elsewhere stops users from
+						    clicking it and wondering why their pricing edits
+						    didn't persist. */}
+						{tab === "details" && (
+							<Button onClick={handleSave} disabled={saving || !room.name || !room.slug}>
+								{saving ? "Saving…" : "Save details"}
+							</Button>
+						)}
 					</div>
 				</div>
 			</div>
