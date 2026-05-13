@@ -10,6 +10,12 @@ import {
 } from "@/db/queries/bookings";
 import { getMonthlyPnl, listMonthlyPnlForRange } from "@/db/queries/finance";
 import { getLatestBalanceSnapshot, getBankInOutBetween } from "@/db/queries/bank";
+import {
+	getTopEventsBySales,
+	getPerOrganiserRevenue,
+	getBookingPipelineCounts,
+	getRecentActivity,
+} from "@/db/queries/dashboard";
 import { currentMonthLondon, resolveMonth, monthLabel } from "@/lib/finance/months";
 import { getServerSession } from "@/utils/auth/server-guard";
 import PnlTrendChart from "./_components/pnl-trend-chart";
@@ -71,6 +77,10 @@ export default async function HomePage() {
 		upcomingEvents,
 		bankSnapshot,
 		bankInOut,
+		topEvents,
+		perOrganiser,
+		pipeline,
+		recentActivity,
 	] = await Promise.all([
 		getMonthlyPnl(venue.id, {
 			ymdFirstOfMonth: month.ymdFirstOfMonth,
@@ -88,6 +98,10 @@ export default async function HomePage() {
 		listUpcomingEvents(venue.id, { limit: 10 }),
 		getLatestBalanceSnapshot(venue.id),
 		getBankInOutBetween(venue.id, month.monthStartDate, month.monthEndDate),
+		getTopEventsBySales(venue.id, { limit: 5 }),
+		getPerOrganiserRevenue(venue.id, { limit: 5 }),
+		getBookingPipelineCounts(venue.id, { monthsBack: 3 }),
+		getRecentActivity(venue.id, { limit: 10 }),
 	]);
 
 	const todayItems = combineScheduleItems(segments, blockouts, todayKey, true);
@@ -137,6 +151,16 @@ export default async function HomePage() {
 				</div>
 				<PnlTrendChart months={monthlyTrend} />
 			</section>
+
+			<div className="grid gap-6 lg:grid-cols-2">
+				<TopEventsCard events={topEvents} />
+				<TopOrganisersCard organisations={perOrganiser} />
+			</div>
+
+			<div className="grid gap-6 lg:grid-cols-2">
+				<PipelineFunnelCard counts={pipeline} />
+				<RecentActivityCard items={recentActivity} />
+			</div>
 
 			<div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
 				<div className="space-y-6">
@@ -400,6 +424,237 @@ function UpcomingEventsCard({ events }) {
 							</Link>
 						</li>
 					))}
+				</ul>
+			)}
+		</section>
+	);
+}
+
+function TopEventsCard({ events }) {
+	return (
+		<section className="rounded-xl border bg-card p-5 space-y-3">
+			<div className="flex items-baseline justify-between gap-3">
+				<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
+					Top events by sales
+				</h2>
+				<Link href="/admin/events" className="text-xs text-muted-foreground hover:text-foreground">
+					All events →
+				</Link>
+			</div>
+			{events.length === 0 ? (
+				<p className="text-sm text-muted-foreground">No paid ticket orders yet.</p>
+			) : (
+				<ul className="space-y-1.5">
+					{events.map((e, i) => (
+						<li key={e.id}>
+							<Link
+								href={`/admin/events/${e.id}`}
+								className="flex items-baseline justify-between gap-3 rounded-md border border-foreground/10 bg-background px-3 py-2 hover:border-foreground/30 transition"
+							>
+								<div className="flex items-baseline gap-3 min-w-0 flex-1">
+									<span className="font-mono text-xs text-muted-foreground tabular-nums">{i + 1}</span>
+									<div className="min-w-0 flex-1">
+										<div className="text-sm font-medium truncate">{e.title}</div>
+										<div className="text-[10px] text-muted-foreground">
+											{e.orders_count} order{e.orders_count === 1 ? "" : "s"}
+											{e.starts_at ? ` · ${stampFmt.format(new Date(e.starts_at))}` : ""}
+										</div>
+									</div>
+								</div>
+								<span className="font-mono text-sm tabular-nums shrink-0">{formatGbp(e.revenue_cents)}</span>
+							</Link>
+						</li>
+					))}
+				</ul>
+			)}
+		</section>
+	);
+}
+
+function TopOrganisersCard({ organisations }) {
+	return (
+		<section className="rounded-xl border bg-card p-5 space-y-3">
+			<div className="flex items-baseline justify-between gap-3">
+				<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
+					Per-organiser revenue
+				</h2>
+				<Link href="/admin/contacts/organisations" className="text-xs text-muted-foreground hover:text-foreground">
+					All organisations →
+				</Link>
+			</div>
+			{organisations.length === 0 ? (
+				<p className="text-sm text-muted-foreground">No organisation-attributed ticket sales yet.</p>
+			) : (
+				<ul className="space-y-1.5">
+					{organisations.map((o, i) => (
+						<li key={o.id}>
+							<Link
+								href={`/admin/contacts/organisations/${o.id}`}
+								className="flex items-baseline justify-between gap-3 rounded-md border border-foreground/10 bg-background px-3 py-2 hover:border-foreground/30 transition"
+							>
+								<div className="flex items-baseline gap-3 min-w-0 flex-1">
+									<span className="font-mono text-xs text-muted-foreground tabular-nums">{i + 1}</span>
+									<div className="min-w-0 flex-1">
+										<div className="text-sm font-medium truncate">{o.name}</div>
+										<div className="text-[10px] text-muted-foreground">
+											{o.events_count} event{o.events_count === 1 ? "" : "s"}
+										</div>
+									</div>
+								</div>
+								<span className="font-mono text-sm tabular-nums shrink-0">{formatGbp(o.revenue_cents)}</span>
+							</Link>
+						</li>
+					))}
+				</ul>
+			)}
+		</section>
+	);
+}
+
+function PipelineFunnelCard({ counts }) {
+	// The "funnel" follows the happy path: pending → approved → confirmed → completed.
+	// Each step shows count + the % conversion from the previous step.
+	const steps = [
+		{ key: "pending", label: "Pending", tone: "amber" },
+		{ key: "approved", label: "Approved", tone: "primary" },
+		{ key: "confirmed", label: "Confirmed", tone: "primary" },
+		{ key: "completed", label: "Completed", tone: "primary" },
+	];
+	const total = steps.reduce((s, st) => s + (counts[st.key] || 0), 0)
+		+ (counts.rejected || 0)
+		+ (counts.cancelled || 0);
+	const maxCount = Math.max(1, ...steps.map((s) => counts[s.key] || 0));
+	return (
+		<section className="rounded-xl border bg-card p-5 space-y-3">
+			<div className="flex items-baseline justify-between gap-3">
+				<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
+					Booking pipeline · last 3 months
+				</h2>
+				<Link href="/admin/bookings" className="text-xs text-muted-foreground hover:text-foreground">
+					All bookings →
+				</Link>
+			</div>
+			{total === 0 ? (
+				<p className="text-sm text-muted-foreground">No bookings in the last 3 months.</p>
+			) : (
+				<>
+					<ul className="space-y-2">
+						{steps.map((s, i) => {
+							const count = counts[s.key] || 0;
+							const widthPct = Math.round((count / maxCount) * 100);
+							const prevCount = i === 0 ? null : counts[steps[i - 1].key] || 0;
+							const conv = prevCount && prevCount > 0 ? Math.round((count / prevCount) * 100) : null;
+							const barTone = s.tone === "amber"
+								? "bg-amber-500/30 border-amber-500/50"
+								: "bg-primary/20 border-primary/40";
+							return (
+								<li key={s.key} className="space-y-1">
+									<div className="flex items-baseline justify-between gap-3 text-xs">
+										<span className="text-muted-foreground">{s.label}</span>
+										<span className="flex items-baseline gap-2">
+											{conv != null && <span className="text-[10px] text-muted-foreground">{conv}%</span>}
+											<span className="font-mono tabular-nums font-medium">{count}</span>
+										</span>
+									</div>
+									<div className="h-2 rounded-full bg-foreground/5 overflow-hidden">
+										<div
+											className={`h-full rounded-full border ${barTone}`}
+											style={{ width: `${Math.max(2, widthPct)}%` }}
+										/>
+									</div>
+								</li>
+							);
+						})}
+					</ul>
+					{(counts.rejected > 0 || counts.cancelled > 0) && (
+						<div className="flex gap-4 text-[10px] uppercase tracking-[0.18em] text-muted-foreground pt-2 border-t border-foreground/10">
+							{counts.rejected > 0 && (
+								<span>
+									Rejected <span className="font-mono text-destructive ml-1">{counts.rejected}</span>
+								</span>
+							)}
+							{counts.cancelled > 0 && (
+								<span>
+									Cancelled <span className="font-mono text-muted-foreground ml-1">{counts.cancelled}</span>
+								</span>
+							)}
+						</div>
+					)}
+				</>
+			)}
+		</section>
+	);
+}
+
+function RecentActivityCard({ items }) {
+	const relFmt = new Intl.RelativeTimeFormat("en-GB", { numeric: "auto" });
+	function relative(at) {
+		const ms = new Date(at).getTime() - Date.now();
+		const mins = Math.round(ms / 60000);
+		if (Math.abs(mins) < 60) return relFmt.format(mins, "minute");
+		const hours = Math.round(mins / 60);
+		if (Math.abs(hours) < 24) return relFmt.format(hours, "hour");
+		const days = Math.round(hours / 24);
+		if (Math.abs(days) < 30) return relFmt.format(days, "day");
+		const months = Math.round(days / 30);
+		return relFmt.format(months, "month");
+	}
+	return (
+		<section className="rounded-xl border bg-card p-5 space-y-3">
+			<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
+				Recent activity
+			</h2>
+			{items.length === 0 ? (
+				<p className="text-sm text-muted-foreground">Nothing happening yet.</p>
+			) : (
+				<ul className="space-y-2">
+					{items.map((it) => {
+						const isOrder = it.kind === "order";
+						const href = isOrder
+							? `/admin/events`
+							: `/admin/bookings/${it.subject_id}`;
+						const actor =
+							it.first_name || it.last_name
+								? `${it.first_name ?? ""} ${it.last_name ?? ""}`.trim()
+								: null;
+						return (
+							<li key={`${it.kind}-${it.id}`}>
+								<Link
+									href={href}
+									className="flex items-baseline justify-between gap-3 rounded-md border border-foreground/10 bg-background px-3 py-2 hover:border-foreground/30 transition"
+								>
+									<div className="min-w-0 flex-1">
+										<div className="flex items-baseline gap-2 flex-wrap text-xs">
+											<span
+												className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] ${
+													isOrder
+														? "border-primary/30 bg-primary/10 text-primary"
+														: it.to_status === "rejected" || it.to_status === "cancelled"
+															? "border-destructive/30 bg-destructive/10 text-destructive"
+															: it.to_status === "pending"
+																? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+																: "border-foreground/15 bg-muted text-muted-foreground"
+												}`}
+											>
+												{isOrder ? "Order paid" : it.to_status}
+											</span>
+											<span className="font-mono text-[10px] text-muted-foreground">{it.subject_ref}</span>
+											{actor && <span className="truncate">{actor}</span>}
+										</div>
+										{it.detail && !isOrder && (
+											<div className="text-[10px] text-muted-foreground truncate mt-0.5">{it.detail}</div>
+										)}
+										{isOrder && it.detail && (
+											<div className="text-[10px] text-muted-foreground truncate mt-0.5">{it.detail}</div>
+										)}
+									</div>
+									<span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">
+										{relative(it.occurred_at)}
+									</span>
+								</Link>
+							</li>
+						);
+					})}
 				</ul>
 			)}
 		</section>
