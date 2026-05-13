@@ -148,16 +148,21 @@ export default async function VatPage({ searchParams }) {
 				to <span className="text-foreground">{dateFmt.format(new Date(toDate.getTime() - 24 * 60 * 60 * 1000))}</span> inclusive.
 			</div>
 
-			<div className="grid gap-3 sm:grid-cols-3">
+			<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				<HeadlineCard label="Box 1 · Output VAT" value={fmtCents(rollup.totals.vat_cents)} tone="primary" />
+				<HeadlineCard label="Box 4 · Input VAT" value={fmtCents(rollup.inputs.vat_cents)} />
+				<HeadlineCard
+					label="Box 5 · Net VAT due"
+					value={`${rollup.net_vat_due_cents >= 0 ? "" : "−"}${fmtCents(Math.abs(rollup.net_vat_due_cents))}`}
+					tone={rollup.net_vat_due_cents >= 0 ? "primary" : "destructive"}
+				/>
 				<HeadlineCard label="Box 6 · Sales ex VAT" value={fmtCents(rollup.totals.net_cents)} />
-				<HeadlineCard label="Gross sales" value={fmtCents(rollup.totals.gross_cents)} />
 			</div>
 
 			<section className="rounded-xl border bg-card overflow-hidden">
 				<div className="px-5 py-3 border-b border-foreground/10 flex items-baseline justify-between gap-3 flex-wrap">
 					<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
-						Breakdown by source
+						Output VAT · sales
 					</h2>
 					<a
 						href={csvHref}
@@ -200,14 +205,38 @@ export default async function VatPage({ searchParams }) {
 				</table>
 			</section>
 
-			<section className="rounded-lg border border-dashed border-foreground/15 bg-muted/20 p-5 text-sm space-y-2">
-				<div className="font-medium">Input VAT (Box 4) not yet tracked</div>
-				<p className="text-muted-foreground">
-					The expense schema doesn&apos;t currently capture VAT paid on
-					purchases, so this report only shows output VAT (Box 1) and sales (Box
-					6). Add a <span className="font-mono text-foreground">vat_cents</span>{" "}
-					column to expenses and the input-side numbers will appear here.
-				</p>
+			<section className="rounded-xl border bg-card overflow-hidden">
+				<div className="px-5 py-3 border-b border-foreground/10">
+					<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
+						Input VAT · purchases
+					</h2>
+				</div>
+				<table className="w-full text-sm">
+					<thead className="bg-muted/40 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+						<tr>
+							<th className="text-left px-5 py-2">Source</th>
+							<th className="text-left px-5 py-2">Date basis</th>
+							<th className="text-right px-5 py-2">Count</th>
+							<th className="text-right px-5 py-2">Gross</th>
+							<th className="text-right px-5 py-2">VAT</th>
+							<th className="text-right px-5 py-2">Net</th>
+						</tr>
+					</thead>
+					<tbody className="divide-y divide-foreground/5">
+						<tr>
+							<td className="px-5 py-2.5">{rollup.inputs.label}</td>
+							<td className="px-5 py-2.5 text-muted-foreground font-mono text-xs">{rollup.inputs.date_basis}</td>
+							<td className="px-5 py-2.5 text-right font-mono tabular-nums">{rollup.inputs.count}</td>
+							<td className="px-5 py-2.5 text-right font-mono tabular-nums">{fmtCents(rollup.inputs.gross_cents)}</td>
+							<td className="px-5 py-2.5 text-right font-mono tabular-nums text-primary">{fmtCents(rollup.inputs.vat_cents)}</td>
+							<td className="px-5 py-2.5 text-right font-mono tabular-nums">{fmtCents(rollup.inputs.net_cents)}</td>
+						</tr>
+					</tbody>
+				</table>
+				<div className="px-5 py-3 border-t border-foreground/10 text-xs text-muted-foreground">
+					Captured from the <Link href="/admin/ledger/expenses" className="hover:text-foreground">Expenses ledger</Link>.
+					Set <span className="font-mono">VAT (£)</span> to 0 on expenses where the supplier isn&apos;t VAT-registered.
+				</div>
 			</section>
 		</div>
 	);

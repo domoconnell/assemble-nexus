@@ -1,0 +1,1 @@
+ALTER TABLE "expense" ADD COLUMN "vat_cents" integer DEFAULT 0 NOT NULL;

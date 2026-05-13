@@ -23,12 +23,18 @@ const ExpenseSchema = z.object({
 	expense_category_id: z.string().uuid().optional().nullable(),
 	description: z.string().min(1).max(500),
 	amount_pounds: z.coerce.number().min(0),
+	// Input VAT — pounds (so the form mirrors `amount_pounds`). Optional;
+	// defaults to 0 when the supplier isn't VAT-registered.
+	vat_pounds: z.coerce.number().min(0).optional().default(0),
 	supplier_name: z.string().max(200).optional().nullable(),
 	attachment_file_id: z.string().uuid().optional().nullable(),
 	linked_event_id: z.string().uuid().optional().nullable(),
 	linked_booking_id: z.string().uuid().optional().nullable(),
 	notes: z.string().max(2000).optional().nullable(),
-});
+}).refine(
+	(d) => d.vat_pounds <= d.amount_pounds + 0.001,
+	{ message: "VAT can't exceed the total amount.", path: ["vat_pounds"] },
+);
 
 export async function saveExpenseAction(input) {
 	await gate();
@@ -49,6 +55,7 @@ export async function saveExpenseAction(input) {
 		expense_category_id: parsed.expense_category_id,
 		description: parsed.description,
 		amount_cents: Math.round(parsed.amount_pounds * 100),
+		vat_cents: Math.round((parsed.vat_pounds ?? 0) * 100),
 		supplier_name: parsed.supplier_name,
 		attachment_file_id: parsed.attachment_file_id,
 		linked_event_id: parsed.linked_event_id,

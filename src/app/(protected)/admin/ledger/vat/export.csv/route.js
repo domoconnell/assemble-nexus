@@ -33,8 +33,9 @@ export async function GET(req) {
 	const rollup = await getVatReturnRollup(venue.id, { fromDate, toDate });
 
 	const rows = [
-		["Source", "Date basis", "Count", "Gross (£)", "VAT (£)", "Net (£)"],
+		["Section", "Source", "Date basis", "Count", "Gross (£)", "VAT (£)", "Net (£)"],
 		...rollup.streams.map((s) => [
+			"Output (sales)",
 			s.label,
 			s.date_basis,
 			s.count,
@@ -43,6 +44,7 @@ export async function GET(req) {
 			(s.net_cents / 100).toFixed(2),
 		]),
 		[
+			"Output (sales)",
 			"TOTAL",
 			"",
 			"",
@@ -50,6 +52,21 @@ export async function GET(req) {
 			(rollup.totals.vat_cents / 100).toFixed(2),
 			(rollup.totals.net_cents / 100).toFixed(2),
 		],
+		[
+			"Input (purchases)",
+			rollup.inputs.label,
+			rollup.inputs.date_basis,
+			rollup.inputs.count,
+			(rollup.inputs.gross_cents / 100).toFixed(2),
+			(rollup.inputs.vat_cents / 100).toFixed(2),
+			(rollup.inputs.net_cents / 100).toFixed(2),
+		],
+		[],
+		["Box 1 (Output VAT)", "", "", "", "", (rollup.totals.vat_cents / 100).toFixed(2), ""],
+		["Box 4 (Input VAT)", "", "", "", "", (rollup.inputs.vat_cents / 100).toFixed(2), ""],
+		["Box 5 (Net VAT due)", "", "", "", "", (rollup.net_vat_due_cents / 100).toFixed(2), ""],
+		["Box 6 (Sales ex VAT)", "", "", "", "", "", (rollup.totals.net_cents / 100).toFixed(2)],
+		["Box 7 (Purchases ex VAT)", "", "", "", "", "", (rollup.inputs.net_cents / 100).toFixed(2)],
 	];
 	const body = rows.map((r) => r.map(csvEscape).join(",")).join("\n") + "\n";
 

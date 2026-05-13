@@ -144,6 +144,7 @@ export async function listExpensesForMonth(venueId, ymdFirstOfMonth, ymdFirstOfN
 			date: expense.date,
 			description: expense.description,
 			amount_cents: expense.amount_cents,
+			vat_cents: expense.vat_cents,
 			supplier_name: expense.supplier_name,
 			expense_category_id: expense.expense_category_id,
 			category_name: expense_category.name,

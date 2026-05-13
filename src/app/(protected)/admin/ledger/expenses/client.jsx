@@ -66,6 +66,7 @@ function emptyDraft() {
 		expense_category_id: "",
 		description: "",
 		amount_pounds: "",
+		vat_pounds: "",
 		supplier_name: "",
 		linked_event_id: "",
 		notes: "",
@@ -93,6 +94,7 @@ export default function ExpensesClient({ ym, monthLabel, categories, expenses, e
 			expense_category_id: row.expense_category_id ?? "",
 			description: row.description ?? "",
 			amount_pounds: ((row.amount_cents ?? 0) / 100).toFixed(2),
+			vat_pounds: ((row.vat_cents ?? 0) / 100).toFixed(2),
 			supplier_name: row.supplier_name ?? "",
 			linked_event_id: row.linked_event_id ?? "",
 			notes: row.notes ?? "",
@@ -115,6 +117,7 @@ export default function ExpensesClient({ ym, monthLabel, categories, expenses, e
 					expense_category_id: editing.expense_category_id || null,
 					description: editing.description,
 					amount_pounds: Number(editing.amount_pounds || 0),
+					vat_pounds: Number(editing.vat_pounds || 0),
 					supplier_name: editing.supplier_name || null,
 					linked_event_id: editing.linked_event_id || null,
 					notes: editing.notes || null,
@@ -226,7 +229,7 @@ export default function ExpensesClient({ ym, monthLabel, categories, expenses, e
 					</DialogHeader>
 					{editing && (
 						<form onSubmit={save} className="space-y-4">
-							<div className="grid gap-4 sm:grid-cols-2">
+							<div className="grid gap-4 sm:grid-cols-3">
 								<div className="space-y-1.5">
 									<Label htmlFor="exp-date">Date</Label>
 									<Input
@@ -251,6 +254,35 @@ export default function ExpensesClient({ ym, monthLabel, categories, expenses, e
 										}
 										required
 									/>
+									<p className="text-[11px] text-muted-foreground">Total inc. VAT</p>
+								</div>
+								<div className="space-y-1.5">
+									<div className="flex items-baseline justify-between gap-2">
+										<Label htmlFor="exp-vat">VAT (£)</Label>
+										<button
+											type="button"
+											onClick={() => {
+												const total = Number(editing.amount_pounds || 0);
+												const vat = total - total / 1.2;
+												setEditing({ ...editing, vat_pounds: vat.toFixed(2) });
+											}}
+											className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition"
+										>
+											20% of total
+										</button>
+									</div>
+									<Input
+										id="exp-vat"
+										type="number"
+										inputMode="decimal"
+										min="0"
+										step="0.01"
+										value={editing.vat_pounds}
+										onChange={(e) =>
+											setEditing({ ...editing, vat_pounds: e.target.value })
+										}
+									/>
+									<p className="text-[11px] text-muted-foreground">0 if supplier isn&apos;t VAT-reg.</p>
 								</div>
 							</div>
 							<div className="space-y-1.5">

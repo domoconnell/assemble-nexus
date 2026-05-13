@@ -14,6 +14,10 @@ export const expense = pgTable(
 		date: date("date", { mode: "string" }).notNull(),
 		description: text("description").notNull(),
 		amount_cents: integer("amount_cents").notNull(),
+		// VAT portion of `amount_cents` (input VAT we paid). Defaults to 0
+		// for expenses where the supplier isn't VAT-registered or for legacy
+		// rows pre-dating the column. Used in the VAT return's Box 4.
+		vat_cents: integer("vat_cents").default(0).notNull(),
 		supplier_name: text("supplier_name"),
 		attachment_file_id: uuid("attachment_file_id").references(() => file.id, { onDelete: "set null" }),
 		linked_event_id: uuid("linked_event_id").references(() => event.id, { onDelete: "set null" }),

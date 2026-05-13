@@ -4,18 +4,21 @@ import { booking } from "@/db/schema/entities/booking.js";
 import { ticket_order } from "@/db/schema/entities/ticket_order.js";
 import { event } from "@/db/schema/entities/event.js";
 import { pos_daily_takings } from "@/db/schema/entities/pos_daily_takings.js";
+import { expense } from "@/db/schema/entities/expense.js";
 
 /**
- * VAT return rollup for a date range. Cash-basis: each stream is keyed off
- * the natural "money received" timestamp.
+ * VAT return rollup for a date range. Cash-basis: each output stream is
+ * keyed off the natural "money received" timestamp; input VAT keys off
+ * the expense's date.
  *
  *   bookings    → confirmed_at  (booking firm, deposit paid)
  *   tickets     → paid_at       (delegate paid)
  *   POS         → date          (each day's takings)
+ *   expenses    → date          (when the expense was incurred)
  *
- * Returns gross/vat/net per stream plus a totals row. Input VAT (on
- * expenses) is NOT yet tracked — the expense schema doesn't have a VAT
- * column. The page surfaces that gap to the user.
+ * Returns gross/vat/net per output stream plus a totals row, and a
+ * separate `inputs` block for the Box 4 side. Net VAT due (Box 5) is
+ * output_vat − input_vat.
  */
 export async function getVatReturnRollup(venueId, { fromDate, toDate }) {
 	const fromIso = fromDate.toISOString();
@@ -23,7 +26,7 @@ export async function getVatReturnRollup(venueId, { fromDate, toDate }) {
 	const fromYmd = fromDate.toISOString().slice(0, 10);
 	const toYmd = toDate.toISOString().slice(0, 10);
 
-	const [[bookingsRow], [ticketsRow], [posRow]] = await Promise.all([
+	const [[bookingsRow], [ticketsRow], [posRow], [expensesRow]] = await Promise.all([
 		db
 			.select({
 				gross_cents: sql`COALESCE(SUM(${booking.total_cents}), 0)::bigint`.as("gross"),
@@ -70,6 +73,21 @@ export async function getVatReturnRollup(venueId, { fromDate, toDate }) {
 					sql`${pos_daily_takings.date} < ${toYmd}`,
 				),
 			),
+		db
+			.select({
+				gross_cents: sql`COALESCE(SUM(${expense.amount_cents}), 0)::bigint`.as("gross"),
+				vat_cents: sql`COALESCE(SUM(${expense.vat_cents}), 0)::bigint`.as("vat"),
+				count: sql`COUNT(*)::int`.as("count"),
+			})
+			.from(expense)
+			.where(
+				and(
+					eq(expense.venue_id, venueId),
+					isNull(expense.deletedAt),
+					sql`${expense.date} >= ${fromYmd}`,
+					sql`${expense.date} < ${toYmd}`,
+				),
+			),
 	]);
 
 	const streams = [
@@ -111,10 +129,25 @@ export async function getVatReturnRollup(venueId, { fromDate, toDate }) {
 		s.net_cents = s.gross_cents - s.vat_cents;
 	}
 
+	const inputs = {
+		key: "expenses",
+		label: "Expenses (purchases)",
+		date_basis: "date",
+		gross_cents: Number(expensesRow?.gross_cents) || 0,
+		vat_cents: Number(expensesRow?.vat_cents) || 0,
+		count: Number(expensesRow?.count) || 0,
+	};
+	inputs.net_cents = inputs.gross_cents - inputs.vat_cents;
+
+	// Box 5: VAT due to HMRC = output VAT − input VAT
+	const net_vat_due_cents = totals.vat_cents - inputs.vat_cents;
+
 	return {
 		from: fromIso,
 		to: toIso,
 		streams,
 		totals,
+		inputs,
+		net_vat_due_cents,
 	};
 }
