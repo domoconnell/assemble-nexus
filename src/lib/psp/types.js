@@ -51,6 +51,11 @@
  * }) => Promise<PaymentIntent>} confirmPayment
  * @property {(args: { intent_id: string, amount_cents: number }) => Promise<Refund>} createRefund
  * @property {(args: { signature?: string, body: string | Buffer }) => Promise<{ type: string, data: unknown }>} parseWebhook
+ *
+ * @property {(intent_id: string) => Promise<number | null>} getActualFeeForIntent
+ *   PSP-side processing fee for a settled intent, in minor units (pence). Returns
+ *   `null` when the driver can't (or doesn't need to) report a real fee — Fake
+ *   PSP has no fees; Stripe returns `null` if the key isn't configured.
  */
 
 export const PSP_KEYS = ["fake", "stripe"];

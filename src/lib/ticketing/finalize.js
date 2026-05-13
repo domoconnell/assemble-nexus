@@ -6,6 +6,7 @@ import { ticket } from "@/db/schema/entities/ticket.js";
 import { customer } from "@/db/schema/entities/customer.js";
 import { event } from "@/db/schema/entities/event.js";
 import { generateTicketCode } from "./codes.js";
+import { getActivePsp } from "@/lib/psp/index.js";
 import {
 	sendTicketOrderConfirmationEmail,
 	sendTicketsWalletEmail,
@@ -59,18 +60,38 @@ export async function finaliseTicketOrder(orderId, { paymentRef } = {}) {
 		await db.insert(ticket).values(newTickets);
 	}
 
+	const [cust] = await db
+		.select()
+		.from(customer)
+		.where(eq(customer.id, updated.customer_id))
+		.limit(1);
+	const [ev] = await db
+		.select({ title: event.title, venue_id: event.venue_id })
+		.from(event)
+		.where(eq(event.id, updated.event_id))
+		.limit(1);
+
+	// Best-effort: ask the active PSP what the processing fee actually was
+	// and back-fill `stripe_fee_actual_cents`. Drivers that can't report a
+	// real number (FakePSP, or Stripe without a secret key) return null and
+	// we leave the column as-is.
+	if (updated.stripe_payment_intent_id && ev?.venue_id) {
+		try {
+			const psp = await getActivePsp(ev.venue_id);
+			const fee = await psp.getActualFeeForIntent(updated.stripe_payment_intent_id);
+			if (typeof fee === "number") {
+				await db
+					.update(ticket_order)
+					.set({ stripe_fee_actual_cents: fee })
+					.where(eq(ticket_order.id, updated.id));
+			}
+		} catch (err) {
+			console.error("[finaliseTicketOrder] fee back-fill failed", err);
+		}
+	}
+
 	// Fire-and-forget confirmation email.
 	try {
-		const [cust] = await db
-			.select()
-			.from(customer)
-			.where(eq(customer.id, updated.customer_id))
-			.limit(1);
-		const [ev] = await db
-			.select({ title: event.title })
-			.from(event)
-			.where(eq(event.id, updated.event_id))
-			.limit(1);
 		if (cust && ev) {
 			// Wallet email is the primary delivery (PDF attached + link to the
 			// `/tickets/[id]` gallery for Add-to-Wallet). The bare confirmation

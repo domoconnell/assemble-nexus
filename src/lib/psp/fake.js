@@ -145,4 +145,9 @@ export const fakePsp = {
 	async parseWebhook() {
 		throw new Error("FakePSP has no webhooks — success is synchronous on confirmPayment.");
 	},
+
+	async getActualFeeForIntent() {
+		// Fake card payments have no real fees — caller writes 0/null and moves on.
+		return null;
+	},
 };
