@@ -25,12 +25,17 @@ export default async function BookPage({ searchParams }) {
 
 	return (
 		<>
-			<Hero
-				height="short"
-				kicker={hero.kicker ?? "Book"}
-				title={hero.title ?? "Tell us when, what, and how big."}
-				subtitle={hero.subtitle ?? "Submit an enquiry and we'll come back within a working day with your deposit details. Nothing is charged until you accept the booking agreement."}
-			/>
+			{/* Hero adds nothing on mobile, eats valuable vertical space, and the
+			    sticky bottom summary bar already shows the price. Show it only
+			    from md upwards. */}
+			<div className="hidden md:block">
+				<Hero
+					height="short"
+					kicker={hero.kicker ?? "Book"}
+					title={hero.title ?? "Tell us when, what, and how big."}
+					subtitle={hero.subtitle ?? "Submit an enquiry and we'll come back within a working day with your deposit details. Nothing is charged until you accept the booking agreement."}
+				/>
+			</div>
 			<Section>
 				<BookingWidget
 					rooms={rooms}

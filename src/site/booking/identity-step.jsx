@@ -104,6 +104,28 @@ export default function IdentityStep({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
+	const [manualChecking, setManualChecking] = useState(false);
+
+	// One-shot session check. Returns the user if signed in, else null. Used
+	// by the interval, the manual "I've signed in" button, and the
+	// visibilitychange handler so mobile users returning to the tab don't
+	// have to wait up to 3s for the next poll tick.
+	const checkSessionNow = useCallback(async () => {
+		try {
+			const { data } = await authClient.getSession();
+			if (data?.user) {
+				if (pollingRef.current) {
+					clearInterval(pollingRef.current);
+					pollingRef.current = null;
+				}
+				await confirmSession(data.user);
+				return data.user;
+			}
+		} catch {}
+		return null;
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
 	// Polling for session after a magic link is sent. Capped at ~3 minutes
 	// (60 polls × 3s) so an abandoned tab doesn't poll forever. Once the cap
 	// hits the UI shows a "didn't get the link?" panel that lets the user
@@ -115,15 +137,8 @@ export default function IdentityStep({
 		const MAX_ATTEMPTS = 60;
 		const id = setInterval(async () => {
 			attempts += 1;
-			try {
-				const { data } = await authClient.getSession();
-				if (data?.user) {
-					clearInterval(id);
-					pollingRef.current = null;
-					await confirmSession(data.user);
-					return;
-				}
-			} catch {}
+			const user = await checkSessionNow();
+			if (user) return; // checkSessionNow clears the interval itself
 			if (attempts >= MAX_ATTEMPTS) {
 				clearInterval(id);
 				pollingRef.current = null;
@@ -137,6 +152,44 @@ export default function IdentityStep({
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [v.phase, pollVersion]);
+
+	// Mobile: clicking the magic link usually opens a new tab. When the
+	// user comes back to this tab, fire an immediate check instead of
+	// waiting for the next poll tick (or worse, waiting at all if the
+	// interval was throttled by the browser while the tab was hidden).
+	useEffect(() => {
+		if (v.phase !== "magic_link_sent") return;
+		function onVisible() {
+			if (document.visibilityState === "visible") {
+				checkSessionNow().then((user) => {
+					if (!user && pollingTimedOut) {
+						setPollingTimedOut(false);
+						setPollVersion((n) => n + 1);
+					}
+				});
+			}
+		}
+		document.addEventListener("visibilitychange", onVisible);
+		window.addEventListener("focus", onVisible);
+		return () => {
+			document.removeEventListener("visibilitychange", onVisible);
+			window.removeEventListener("focus", onVisible);
+		};
+	}, [v.phase, pollingTimedOut, checkSessionNow]);
+
+	async function manualCheck() {
+		setManualChecking(true);
+		try {
+			const user = await checkSessionNow();
+			if (!user) {
+				// Restart polling for another window in case the user is mid-click
+				setPollingTimedOut(false);
+				setPollVersion((n) => n + 1);
+			}
+		} finally {
+			setManualChecking(false);
+		}
+	}
 
 	async function resendMagicLink() {
 		setBusy(true);
@@ -315,6 +368,14 @@ export default function IdentityStep({
 							<span className="inline-block size-1.5 rounded-full bg-primary animate-pulse" />
 							<span>Waiting for you to click the link…</span>
 						</div>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={manualCheck}
+							disabled={manualChecking || busy}
+						>
+							{manualChecking ? "Checking…" : "I've clicked the link — check now"}
+						</Button>
 						<button
 							type="button"
 							className="text-xs text-muted-foreground hover:text-foreground underline"

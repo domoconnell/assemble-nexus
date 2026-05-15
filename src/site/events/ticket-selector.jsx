@@ -513,7 +513,7 @@ export default function TicketSelector({
 			</Button>
 
 			<Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
-				<DialogContent className="max-w-md p-6 sm:p-8 space-y-6">
+				<DialogContent className="max-w-md p-6 sm:p-8 space-y-6 max-h-[90svh] overflow-y-auto">
 					<DialogHeader>
 						<DialogTitle>Who&apos;s buying?</DialogTitle>
 						<DialogDescription>

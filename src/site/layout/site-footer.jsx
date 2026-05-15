@@ -5,14 +5,15 @@ import { Logo } from "@/site/ui/logo";
 export function SiteFooter({ rooms = [], hasUpcomingEvents = false }) {
 	const columns = [];
 
-	columns.push({
-		title: "Visit",
-		links: [
-			{ label: "Find us", href: "/about#location" },
-			{ label: "Café", href: "/about#cafe" },
-			{ label: "Accessibility", href: "/about#accessibility" },
-		],
-	});
+	const visitLinks = [
+		{ label: "Find us", href: "/about#location" },
+		{ label: "Café", href: "/about#cafe" },
+		{ label: "Accessibility", href: "/about#accessibility" },
+	];
+	if (hasUpcomingEvents) {
+		visitLinks.push({ label: "Upcoming events", href: "/whats-on" });
+	}
+	columns.push({ title: "Visit", links: visitLinks });
 
 	const hireLinks = [];
 	for (const r of rooms) {
@@ -20,13 +21,6 @@ export function SiteFooter({ rooms = [], hasUpcomingEvents = false }) {
 	}
 	hireLinks.push({ label: "Book a room", href: "/book" });
 	columns.push({ title: "Hire", links: hireLinks });
-
-	if (hasUpcomingEvents) {
-		columns.push({
-			title: "What's On",
-			links: [{ label: "Upcoming events", href: "/whats-on" }],
-		});
-	}
 
 	columns.push({
 		title: "Connect",

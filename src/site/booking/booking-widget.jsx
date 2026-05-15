@@ -238,10 +238,17 @@ export default function BookingWidget({
 		else if (!layouts.find((l) => l.layout_id === layoutId)) setLayoutId("");
 	}, [roomId]);
 
+	// Skip the room-picker step when the room is already chosen — either
+	// locked programmatically (popup mode) or arrived via `?room=` on
+	// /book. The user lands directly on the date step in both cases.
+	const skipRoomStep =
+		!!lockedRoomId ||
+		(!!preselectedRoomSlug && rooms.some((r) => r.slug === preselectedRoomSlug));
+
 	// Build steps dynamically
 	const steps = useMemo(() => {
 		const list = [];
-		if (!lockedRoomId) list.push({ key: "room", title: "Room" });
+		if (!skipRoomStep) list.push({ key: "room", title: "Room" });
 		list.push({ key: "event", title: "Main event" });
 		if (offers(setupType)) list.push({ key: "setup", title: "Setup" });
 		if (offers(rehearsalType)) list.push({ key: "rehearsal", title: "Rehearsal" });
@@ -254,7 +261,7 @@ export default function BookingWidget({
 		list.push({ key: "review", title: "Review" });
 		return list;
 	}, [
-		lockedRoomId,
+		skipRoomStep,
 		offeredTypeIds,
 		facilityPackages.length,
 		discounts.length,
@@ -705,19 +712,97 @@ export default function BookingWidget({
 	}
 
 	return (
-		<div className="grid gap-8 lg:grid-cols-[1.85fr_1fr] lg:items-start">
-			<div>
-				<div className="rounded-xl border border-foreground/10 bg-card p-6 sm:p-8">
-					{stepsContent}
-					<div className="flex items-center justify-between gap-3 pt-6 mt-6 border-t border-foreground/10">
-						{navFooter}
+		<>
+			<MobileSummaryBar
+				summary={summary}
+				room={room}
+				eventRows={eventRows}
+				quote={quote}
+			/>
+			<div className="grid gap-8 lg:grid-cols-[1.85fr_1fr] lg:items-start">
+				<div>
+					{/* No card chrome on phones — the form sits directly on the page
+					    background so the limited screen real estate isn't eaten by
+					    border + padding. Card returns from `md` upwards. */}
+					<div className="md:rounded-xl md:border md:border-foreground/10 md:bg-card md:p-8">
+						{stepsContent}
+						<div className="flex items-center justify-between gap-3 pt-6 mt-6 border-t border-foreground/10">
+							{navFooter}
+						</div>
 					</div>
 				</div>
-			</div>
 
-			<aside className="rounded-xl border border-foreground/10 bg-card p-6 lg:sticky lg:top-28 self-start">
-				{summary}
-			</aside>
+				<aside className="hidden lg:block rounded-xl border border-foreground/10 bg-card p-6 lg:sticky lg:top-28 self-start">
+					{summary}
+				</aside>
+			</div>
+		</>
+	);
+}
+
+/**
+ * Compact summary that's sticky at the top of the page on mobile only.
+ * Tapping the bar slides the full QuoteSummary down underneath it. Hidden
+ * from `lg` upwards where the right-rail summary is visible inline.
+ */
+function MobileSummaryBar({ summary, room, eventRows, quote }) {
+	const [open, setOpen] = useState(false);
+	const firstDate = eventRows?.[0]?.date;
+	const firstDateLabel = (() => {
+		if (!firstDate) return null;
+		const d = new Date(`${firstDate}T12:00`);
+		if (Number.isNaN(d.valueOf())) return null;
+		return dateFormatter.format(d);
+	})();
+	const total = quote?.total_cents;
+	const chevronIcon = byPrefixAndName.fas?.["chevron-down"];
+
+	return (
+		<div className="lg:hidden sticky top-0 z-30 mb-4 -mx-4 sm:-mx-6 bg-background/95 backdrop-blur border-y border-foreground/10">
+			<button
+				type="button"
+				onClick={() => setOpen((o) => !o)}
+				className="w-full flex items-center justify-between gap-3 px-4 sm:px-6 py-2.5 text-left"
+				aria-expanded={open}
+			>
+				<div className="min-w-0 flex-1">
+					<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground truncate">
+						{room?.name ?? "Pick a room"}
+					</div>
+					<div className="text-xs text-foreground/85 truncate">
+						{firstDateLabel ?? "Pick a date"}
+					</div>
+				</div>
+				<div className="text-right shrink-0">
+					<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+						Total
+					</div>
+					<div className="font-mono font-medium tabular-nums text-sm">
+						{total != null ? formatGbp(total) : "—"}
+					</div>
+				</div>
+				{chevronIcon && (
+					<FontAwesomeIcon
+						icon={chevronIcon}
+						className={`h-3 w-3 text-muted-foreground transition-transform ${
+							open ? "rotate-180" : ""
+						}`}
+					/>
+				)}
+			</button>
+			<AnimatePresence initial={false}>
+				{open && (
+					<motion.div
+						initial={{ height: 0, opacity: 0 }}
+						animate={{ height: "auto", opacity: 1 }}
+						exit={{ height: 0, opacity: 0 }}
+						transition={{ duration: 0.18 }}
+						className="overflow-hidden border-t border-foreground/10"
+					>
+						<div className="p-4 max-h-[60vh] overflow-y-auto">{summary}</div>
+					</motion.div>
+				)}
+			</AnimatePresence>
 		</div>
 	);
 }

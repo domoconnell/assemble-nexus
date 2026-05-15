@@ -153,7 +153,7 @@ function TicketSection({
 						return (
 							<li
 								key={t.id}
-								className={`flex items-stretch justify-between gap-4 rounded-lg border bg-card p-4 transition hover:border-foreground/30 ${
+								className={`flex flex-col sm:flex-row sm:items-stretch sm:justify-between gap-3 sm:gap-4 rounded-lg border bg-card p-4 transition hover:border-foreground/30 ${
 									muted ? "opacity-80 border-foreground/5" : "border-foreground/10"
 								}`}
 							>
@@ -186,7 +186,7 @@ function TicketSection({
 										</span>
 									</div>
 								</Link>
-								<div className="flex flex-col items-stretch gap-2 shrink-0 w-44">
+								<div className="flex flex-col items-stretch gap-2 shrink-0 w-full sm:w-44">
 									<Link
 										href={`/my-tickets/${t.code}`}
 										className="text-xs text-muted-foreground text-right hover:text-foreground transition"

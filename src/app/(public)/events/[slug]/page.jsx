@@ -243,7 +243,7 @@ export default async function EventPage({ params, searchParams }) {
 								</div>
 							)}
 							{(doorsTime || timeStart || timeEnd) && (
-								<dl className="grid grid-cols-3 gap-3">
+								<dl className="grid grid-cols-3 gap-2 sm:gap-3">
 									<div>
 										<dt className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
 											Doors
