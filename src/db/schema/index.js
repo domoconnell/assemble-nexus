@@ -49,6 +49,7 @@ export * from "./entities/recurring_cost_schedule";
 export * from "./entities/expense_category";
 export * from "./entities/expense";
 export * from "./entities/pos_daily_takings";
+export * from "./entities/bank_account";
 export * from "./entities/bank_transaction";
 export * from "./entities/bank_balance_snapshot";
 export * from "./entities/manual_income";

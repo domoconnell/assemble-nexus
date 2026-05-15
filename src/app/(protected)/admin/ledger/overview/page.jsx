@@ -8,8 +8,7 @@ import {
 	prevMonth,
 	monthLabel,
 } from "@/lib/finance/months";
-import { getStarlingBalance } from "@/lib/finance/starling";
-import { getStarlingSettings } from "@/db/queries/settings";
+import { getCombinedLatestBalance } from "@/db/queries/bank";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +28,6 @@ export default async function LedgerDashboardPage({ searchParams }) {
 	const ym = /^\d{4}-\d{2}$/.test(requested ?? "") ? requested : fallback.ym;
 
 	const month = resolveMonth(ym);
-	const starlingSettings = await getStarlingSettings(venue.id);
 	const [pnl, bank] = await Promise.all([
 		getMonthlyPnl(venue.id, {
 			ymdFirstOfMonth: month.ymdFirstOfMonth,
@@ -37,7 +35,7 @@ export default async function LedgerDashboardPage({ searchParams }) {
 			monthStartDate: month.monthStartDate,
 			monthEndDate: month.monthEndDate,
 		}),
-		getStarlingBalance(starlingSettings),
+		getCombinedLatestBalance(venue.id),
 	]);
 
 	const prev = prevMonth(month.year, month.month1);
@@ -86,24 +84,22 @@ export default async function LedgerDashboardPage({ searchParams }) {
 				</div>
 			</div>
 
-			{bank?.configured && !bank?.error && (
-				<section className="rounded-lg border bg-card p-4 flex items-baseline justify-between gap-3">
+			{bank && (
+				<Link
+					href="/admin/ledger/banking"
+					className="rounded-lg border bg-card p-4 flex items-baseline justify-between gap-3 hover:border-foreground/30 transition"
+				>
 					<div>
 						<div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-							Bank balance (Starling)
+							Bank balance · {bank.account_count} account{bank.account_count === 1 ? "" : "s"}
 						</div>
-						<div className="font-display text-xl mt-1">{fmt(bank.cleared_cents)}</div>
+						<div className="font-display text-xl mt-1">{fmt(bank.cleared_minor)}</div>
 					</div>
 					<div className="text-right text-xs text-muted-foreground">
-						{bank.pending_cents !== 0 && <div>Pending: {fmt(bank.pending_cents)}</div>}
-						<div>Effective: {fmt(bank.effective_cents)}</div>
+						{bank.pending_minor !== 0 && <div>Pending: {fmt(bank.pending_minor)}</div>}
+						<div>Effective: {fmt(bank.effective_minor)}</div>
 					</div>
-				</section>
-			)}
-			{bank?.error && (
-				<div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-					Starling: {bank.error}
-				</div>
+				</Link>
 			)}
 
 			<section className="rounded-lg border border-primary/30 bg-primary/5 p-6 space-y-4">

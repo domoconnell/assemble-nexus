@@ -9,7 +9,7 @@ import {
 	listDayActivityForMonth,
 } from "@/db/queries/bookings";
 import { getMonthlyPnl, listMonthlyPnlForRange } from "@/db/queries/finance";
-import { getLatestBalanceSnapshot, getBankInOutBetween } from "@/db/queries/bank";
+import { getCombinedLatestBalance, getBankInOutBetween } from "@/db/queries/bank";
 import {
 	getTopEventsBySales,
 	getPerOrganiserRevenue,
@@ -96,7 +96,7 @@ export default async function HomePage() {
 		listDayActivityForMonth(venue.id, month.monthStartDate, month.monthEndDate),
 		listMonthlyPnlForRange(venue.id, { endYm: month.ym, monthsBack: 12 }),
 		listUpcomingEvents(venue.id, { limit: 10 }),
-		getLatestBalanceSnapshot(venue.id),
+		getCombinedLatestBalance(venue.id),
 		getBankInOutBetween(venue.id, month.monthStartDate, month.monthEndDate),
 		getTopEventsBySales(venue.id, { limit: 5 }),
 		getPerOrganiserRevenue(venue.id, { limit: 5 }),
@@ -263,6 +263,7 @@ function BankBalanceWidget({ snapshot, inOut, monthName }) {
 	const outDelta = (inOut?.out_minor ?? 0) / 100;
 	const net = (inOut?.net_minor ?? 0) / 100;
 	const captured = new Date(snapshot.captured_at);
+	const accountCount = snapshot.account_count ?? 1;
 	const fmt = new Intl.NumberFormat("en-GB", {
 		style: "currency",
 		currency: snapshot.currency || "GBP",
@@ -275,7 +276,7 @@ function BankBalanceWidget({ snapshot, inOut, monthName }) {
 			<div className="flex items-baseline justify-between gap-3 flex-wrap">
 				<div>
 					<div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-						Bank balance
+						Bank balance · {accountCount} account{accountCount === 1 ? "" : "s"}
 					</div>
 					<div className="font-display text-3xl tracking-tight mt-1">{fmt.format(cleared)}</div>
 					<div className="text-[10px] text-muted-foreground mt-1">

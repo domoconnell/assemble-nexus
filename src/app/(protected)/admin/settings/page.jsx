@@ -32,9 +32,9 @@ const cards = [
 		href: "/admin/settings/payments",
 	},
 	{
-		title: "Bank account",
-		description: "Connect the venue's Starling Bank account to surface the cleared balance on the ledger.",
-		href: "/admin/settings/bank-account",
+		title: "Bank accounts",
+		description: "Connect one or more bank accounts (Starling, Revolut). Balances and transactions feed the dashboard and the Banking page.",
+		href: "/admin/settings/bank-accounts",
 	},
 	{
 		title: "POS",

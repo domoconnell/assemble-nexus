@@ -253,6 +253,13 @@
       "when": 1778706076137,
       "tag": "0035_smooth_mister_sinister",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1778869807062,
+      "tag": "0036_late_silver_sable",
+      "breakpoints": true
     }
   ]
 }

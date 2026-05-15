@@ -51,10 +51,6 @@ export async function getGoogleWalletSettings(venueId) {
 	return getSetting(venueId, "google_wallet", null);
 }
 
-export async function getStarlingSettings(venueId) {
-	return getSetting(venueId, "starling", null);
-}
-
 export async function getSquareSettings(venueId) {
 	return getSetting(venueId, "square", null);
 }

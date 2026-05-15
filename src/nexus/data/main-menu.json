@@ -73,7 +73,7 @@
 					{ "title": "Discounts", "url": "/admin/settings/discounts" },
 					{ "title": "Ticketing", "url": "/admin/settings/ticketing" },
 					{ "title": "Payments", "url": "/admin/settings/payments" },
-					{ "title": "Bank account", "url": "/admin/settings/bank-account" },
+					{ "title": "Bank accounts", "url": "/admin/settings/bank-accounts" },
 					{ "title": "POS", "url": "/admin/settings/pos" },
 					{ "title": "Hours & rate bands", "url": "/admin/settings/hours" }
 				]

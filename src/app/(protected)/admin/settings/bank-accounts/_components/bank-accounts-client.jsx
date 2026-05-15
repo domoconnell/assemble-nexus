@@ -1,0 +1,232 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Button } from "@/shadcn/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogDescription,
+} from "@/shadcn/components/ui/dialog";
+import ConfirmDialog from "@/global/ui/components/confirm-dialog";
+import StarlingForm from "./starling-form";
+import RevolutForm from "./revolut-form";
+import {
+	deleteBankAccountAction,
+	setBankAccountActiveAction,
+	syncBankAccountNowAction,
+} from "../actions";
+
+const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
+
+const PROVIDER_OPTIONS = [
+	{ key: "starling", label: "Starling Bank", blurb: "Personal Access Token. Single-account hire, simplest setup." },
+	{ key: "revolut", label: "Revolut Business", blurb: "Certificate-based OAuth. Supports multi-currency sub-accounts." },
+];
+
+export default function BankAccountsClient({ accounts }) {
+	const router = useRouter();
+	const [addOpen, setAddOpen] = useState(false);
+	const [chosenProvider, setChosenProvider] = useState(null);
+	const [editing, setEditing] = useState(null); // bank_account row
+	const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+	const [syncingId, setSyncingId] = useState(null);
+
+	function openAdd(provider) {
+		setChosenProvider(provider);
+		setEditing(null);
+	}
+
+	function openEdit(account) {
+		setChosenProvider(account.provider);
+		setEditing(account);
+	}
+
+	function closeForm() {
+		setChosenProvider(null);
+		setEditing(null);
+		setAddOpen(false);
+		router.refresh();
+	}
+
+	async function toggleActive(account) {
+		try {
+			await setBankAccountActiveAction({ id: account.id, is_active: !account.is_active });
+			toast.success(account.is_active ? "Account disabled." : "Account enabled.");
+			router.refresh();
+		} catch (err) {
+			toast.error(err?.message || "Couldn't update");
+		}
+	}
+
+	async function sync(account, force = false) {
+		setSyncingId(account.id);
+		try {
+			const result = await syncBankAccountNowAction({ id: account.id, force });
+			if (result.ok) {
+				toast.success(
+					`Synced — ${result.inserted} new, ${result.updated} updated${result.backfilled ? `, ${result.backfilled} balance points` : ""}.`,
+				);
+				router.refresh();
+			} else {
+				toast.error(result.error || result.reason || "Sync failed.");
+			}
+		} catch (err) {
+			toast.error(err?.message || "Sync failed");
+		} finally {
+			setSyncingId(null);
+		}
+	}
+
+	async function performDelete(id) {
+		try {
+			await deleteBankAccountAction({ id });
+			toast.success("Bank account removed.");
+			setConfirmDeleteId(null);
+			router.refresh();
+		} catch (err) {
+			toast.error(err?.message || "Couldn't remove");
+		}
+	}
+
+	return (
+		<>
+			<div className="space-y-3">
+				{accounts.length === 0 ? (
+					<div className="rounded-xl border border-dashed border-foreground/15 bg-card p-10 text-center space-y-4">
+						<h2 className="font-display text-xl tracking-tight">No bank accounts connected yet.</h2>
+						<p className="text-sm text-muted-foreground max-w-md mx-auto">
+							Add one and balances + transactions will start syncing nightly.
+						</p>
+						<Button onClick={() => setAddOpen(true)}>Add bank account</Button>
+					</div>
+				) : (
+					<>
+						<ul className="space-y-2">
+							{accounts.map((a) => (
+								<AccountRow
+									key={a.id}
+									account={a}
+									onEdit={() => openEdit(a)}
+									onSync={() => sync(a, false)}
+									onBackfill={() => sync(a, true)}
+									onToggleActive={() => toggleActive(a)}
+									onDelete={() => setConfirmDeleteId(a.id)}
+									syncing={syncingId === a.id}
+								/>
+							))}
+						</ul>
+						<div className="flex justify-end pt-2">
+							<Button variant="outline" onClick={() => setAddOpen(true)}>
+								Add bank account
+							</Button>
+						</div>
+					</>
+				)}
+			</div>
+
+			<Dialog open={addOpen} onOpenChange={setAddOpen}>
+				<DialogContent className="p-6 sm:p-8 space-y-5 max-w-lg">
+					<DialogHeader>
+						<DialogTitle>Add bank account</DialogTitle>
+						<DialogDescription>
+							Pick the provider that issued the account.
+						</DialogDescription>
+					</DialogHeader>
+					<div className="grid gap-3">
+						{PROVIDER_OPTIONS.map((p) => (
+							<button
+								key={p.key}
+								type="button"
+								onClick={() => {
+									openAdd(p.key);
+									setAddOpen(false);
+								}}
+								className="text-left rounded-lg border border-foreground/10 bg-background px-4 py-4 hover:border-foreground/30 transition"
+							>
+								<div className="font-medium">{p.label}</div>
+								<p className="text-sm text-muted-foreground mt-1">{p.blurb}</p>
+							</button>
+						))}
+					</div>
+				</DialogContent>
+			</Dialog>
+
+			{chosenProvider === "starling" && (
+				<StarlingForm
+					open
+					onOpenChange={(o) => !o && closeForm()}
+					initial={editing}
+				/>
+			)}
+			{chosenProvider === "revolut" && (
+				<RevolutForm
+					open
+					onOpenChange={(o) => !o && closeForm()}
+					initial={editing}
+				/>
+			)}
+
+			<ConfirmDialog
+				open={!!confirmDeleteId}
+				onOpenChange={(o) => !o && setConfirmDeleteId(null)}
+				title="Remove this bank account?"
+				description="Existing transactions and balance snapshots are kept but you'll stop receiving syncs from this account."
+				confirmLabel="Remove"
+				destructive
+				onConfirm={() => confirmDeleteId && performDelete(confirmDeleteId)}
+			/>
+		</>
+	);
+}
+
+function AccountRow({ account, onEdit, onSync, onBackfill, onToggleActive, onDelete, syncing }) {
+	const providerLabel = account.provider === "starling" ? "Starling" : account.provider === "revolut" ? "Revolut" : account.provider;
+	const lastSynced = account.last_synced_at ? new Date(account.last_synced_at) : null;
+	return (
+		<li className="rounded-lg border border-foreground/10 bg-card p-4 space-y-3">
+			<div className="flex items-baseline justify-between gap-3 flex-wrap">
+				<div className="min-w-0">
+					<div className="flex items-center gap-2 flex-wrap">
+						<span className="font-medium">{account.label}</span>
+						<span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground rounded-full border border-foreground/15 px-2 py-0.5">
+							{providerLabel}
+						</span>
+						{!account.is_active && (
+							<span className="text-[10px] uppercase tracking-[0.18em] text-destructive rounded-full border border-destructive/30 bg-destructive/5 px-2 py-0.5">
+								Disabled
+							</span>
+						)}
+					</div>
+					<div className="text-xs text-muted-foreground mt-1">
+						{account.currency} · {account.external_account_uid ? <span className="font-mono">{account.external_account_uid.slice(0, 8)}…</span> : "Not yet linked"}
+						{lastSynced ? <> · Last synced {lastSynced.toLocaleString("en-GB")}</> : null}
+					</div>
+					{account.last_sync_error && (
+						<div className="text-xs text-destructive mt-1">{account.last_sync_error}</div>
+					)}
+				</div>
+				<div className="flex items-center gap-2">
+					<Button variant="outline" size="sm" onClick={onEdit} disabled={syncing}>
+						Edit
+					</Button>
+					<Button variant="outline" size="sm" onClick={onSync} disabled={syncing || !account.external_account_uid}>
+						{syncing ? "Syncing…" : "Sync"}
+					</Button>
+					<Button variant="outline" size="sm" onClick={onBackfill} disabled={syncing || !account.external_account_uid}>
+						Backfill
+					</Button>
+					<Button variant="ghost" size="sm" onClick={onToggleActive} disabled={syncing}>
+						{account.is_active ? "Disable" : "Enable"}
+					</Button>
+					<Button variant="ghost" size="sm" onClick={onDelete} disabled={syncing}>
+						Remove
+					</Button>
+				</div>
+			</div>
+		</li>
+	);
+}
