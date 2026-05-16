@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { authClient } from "@/utils/auth/auth-client";
 import { Button } from "@/shadcn/components/ui/button";
 import { Input } from "@/shadcn/components/ui/input";
@@ -8,8 +8,9 @@ import { Label } from "@/shadcn/components/ui/label";
 
 export const EMPTY_BUYER_IDENTITY = {
 	// Sub-flow state. `init` means we haven't checked the session yet.
-	phase: "init", // init | session | ask_email | magic_link_sent | new_user_form
+	phase: "init", // init | session | ask_email | awaiting_otp | new_user_form
 	email: "",
+	otp: "",
 	sessionUser: null, // { id, email, first_name, last_name } when phase === "session"
 	firstName: "",
 	lastName: "",
@@ -61,9 +62,6 @@ export default function BuyerIdentity({ value, onChange }) {
 
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState(null);
-	const [pollingTimedOut, setPollingTimedOut] = useState(false);
-	const [pollVersion, setPollVersion] = useState(0);
-	const pollingRef = useRef(null);
 
 	// On mount: check existing session.
 	useEffect(() => {
@@ -88,103 +86,47 @@ export default function BuyerIdentity({ value, onChange }) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	const [manualChecking, setManualChecking] = useState(false);
-
-	// One-shot session check. Returns the user if signed in, else null. Used
-	// by the interval, the manual "I've signed in" button, and the
-	// visibilitychange handler so mobile users returning to the tab don't
-	// have to wait up to 3s for the next poll tick.
-	const checkSessionNow = useCallback(async () => {
-		try {
-			const { data } = await authClient.getSession();
-			if (data?.user) {
-				if (pollingRef.current) {
-					clearInterval(pollingRef.current);
-					pollingRef.current = null;
-				}
-				set({ phase: "session", sessionUser: data.user, email: data.user.email });
-				return data.user;
-			}
-		} catch {}
-		return null;
-	}, [set]);
-
-	// Polling for session after a magic link is sent. Capped at ~3 minutes
-	// (60 polls × 3s) so we don't run forever on a tab someone left open. When
-	// the cap hits we flip `pollingTimedOut`; the UI shows a "didn't get the
-	// link?" prompt that resends or lets them switch email.
-	useEffect(() => {
-		if (v.phase !== "magic_link_sent") return;
-		setPollingTimedOut(false);
-		let attempts = 0;
-		const MAX_ATTEMPTS = 60;
-		const id = setInterval(async () => {
-			attempts += 1;
-			const user = await checkSessionNow();
-			if (user) return;
-			if (attempts >= MAX_ATTEMPTS) {
-				clearInterval(id);
-				pollingRef.current = null;
-				setPollingTimedOut(true);
-			}
-		}, 3000);
-		pollingRef.current = id;
-		return () => {
-			clearInterval(id);
-			pollingRef.current = null;
-		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [v.phase, pollVersion]);
-
-	// Mobile: clicking the magic link usually opens a new tab. When the
-	// user returns, fire an immediate check rather than waiting for the
-	// next poll tick (or for the interval to un-throttle).
-	useEffect(() => {
-		if (v.phase !== "magic_link_sent") return;
-		function onVisible() {
-			if (document.visibilityState === "visible") {
-				checkSessionNow().then((user) => {
-					if (!user && pollingTimedOut) {
-						setPollingTimedOut(false);
-						setPollVersion((n) => n + 1);
-					}
-				});
-			}
-		}
-		document.addEventListener("visibilitychange", onVisible);
-		window.addEventListener("focus", onVisible);
-		return () => {
-			document.removeEventListener("visibilitychange", onVisible);
-			window.removeEventListener("focus", onVisible);
-		};
-	}, [v.phase, pollingTimedOut, checkSessionNow]);
-
-	async function manualCheck() {
-		setManualChecking(true);
-		try {
-			const user = await checkSessionNow();
-			if (!user) {
-				setPollingTimedOut(false);
-				setPollVersion((n) => n + 1);
-			}
-		} finally {
-			setManualChecking(false);
-		}
-	}
-
-	async function resendMagicLink() {
+	async function resendOtp() {
 		setBusy(true);
 		setError(null);
 		try {
-			const { error: err } = await authClient.signIn.magicLink({
+			const { error: err } = await authClient.emailOtp.sendVerificationOtp({
 				email: v.email.trim(),
-				callbackURL: "/auth-verified",
+				type: "sign-in",
 			});
-			if (err) throw new Error(err.message || "Couldn't resend the link.");
-			setPollingTimedOut(false);
-			setPollVersion((n) => n + 1);
+			if (err) throw new Error(err.message || "Couldn't send a fresh code.");
+			set({ otp: "" });
 		} catch (e) {
-			setError(e?.message || "Couldn't resend the link.");
+			setError(e?.message || "Couldn't send a fresh code.");
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function verifyOtp(e) {
+		e?.preventDefault();
+		const code = (v.otp ?? "").trim();
+		if (code.length < 4) return;
+		setBusy(true);
+		setError(null);
+		try {
+			const { data, error: err } = await authClient.signIn.emailOtp({
+				email: v.email.trim(),
+				otp: code,
+			});
+			if (err) throw new Error(err.message || "That code didn't match — try again.");
+			if (data?.user) {
+				set({
+					phase: "session",
+					sessionUser: data.user,
+					email: data.user.email,
+				});
+			} else {
+				throw new Error("Sign-in succeeded but no user was returned.");
+			}
+		} catch (e) {
+			setError(e?.message || "That code didn't match — try again.");
+			set({ otp: "" });
 		} finally {
 			setBusy(false);
 		}
@@ -206,12 +148,12 @@ export default function BuyerIdentity({ value, onChange }) {
 			if (!res.ok) throw new Error(data?.error || "Lookup failed");
 
 			if (data.exists) {
-				const { error: err } = await authClient.signIn.magicLink({
+				const { error: err } = await authClient.emailOtp.sendVerificationOtp({
 					email,
-					callbackURL: "/auth-verified",
+					type: "sign-in",
 				});
-				if (err) throw new Error(err.message || "Couldn't send the sign-in link.");
-				set({ phase: "magic_link_sent" });
+				if (err) throw new Error(err.message || "Couldn't send the sign-in code.");
+				set({ phase: "awaiting_otp", otp: "" });
 			} else {
 				set({ phase: "new_user_form" });
 			}
@@ -305,71 +247,57 @@ export default function BuyerIdentity({ value, onChange }) {
 		);
 	}
 
-	if (v.phase === "magic_link_sent") {
+	if (v.phase === "awaiting_otp") {
 		return (
-			<div className="space-y-3 text-center max-w-md mx-auto">
+			<form onSubmit={verifyOtp} className="space-y-3 max-w-md mx-auto text-center">
 				<h3 className="font-display text-xl tracking-tight">Check your email.</h3>
 				<p className="text-sm text-muted-foreground">
-					We&apos;ve sent a sign-in link to{" "}
+					We&apos;ve sent a 6-digit code to{" "}
 					<span className="font-medium text-foreground">{v.email}</span>.
 				</p>
-				<p className="text-sm text-muted-foreground">
-					Open it from your email — we&apos;ll pick up here automatically once
-					you click it.
-					<br />
-					<span className="text-xs">
-						(Keep this window open. Right-click → open in new tab if you can.)
-					</span>
-				</p>
-				{pollingTimedOut ? (
-					<div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 space-y-2 text-xs">
-						<p className="text-amber-700 dark:text-amber-400">
-							Still waiting — the link might be in spam, or you opened it in a
-							private browser session.
-						</p>
-						<div className="flex flex-wrap gap-2 justify-center">
-							<button
-								type="button"
-								className="underline text-muted-foreground hover:text-foreground"
-								onClick={resendMagicLink}
-								disabled={busy}
-							>
-								{busy ? "Sending…" : "Resend link"}
-							</button>
-							<span className="text-muted-foreground/60">·</span>
-							<button
-								type="button"
-								className="underline text-muted-foreground hover:text-foreground"
-								onClick={() => set({ phase: "ask_email" })}
-							>
-								Use a different email
-							</button>
-						</div>
+				<div className="space-y-1.5 text-left">
+					<Label htmlFor="buyer-otp">Code</Label>
+					<Input
+						id="buyer-otp"
+						inputMode="numeric"
+						autoComplete="one-time-code"
+						pattern="[0-9]*"
+						maxLength={8}
+						required
+						placeholder="123456"
+						value={v.otp ?? ""}
+						onChange={(e) => set({ otp: e.target.value.replace(/\D/g, "") })}
+						disabled={busy}
+						className="text-center font-mono text-lg tracking-[0.4em]"
+					/>
+				</div>
+				{error && (
+					<div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive text-left">
+						{error}
 					</div>
-				) : (
-					<>
-						<div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-							<span className="inline-block size-1.5 rounded-full bg-primary animate-pulse" />
-							<span>Waiting for you to click the link…</span>
-						</div>
-						<Button
-							type="button"
-							variant="outline"
-							onClick={manualCheck}
-							disabled={manualChecking || busy}
-						>
-							{manualChecking ? "Checking…" : "I've clicked the link — check now"}
-						</Button>
-						<button
-							type="button"
-							className="text-xs text-muted-foreground hover:text-foreground underline"
-							onClick={() => set({ phase: "ask_email" })}
-						>
-							Use a different email
-						</button>
-					</>
 				)}
-			</div>
+				<Button type="submit" disabled={busy || (v.otp ?? "").length < 6} className="w-full">
+					{busy ? "Verifying…" : "Continue"}
+				</Button>
+				<div className="flex flex-wrap gap-2 justify-center text-xs">
+					<button
+						type="button"
+						className="underline text-muted-foreground hover:text-foreground"
+						onClick={resendOtp}
+						disabled={busy}
+					>
+						{busy ? "Sending…" : "Send a new code"}
+					</button>
+					<span className="text-muted-foreground/60">·</span>
+					<button
+						type="button"
+						className="underline text-muted-foreground hover:text-foreground"
+						onClick={() => set({ phase: "ask_email", otp: "" })}
+					>
+						Use a different email
+					</button>
+				</div>
+			</form>
 		);
 	}
 

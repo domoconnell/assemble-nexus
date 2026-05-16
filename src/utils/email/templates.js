@@ -29,6 +29,18 @@ export const EMAIL_TEMPLATES = {
 		},
 	},
 
+	"auth-otp": {
+		templateId: null,
+		description: "Six-digit one-time code sent during booking and ticket checkout. Mobile-friendly alternative to the magic link — the code is entered back in the original tab so the session lands in the right browser. 10-minute expiry.",
+		audience: "any",
+		fields: {
+			code: "Six-digit numeric code (string).",
+			expires_in_minutes: "How long the code is valid (number).",
+			firstName: "Recipient's first name. Empty string for new users.",
+			lastName: "Recipient's last name. Empty string for new users.",
+		},
+	},
+
 	"booking-enquiry-received": {
 		templateId: null,
 		description: "Sent to the hirer immediately after they submit a booking enquiry.",
