@@ -48,7 +48,7 @@ export default async function LedgerDashboardPage({ searchParams }) {
 		<div className="mx-auto p-6 lg:p-10 max-w-5xl space-y-8">
 			<div className="flex items-baseline justify-between gap-4 flex-wrap">
 				<div>
-					<h1 className="text-2xl font-semibold">Ledger — {monthLabel(month.year, month.month1)}</h1>
+					<h1 className="text-2xl font-semibold">Ledger - {monthLabel(month.year, month.month1)}</h1>
 					<p className="mt-1 text-sm text-muted-foreground">
 						Monthly P&amp;L for The Assembly Rooms.
 					</p>
@@ -170,25 +170,25 @@ export default async function LedgerDashboardPage({ searchParams }) {
 						<Link href="/admin/ledger/recurring" className="underline hover:text-foreground">
 							Recurring costs
 						</Link>{" "}
-						— utilities, staff, mortgage figures
+						- utilities, staff, mortgage figures
 					</li>
 					<li>
 						<Link href="/admin/ledger/expenses" className="underline hover:text-foreground">
 							Expenses
 						</Link>{" "}
-						— operational costs
+						- operational costs
 					</li>
 					<li>
 						<Link href="/admin/ledger/pos" className="underline hover:text-foreground">
 							POS takings
 						</Link>{" "}
-						— Square API sync (needs credentials)
+						- Square API sync (needs credentials)
 					</li>
 					<li>
 						<Link href="/admin/ledger/income" className="underline hover:text-foreground">
 							Manual income
 						</Link>{" "}
-						— donations and ad-hoc receipts
+						- donations and ad-hoc receipts
 					</li>
 				</ul>
 			</section>

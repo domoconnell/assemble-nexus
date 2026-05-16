@@ -10,7 +10,7 @@ import DelegateNav from "../_components/delegate-nav";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-	title: "My orders — The Assembly Rooms",
+	title: "My orders - The Assembly Rooms",
 };
 
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
@@ -47,7 +47,7 @@ export default async function MyOrdersPage() {
 					height="short"
 					kicker="Your orders"
 					title="Sign in to see your orders."
-					subtitle="No password needed — we'll email you a one-click link."
+					subtitle="No password needed - we'll email you a one-click link."
 				/>
 				<Container className="pt-6 pb-12 lg:pb-16">
 					<MagicLinkForm

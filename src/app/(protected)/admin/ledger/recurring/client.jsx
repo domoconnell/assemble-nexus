@@ -20,7 +20,7 @@ const monthFmt = new Intl.DateTimeFormat("en-GB", {
 	timeZone: "UTC",
 });
 function formatYmdMonth(ymd) {
-	if (!ymd) return "—";
+	if (!ymd) return "-";
 	const [y, m] = ymd.split("-").map(Number);
 	return monthFmt.format(new Date(Date.UTC(y, m - 1, 1)));
 }
@@ -175,7 +175,7 @@ function Section({ section }) {
 								<tr key={row.id} className="border-t border-foreground/5">
 									<td className="py-2">{formatYmdMonth(row.effective_from)}</td>
 									<td className="py-2 font-mono">{fmt(row.monthly_amount_cents)}</td>
-									<td className="py-2 text-muted-foreground">{row.notes || "—"}</td>
+									<td className="py-2 text-muted-foreground">{row.notes || "-"}</td>
 									<td className="py-2 text-right">
 										<Button
 											type="button"

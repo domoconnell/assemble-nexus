@@ -160,7 +160,7 @@ export default function RoomPricingEditor({ roomId, offeredTypes, vatRates, init
 										inputMode="decimal"
 										min="0"
 										step="0.01"
-										placeholder="—"
+										placeholder="-"
 										value={d.daily_cap_pounds}
 										onChange={(e) => update(t.id, { daily_cap_pounds: e.target.value })}
 									/>
@@ -170,7 +170,7 @@ export default function RoomPricingEditor({ roomId, offeredTypes, vatRates, init
 									<Input
 										type="number"
 										min="0"
-										placeholder="—"
+										placeholder="-"
 										value={d.min_hours ?? ""}
 										onChange={(e) => update(t.id, { min_hours: e.target.value })}
 									/>

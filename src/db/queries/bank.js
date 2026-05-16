@@ -43,7 +43,7 @@ function snapshotAccountFilter(accountIds) {
 
 /**
  * Latest snapshot per bank account for the venue, optionally filtered to a
- * subset. Returned as an array — `combineLatestSnapshots` sums them when
+ * subset. Returned as an array - `combineLatestSnapshots` sums them when
  * the caller wants a single combined balance.
  */
 export async function listLatestBalanceSnapshots(venueId, { accountIds } = {}) {
@@ -73,7 +73,7 @@ export async function listLatestBalanceSnapshots(venueId, { accountIds } = {}) {
 }
 
 /**
- * Sum of the latest snapshots across (filtered) accounts — the combined
+ * Sum of the latest snapshots across (filtered) accounts - the combined
  * "cash on hand" number used by the dashboard widget and Banking page
  * cards. Returns null when no snapshots exist yet.
  */

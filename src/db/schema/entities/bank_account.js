@@ -4,7 +4,7 @@ import { venue } from "./venue.js";
 export const BANK_PROVIDERS = ["starling", "revolut"];
 
 /**
- * One row per connected bank account. A venue may have multiple — Revolut +
+ * One row per connected bank account. A venue may have multiple - Revolut +
  * Starling, GBP + EUR, etc. The `provider` field selects which plugin
  * handles balance/transaction sync. The `credentials` JSONB is shaped
  * differently per provider (see each provider's plugin docs) so the

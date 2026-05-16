@@ -156,7 +156,7 @@ function HeadlineCards({ combined, inOut, monthName }) {
 				label="Cleared balance"
 				value={fmtMinor(cleared)}
 				tone="primary"
-				sub={combined ? `Across ${combined.account_count} account${combined.account_count === 1 ? "" : "s"} · ${stampFmt.format(new Date(combined.captured_at))}` : "—"}
+				sub={combined ? `Across ${combined.account_count} account${combined.account_count === 1 ? "" : "s"} · ${stampFmt.format(new Date(combined.captured_at))}` : "-"}
 			/>
 			<Card label={`In · ${monthName}`} value={`+${fmtMinor(inMinor)}`} tone="primary" sub="Settled this month, excluding transfers" />
 			<Card label={`Out · ${monthName}`} value={`−${fmtMinor(outMinor)}`} tone="destructive" sub="Settled this month, excluding transfers" />
@@ -204,15 +204,15 @@ function TransactionsTable({ rows, accountsById }) {
 				<tbody className="divide-y divide-foreground/5">
 					{rows.map((r) => {
 						const when = r.settled_at ?? r.transaction_time;
-						const dateStr = when ? dateFmt.format(new Date(when)) : "—";
+						const dateStr = when ? dateFmt.format(new Date(when)) : "-";
 						const isIn = r.direction === "IN";
-						const accountLabel = accountsById[r.bank_account_id]?.label ?? "—";
+						const accountLabel = accountsById[r.bank_account_id]?.label ?? "-";
 						return (
 							<tr key={r.id} className={`hover:bg-muted/20 ${r.is_transfer ? "opacity-60" : ""}`}>
 								<td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">{dateStr}</td>
 								<td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{accountLabel}</td>
 								<td className="px-4 py-2.5">
-									{r.counterparty_name || "—"}
+									{r.counterparty_name || "-"}
 									{r.is_transfer && (
 										<span className="ml-2 text-[10px] uppercase tracking-[0.15em] text-muted-foreground border border-foreground/15 rounded-full px-1.5 py-0.5">
 											Transfer

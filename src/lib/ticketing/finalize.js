@@ -15,7 +15,7 @@ import {
 /**
  * Finalise a ticket order once payment has succeeded.
  *
- * Idempotent — calling on an already-finalised order is a no-op. Generates
+ * Idempotent - calling on an already-finalised order is a no-op. Generates
  * `ticket` rows (one per ticket-line quantity, including bundle-substituted
  * child rows). QR codes / wallet passes are out of scope here and ship in
  * the background-worker phase.

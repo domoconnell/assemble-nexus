@@ -19,7 +19,7 @@ function pad(n) {
 // Coerce a 'YYYY-MM' input into the first of that month as 'YYYY-MM-DD'.
 function firstOfMonth(ym) {
 	const m = /^(\d{4})-(\d{2})$/.exec(ym);
-	if (!m) throw new Error("Invalid month — expected YYYY-MM");
+	if (!m) throw new Error("Invalid month - expected YYYY-MM");
 	const year = Number(m[1]);
 	const month = Number(m[2]);
 	if (month < 1 || month > 12) throw new Error("Invalid month");
@@ -41,7 +41,7 @@ export async function setRecurringCostScheduleAction(input) {
 	const amount_cents = Math.round(parsed.amount_pounds * 100);
 
 	// If there's already a row for this venue/type/effective_from, update it.
-	// Otherwise insert. This keeps the history clean — multiple edits to the
+	// Otherwise insert. This keeps the history clean - multiple edits to the
 	// same starting month don't pile up duplicate rows.
 	const [existing] = await db
 		.select({ id: recurring_cost_schedule.id })

@@ -35,7 +35,7 @@ async function call(token, path) {
 }
 
 /**
- * Look up the accounts on a Starling PAT — used by the setup form so the
+ * Look up the accounts on a Starling PAT - used by the setup form so the
  * user can pick the right account UID from a dropdown rather than copy/paste
  * the UUID by hand. Returns the raw account list shape from Starling.
  */

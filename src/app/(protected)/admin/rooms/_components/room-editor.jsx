@@ -384,7 +384,7 @@ export default function RoomEditor({
 								Delete
 							</Button>
 						)}
-						{/* Top Save is for Details-tab fields only — every other tab
+						{/* Top Save is for Details-tab fields only - every other tab
 						    has its own save mechanism (pricing's "Save pricing" at
 						    the bottom, packages save per-card, blocks per-block,
 						    gallery on blur). Hiding it elsewhere stops users from
@@ -592,7 +592,7 @@ export default function RoomEditor({
 										<Input
 											type="number"
 											min="0"
-											placeholder="—"
+											placeholder="-"
 											value={c.value}
 											onChange={(e) => setCapacityValue(c.layout_id, e.target.value)}
 											disabled={!c.enabled}
@@ -677,7 +677,7 @@ export default function RoomEditor({
 								{catGroups.length > 0 && (
 									<div className="space-y-2">
 										<p className="text-xs text-muted-foreground">
-											Choose-one sets — group packages so customers can pick only one.
+											Choose-one sets - group packages so customers can pick only one.
 										</p>
 										<div className="space-y-2">
 											{catGroups.map((g) => (

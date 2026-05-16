@@ -168,7 +168,7 @@ export default function BookingDetailActions({
 					open={issueInvoiceOpen}
 					onOpenChange={setIssueInvoiceOpen}
 					title={balanceInvoiceIssuedAt ? "Re-send balance invoice?" : "Issue balance invoice?"}
-					description="Emails the hirer with the outstanding amount and a link to pay. They can pay at any time via the link on their booking page — issuing prompts them by email."
+					description="Emails the hirer with the outstanding amount and a link to pay. They can pay at any time via the link on their booking page - issuing prompts them by email."
 					confirmLabel={balanceInvoiceIssuedAt ? "Re-send" : "Send invoice"}
 					onConfirm={issueInvoice}
 				/>
@@ -187,7 +187,7 @@ export default function BookingDetailActions({
 	if (status !== "pending") {
 		return (
 			<section className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-				No actions available — this booking is{" "}
+				No actions available - this booking is{" "}
 				<span className="font-medium text-foreground">{status}</span>.
 			</section>
 		);

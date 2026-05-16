@@ -97,7 +97,7 @@ export default function StarlingForm({ open, onOpenChange, initial }) {
 						>
 							Starling Developer Portal
 						</a>
-						{" "}— scopes <span className="font-mono">balance:read</span> and{" "}
+						{" "}- scopes <span className="font-mono">balance:read</span> and{" "}
 						<span className="font-mono">transaction:read</span>.
 					</DialogDescription>
 				</DialogHeader>
@@ -150,7 +150,7 @@ export default function StarlingForm({ open, onOpenChange, initial }) {
 									<SelectValue placeholder="Pick an account" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value={ACCOUNT_PICKER_NONE}>—</SelectItem>
+									<SelectItem value={ACCOUNT_PICKER_NONE}>-</SelectItem>
 									{discovered.map((a) => (
 										<SelectItem key={a.accountUid} value={a.accountUid}>
 											{a.name} · {a.currency} · {a.accountType}

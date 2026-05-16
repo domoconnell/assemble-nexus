@@ -34,7 +34,7 @@ export async function generateMetadata({ params }) {
 	const room = await getPublishedRoomBySlug(venue.id, slug);
 	if (!room) return {};
 	return {
-		title: `${room.name} — The Assembly Rooms`,
+		title: `${room.name} - The Assembly Rooms`,
 		description: room.tagline ?? room.short_description ?? "",
 	};
 }

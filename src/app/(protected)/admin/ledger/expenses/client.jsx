@@ -33,7 +33,7 @@ const dayFmt = new Intl.DateTimeFormat("en-GB", {
 	timeZone: "UTC",
 });
 function formatDate(ymd) {
-	if (!ymd) return "—";
+	if (!ymd) return "-";
 	const [y, m, d] = ymd.split("-").map(Number);
 	return dayFmt.format(new Date(Date.UTC(y, m - 1, d)));
 }
@@ -49,7 +49,7 @@ const eventDateFmt = new Intl.DateTimeFormat("en-GB", {
 });
 function formatEventLabel(ev) {
 	if (!ev) return "";
-	const when = ev.starts_at ? ` — ${eventDateFmt.format(new Date(ev.starts_at))}` : "";
+	const when = ev.starts_at ? ` - ${eventDateFmt.format(new Date(ev.starts_at))}` : "";
 	return `${ev.title}${when}`;
 }
 
@@ -195,8 +195,8 @@ export default function ExpensesClient({ ym, monthLabel, categories, expenses, e
 												</div>
 											)}
 										</td>
-										<td className="px-4 py-2 text-muted-foreground">{row.category_name ?? "—"}</td>
-										<td className="px-4 py-2 text-muted-foreground">{row.supplier_name ?? "—"}</td>
+										<td className="px-4 py-2 text-muted-foreground">{row.category_name ?? "-"}</td>
+										<td className="px-4 py-2 text-muted-foreground">{row.supplier_name ?? "-"}</td>
 										<td className="px-4 py-2 text-right font-mono whitespace-nowrap">{fmt(row.amount_cents)}</td>
 										<td className="px-2 py-2 whitespace-nowrap text-right">
 											<Button variant="ghost" size="sm" onClick={() => openEdit(row)}>

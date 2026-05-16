@@ -63,7 +63,7 @@ export async function buildInvoicePdfBuffer({ order, lines, customer, venue }) {
 		const qty = l.quantity > 1 ? l.quantity : 1;
 		const unit = l.unit_price_cents ?? Math.round((l.line_total_cents ?? 0) / Math.max(1, qty));
 		tableRows.push({
-			description: l.name_snapshot ?? "—",
+			description: l.name_snapshot ?? "-",
 			quantity: qty,
 			unit_cents: unit,
 			total_cents: l.line_total_cents ?? 0,
@@ -111,7 +111,7 @@ export async function buildInvoicePdfBuffer({ order, lines, customer, venue }) {
 				View,
 				{ style: styles.section },
 				React.createElement(Text, { style: styles.sectionLabel }, "Billed to"),
-				React.createElement(Text, null, customer ? `${customer.first_name ?? ""} ${customer.last_name ?? ""}`.trim() : "—"),
+				React.createElement(Text, null, customer ? `${customer.first_name ?? ""} ${customer.last_name ?? ""}`.trim() : "-"),
 				customer?.email && React.createElement(Text, { style: styles.addressLine }, customer.email),
 				customer?.organisation && React.createElement(Text, { style: styles.addressLine }, customer.organisation),
 			),

@@ -17,7 +17,7 @@ export const ticket_order = pgTable(
 		reference: text("reference").notNull().unique(),
 		event_id: uuid("event_id").notNull().references(() => event.id, { onDelete: "restrict" }),
 		customer_id: uuid("customer_id").notNull().references(() => customer.id, { onDelete: "restrict" }),
-		// Optional CRM link — set when an org (rather than a private delegate)
+		// Optional CRM link - set when an org (rather than a private delegate)
 		// is buying tickets, e.g. company block-buys.
 		organisation_id: uuid("organisation_id"),
 
@@ -35,12 +35,12 @@ export const ticket_order = pgTable(
 		booking_fee_cents: integer("booking_fee_cents").default(0).notNull(),
 		booking_fee_borne_by: text("booking_fee_borne_by").default("organiser").notNull(),
 
-		// Money breakdown snapshot — captured at order creation, surfaces in
+		// Money breakdown snapshot - captured at order creation, surfaces in
 		// both admin and organiser views. `organiser_net_cents` = what we owe
 		// the organiser for this order; `stripe_fee_estimate_cents` =
 		// venue's expected PSP cost from the configured Stripe rate;
 		// `stripe_fee_actual_cents` lands when the Stripe webhook fires
-		// (currently unwired — falls back to the estimate everywhere).
+		// (currently unwired - falls back to the estimate everywhere).
 		organiser_net_cents: integer("organiser_net_cents").default(0).notNull(),
 		stripe_fee_estimate_cents: integer("stripe_fee_estimate_cents").default(0).notNull(),
 		stripe_fee_actual_cents: integer("stripe_fee_actual_cents"),

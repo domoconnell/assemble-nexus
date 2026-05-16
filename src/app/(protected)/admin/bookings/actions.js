@@ -82,10 +82,10 @@ export async function approveBookingAction(input) {
 				}),
 			]);
 			if (foundBookings.length) {
-				throw new Error("Cannot approve — another booking now conflicts with this one.");
+				throw new Error("Cannot approve - another booking now conflicts with this one.");
 			}
 			if (foundEvents.length) {
-				throw new Error("Cannot approve — an event now uses one of these rooms.");
+				throw new Error("Cannot approve - an event now uses one of these rooms.");
 			}
 		}
 	}
@@ -106,7 +106,7 @@ export async function approveBookingAction(input) {
 	});
 
 	const [cust] = await db.select().from(customer).where(eq(customer.id, b.customer_id)).limit(1);
-	// Safety net for older bookings that pre-date the submission-time hook —
+	// Safety net for older bookings that pre-date the submission-time hook -
 	// the helper is a no-op when an event already exists.
 	const draftEvent = await ensureDraftEventForBooking({
 		booking: updated,
@@ -234,7 +234,7 @@ export async function issueBookingBalanceInvoiceAction(input) {
 
 /**
  * Admin override: mark the booking's outstanding balance as paid offline.
- * Idempotent — calling again on a fully-settled booking is a no-op.
+ * Idempotent - calling again on a fully-settled booking is a no-op.
  */
 export async function markBookingBalancePaidOfflineAction(input) {
 	await gateAdmin();
@@ -320,7 +320,7 @@ const AddRecurrenceSchema = z.object({
  *  - Booking must be in `pending` or `approved` status (no money committed
  *    yet from the deposit side).
  *  - Skips any generated dates that conflict with existing bookings,
- *    events, or blockouts on the same room — those are returned in
+ *    events, or blockouts on the same room - those are returned in
  *    `skipped` for the admin to follow up on.
  */
 export async function addRecurringSegmentsAction(input) {

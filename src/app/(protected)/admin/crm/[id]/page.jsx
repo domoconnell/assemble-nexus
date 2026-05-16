@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }) {
 	const { id } = await params;
 	const o = await getOrganisationById(id);
-	return { title: o ? `${o.name} — CRM` : "CRM" };
+	return { title: o ? `${o.name} - CRM` : "CRM" };
 }
 
 export default async function OrganisationDetailPage({ params }) {

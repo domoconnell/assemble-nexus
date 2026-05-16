@@ -133,7 +133,7 @@ export default function RevolutForm({ open, onOpenChange, initial }) {
 		try {
 			const res = await probeRevolutAction({ id: savedId });
 			if (res.ok) {
-				toast.success(`Connected — ${res.account_label ?? res.account_count + " account(s)"}.`);
+				toast.success(`Connected - ${res.account_label ?? res.account_count + " account(s)"}.`);
 			} else {
 				toast.error(res.error || "Couldn't connect");
 			}
@@ -155,7 +155,7 @@ export default function RevolutForm({ open, onOpenChange, initial }) {
 					</DialogDescription>
 				</DialogHeader>
 
-				{/* Step 1 — credentials */}
+				{/* Step 1 - credentials */}
 				<section className="space-y-4">
 					<div className="flex items-baseline justify-between">
 						<h3 className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -203,7 +203,7 @@ export default function RevolutForm({ open, onOpenChange, initial }) {
 								onChange={(e) => setIssuer(e.target.value)}
 							/>
 							<p className="text-[11px] text-muted-foreground">
-								The hostname Revolut sees as your app — used in the JWT{" "}
+								The hostname Revolut sees as your app - used in the JWT{" "}
 								<span className="font-mono">iss</span> claim.
 							</p>
 						</div>
@@ -247,7 +247,7 @@ export default function RevolutForm({ open, onOpenChange, initial }) {
 					</div>
 				</section>
 
-				{/* Step 2 — authorise */}
+				{/* Step 2 - authorise */}
 				{savedId && (
 					<section className="space-y-3 pt-4 border-t border-foreground/10">
 						<h3 className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -291,7 +291,7 @@ export default function RevolutForm({ open, onOpenChange, initial }) {
 					</section>
 				)}
 
-				{/* Step 3 — pick account */}
+				{/* Step 3 - pick account */}
 				{savedId && (discovered.length > 0 || hasTokens) && (
 					<section className="space-y-3 pt-4 border-t border-foreground/10">
 						<h3 className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -308,7 +308,7 @@ export default function RevolutForm({ open, onOpenChange, initial }) {
 									<SelectValue placeholder="Pick an account" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value={ACCOUNT_PICKER_NONE}>—</SelectItem>
+									<SelectItem value={ACCOUNT_PICKER_NONE}>-</SelectItem>
 									{discovered.map((a) => (
 										<SelectItem key={a.id} value={a.id}>
 											{a.name} · {a.currency} · {a.state}

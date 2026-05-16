@@ -110,7 +110,7 @@ export default async function AdminBookingsPage({ searchParams }) {
 										<div className="text-xs text-muted-foreground">{r.customer_email}</div>
 									</td>
 									<td className="px-4 py-3 text-muted-foreground">
-										{r.submitted_at ? dateFmt.format(new Date(r.submitted_at)) : "—"}
+										{r.submitted_at ? dateFmt.format(new Date(r.submitted_at)) : "-"}
 									</td>
 									<td className="px-4 py-3 text-right font-mono">
 										{formatGbp(r.total_cents)}

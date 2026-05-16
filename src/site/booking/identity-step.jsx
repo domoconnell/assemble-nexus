@@ -131,14 +131,14 @@ export default function IdentityStep({
 				email: v.email.trim(),
 				otp: code,
 			});
-			if (err) throw new Error(err.message || "That code didn't match — try again.");
+			if (err) throw new Error(err.message || "That code didn't match. Try again.");
 			if (data?.user) {
 				await confirmSession(data.user);
 			} else {
 				throw new Error("Sign-in succeeded but no user was returned.");
 			}
 		} catch (e) {
-			setError(e?.message || "That code didn't match — try again.");
+			setError(e?.message || "That code didn't match. Try again.");
 			set({ otp: "" });
 		} finally {
 			setBusy(false);
@@ -413,7 +413,7 @@ export default function IdentityStep({
 		return (
 			<div className="space-y-4">
 				<div className="space-y-1">
-					<h3 className="font-display text-xl tracking-tight">Welcome — let&apos;s get you set up</h3>
+					<h3 className="font-display text-xl tracking-tight">Welcome. Let&apos;s get you set up.</h3>
 					<p className="text-sm text-muted-foreground">
 						We don&apos;t have <span className="font-medium text-foreground">{v.email}</span> on
 						file. Tell us a little about you and your organisation.

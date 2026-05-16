@@ -90,7 +90,7 @@ async function signCookieValue(value, secret) {
 }
 
 /**
- * Look up an existing user by email (case-insensitive) — used by the
+ * Look up an existing user by email (case-insensitive) - used by the
  * identity dialog to branch new-vs-existing before sending magic link or
  * creating an account.
  */

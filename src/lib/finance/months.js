@@ -1,6 +1,6 @@
 /**
  * Helpers for handling month boundaries in Europe/London. Finance reporting
- * is naturally month-based — these utilities give us consistent inclusive
+ * is naturally month-based - these utilities give us consistent inclusive
  * lower / exclusive upper bounds in both YYYY-MM-DD string form (for date
  * columns like expense.date) and Date form (for timestamptz columns like
  * ticket_order.paid_at).
@@ -39,7 +39,7 @@ export function resolveMonth(ym /* 'YYYY-MM' */) {
 	// Construct UTC instants representing midnight London time. BST/GMT shifts
 	// happen on the last Sunday of March/October; if the month boundary is
 	// inside a DST transition the offset is one of {0, +1}. We pick midnight
-	// UTC as a conservative anchor — finance reporting at month granularity
+	// UTC as a conservative anchor - finance reporting at month granularity
 	// doesn't need sub-hour precision.
 	const monthStartDate = new Date(`${ymdStart}T00:00:00Z`);
 	const monthEndDate = new Date(`${ymdEnd}T00:00:00Z`);

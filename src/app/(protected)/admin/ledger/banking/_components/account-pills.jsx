@@ -33,7 +33,7 @@ export default function AccountPills({ accounts, selectedIds }) {
 		const next = new Set(selected);
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
-		// Empty selection auto-flips to "all" — at least one account must be on.
+		// Empty selection auto-flips to "all" - at least one account must be on.
 		const nextIds = next.size === 0 ? accounts.map((a) => a.id) : [...next];
 		setSelection(nextIds);
 	}

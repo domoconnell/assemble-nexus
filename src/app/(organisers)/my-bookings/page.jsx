@@ -11,7 +11,7 @@ import OrganiserNav from "../_components/organiser-nav";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-	title: "My bookings — The Assembly Rooms",
+	title: "My bookings - The Assembly Rooms",
 };
 
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
@@ -49,7 +49,7 @@ export default async function MyBookingsPage() {
 					height="short"
 					kicker="Your bookings"
 					title="Sign in to see your bookings."
-					subtitle="No password needed — we'll email you a one-click link."
+					subtitle="No password needed - we'll email you a one-click link."
 				/>
 				<Container className="pt-6 pb-12 lg:pb-16">
 					<MagicLinkForm callbackURL="/my-bookings" heading="See your bookings" />
@@ -135,7 +135,7 @@ export default async function MyBookingsPage() {
 										</div>
 										<div className="text-sm text-muted-foreground">
 											Submitted{" "}
-											{b.submitted_at ? stampFmt.format(new Date(b.submitted_at)) : "—"}
+											{b.submitted_at ? stampFmt.format(new Date(b.submitted_at)) : "-"}
 										</div>
 									</div>
 									<div className="font-mono text-sm shrink-0 whitespace-nowrap">

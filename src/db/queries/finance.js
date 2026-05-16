@@ -198,7 +198,7 @@ export async function sumExpensesForEvent(eventId) {
 }
 
 export async function expensesByCategoryForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth) {
-	// Returns rows grouped by category for the month — used by the director
+	// Returns rows grouped by category for the month - used by the director
 	// board pack to show the cost-of-delivery breakdown. Uncategorised
 	// expenses are rolled up under name = "Uncategorised".
 	const rows = await db.execute(sql`
@@ -390,7 +390,7 @@ export async function sumBookingIncomeForMonth(venueId, monthStartDate, monthEnd
 }
 
 /**
- * Gross ticket income for the month — the full `total_cents` of every paid
+ * Gross ticket income for the month - the full `total_cents` of every paid
  * order at this venue. The waterfall view treats this as "money in" and
  * deducts organiser payouts + Stripe fees from it via the cost-of-delivery
  * line below.
@@ -417,7 +417,7 @@ export async function sumTicketIncomeForMonth(venueId, monthStartDate, monthEndD
 
 /**
  * Money owed to event organisers from paid orders this month. Only counts
- * events with a CRM organiser linked — events without one keep the cash on
+ * events with a CRM organiser linked - events without one keep the cash on
  * the venue's books.
  */
 export async function sumOrganiserPayoutsForMonth(venueId, monthStartDate, monthEndDate) {
@@ -467,11 +467,11 @@ export async function sumStripeFeesForMonth(venueId, monthStartDate, monthEndDat
 }
 
 /* ------------------------------------------------------------------------ */
-/* monthly P&L roll-up — drives the dashboard                               */
+/* monthly P&L roll-up - drives the dashboard                               */
 /* ------------------------------------------------------------------------ */
 
 /**
- * `ymdFirstOfMonth` and `ymdFirstOfNextMonth` are 'YYYY-MM-DD' strings —
+ * `ymdFirstOfMonth` and `ymdFirstOfNextMonth` are 'YYYY-MM-DD' strings -
  * the inclusive lower bound and exclusive upper bound of the target month.
  * `monthStartDate` / `monthEndDate` are JS Date instances for the same
  * boundaries (used against timestamptz columns).
@@ -482,7 +482,7 @@ export async function sumStripeFeesForMonth(venueId, monthStartDate, monthEndDat
  * `getMonthlyPnl`'s shape plus a `ym` identifier so the dashboard chart can
  * key by month.
  *
- * Currently iterates per-month — fine for the 12-month dashboard window.
+ * Currently iterates per-month - fine for the 12-month dashboard window.
  */
 export async function listMonthlyPnlForRange(venueId, { endYm, monthsBack = 12 } = {}) {
 	const [endYear, endMonth] = endYm.split("-").map(Number);

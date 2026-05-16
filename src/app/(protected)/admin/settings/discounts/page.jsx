@@ -23,7 +23,7 @@ export default async function DiscountsPage() {
 				</Link>
 				<h1 className="mt-2 text-2xl font-semibold">Discounts</h1>
 				<p className="text-sm text-muted-foreground mt-1">
-					Discounts that customers can apply to their booking. Applies to room hire only — never to add-ons.
+					Discounts that customers can apply to their booking. Applies to room hire only - never to add-ons.
 				</p>
 			</div>
 			<DiscountsEditor initialDiscounts={discounts} />

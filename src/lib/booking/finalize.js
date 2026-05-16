@@ -17,7 +17,7 @@ function outstandingBalanceCents(row) {
 /**
  * Finalise a booking once the deposit has been paid.
  *
- * Idempotent — calling again on an already-confirmed booking is a no-op.
+ * Idempotent - calling again on an already-confirmed booking is a no-op.
  * Marks `deposit_paid_cents`, flips status `approved → confirmed`, writes a
  * `booking_status_event` row, and best-effort emails the hirer.
  */
@@ -68,7 +68,7 @@ export async function finaliseBookingDeposit(bookingId, { paymentRef, amountPaid
  *
  * Adds `amountPaidCents` to `balance_paid_cents`. If the booking is fully
  * paid (deposit + balance >= total), flips status to "completed" and writes
- * a status event. Otherwise leaves status alone (partial-balance scenario —
+ * a status event. Otherwise leaves status alone (partial-balance scenario -
  * unusual but allowed).
  *
  * Idempotent: a no-op if the booking is already in `completed` or

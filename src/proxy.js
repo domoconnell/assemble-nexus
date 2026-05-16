@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 // Routes that require a session cookie before they even reach Next's
-// rendering. `/my-events` and `/my-tickets` are NOT here — those pages
+// rendering. `/my-events` and `/my-tickets` are NOT here - those pages
 // render their own in-page magic-link form when no session exists.
 const PROTECTED_PREFIXES = ["/admin"];
 const LOGIN_PATH = "/auth/login";
@@ -19,7 +19,7 @@ const SESSION_COOKIE_NAMES = [
     `__Secure-${COOKIE_PREFIX}.session_token`,
 ];
 
-// Canonical host derived from BASE_URL — every request is rewritten to this
+// Canonical host derived from BASE_URL - every request is rewritten to this
 // host + https. Apex (`assembly-rooms.com`) bounces to `www.assembly-rooms.com`,
 // http bounces to https. Dev (localhost) is skipped.
 const CANONICAL_URL = (() => {
@@ -34,7 +34,7 @@ export function proxy(req) {
     if (CANONICAL_URL && CANONICAL_URL.hostname !== "localhost") {
         const host = req.headers.get("host") || "";
         const proto = req.headers.get("x-forwarded-proto") || "https";
-        // Treat empty/loopback hosts as internal — Next's image optimizer
+        // Treat empty/loopback hosts as internal - Next's image optimizer
         // builds its source fetch via a mocked request with no host header,
         // and we must never redirect that.
         const isInternal =
@@ -85,7 +85,7 @@ export const config = {
     // Exclude Next internals AND any path that looks like a static asset.
     // The trailing extension check matters because Next's image optimizer
     // makes an *internal* mock request to the source file (e.g.
-    // `/assembly-rooms-white.png`) when optimising local images — if the
+    // `/assembly-rooms-white.png`) when optimising local images - if the
     // middleware ran on that and issued any redirect, the optimizer would
     // see a non-image body and fail with "isn't a valid image".
     matcher: [

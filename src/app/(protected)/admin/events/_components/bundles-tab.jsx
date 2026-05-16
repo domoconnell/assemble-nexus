@@ -191,7 +191,7 @@ export default function BundlesTab({
 				<div>
 					<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Bundles</h2>
 					<p className="text-xs text-muted-foreground mt-1">
-						Fixed-price packs (e.g. "Family pack — 2 × Adult + 2 × Child for £45"). Auto-applied
+						Fixed-price packs (e.g. "Family pack - 2 × Adult + 2 × Child for £45"). Auto-applied
 						when the cart contains the required quantities.
 					</p>
 				</div>
@@ -209,7 +209,7 @@ export default function BundlesTab({
 			)}
 			{!hasTicketTypes && (
 				<div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-					Add ticket types first — bundles are made up of ticket-type quantities.
+					Add ticket types first - bundles are made up of ticket-type quantities.
 				</div>
 			)}
 			{bundles.length === 0 ? (

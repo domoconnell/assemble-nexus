@@ -13,7 +13,7 @@ const Schema = z.object({
 });
 
 /**
- * Public — anyone with a booking reference can start a balance payment once
+ * Public - anyone with a booking reference can start a balance payment once
  * the deposit has confirmed the booking. Reuses any existing pending balance
  * intent; otherwise creates a fresh one for the outstanding amount.
  */

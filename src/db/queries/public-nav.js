@@ -5,8 +5,8 @@ import { event } from "@/db/schema/entities/event.js";
 
 /**
  * Pulls the data the public header + footer need to render a dynamic nav:
- *   rooms             — published rooms (one nav item each)
- *   hasUpcomingEvents — true when at least one published, public, future event exists
+ *   rooms             - published rooms (one nav item each)
+ *   hasUpcomingEvents - true when at least one published, public, future event exists
  *
  * Returned in one query each so the layout's render is cheap.
  */

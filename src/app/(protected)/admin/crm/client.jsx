@@ -117,7 +117,7 @@ export default function CrmListClient({ organisations }) {
 					<DialogHeader className="px-6 sm:px-8 pt-6 sm:pt-8 pb-4 space-y-1.5">
 						<DialogTitle>{editing?.id ? "Edit organisation" : "Add organisation"}</DialogTitle>
 						<DialogDescription>
-							A counterparty you do ongoing business with — a church, business, or charity.
+							A counterparty you do ongoing business with - a church, business, or charity.
 						</DialogDescription>
 					</DialogHeader>
 					{editing && (

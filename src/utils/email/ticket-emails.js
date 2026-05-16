@@ -47,7 +47,7 @@ export async function sendTicketOrderConfirmationEmail({ order, customer, eventT
 }
 
 /**
- * Wallet-pass delivery email — fires on order finalisation. Includes:
+ * Wallet-pass delivery email - fires on order finalisation. Includes:
  *   - A multi-page PDF of every ticket as an attachment
  *   - A `ticketsURL` to the public no-auth gallery (`/tickets/[order-id]`)
  *     which has the "Add to Apple Wallet" buttons per ticket

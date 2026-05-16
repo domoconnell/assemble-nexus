@@ -5,8 +5,8 @@ import { requireCurrentVenue } from "@/db/queries/venue";
 import { getPageContent } from "@/db/queries/site-content";
 
 export const metadata = {
-	title: "About — The Assembly Rooms",
-	description: "About The Assembly Rooms — the venue at the heart of Assemble Church.",
+	title: "About - The Assembly Rooms",
+	description: "About The Assembly Rooms. The venue at the heart of Assemble Church.",
 };
 
 export const dynamic = "force-dynamic";
@@ -40,7 +40,7 @@ export default async function AboutPage() {
 						<RichText html={whoWeAre.body} />
 					) : (
 						<p>
-							Placeholder. Real about copy goes here — story, mission, who runs the
+							Placeholder. Real about copy goes here: story, mission, who runs the
 							place, how we got here.
 						</p>
 					)}

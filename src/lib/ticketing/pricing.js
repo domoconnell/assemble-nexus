@@ -323,7 +323,7 @@ export async function quoteTicketOrder({ eventId, cart, codes = [], customerCove
 				if (!allowed.has(a.addon_id)) continue;
 				const addon = addonById.get(a.addon_id);
 				if (!addon) continue;
-				// addon.quantity is the TOTAL count across the ticket line — i.e. how
+				// addon.quantity is the TOTAL count across the ticket line - i.e. how
 				// many of the line's tickets are getting this addon. Capped at
 				// (ticket_qty × max_per_ticket).
 				const maxPerTicket = addon.max_quantity_per_ticket ?? 1;
@@ -474,7 +474,7 @@ export async function quoteTicketOrder({ eventId, cart, codes = [], customerCove
 	const available = max != null ? Math.max(0, max - committed) : null;
 
 	// Booking-fee math. orderValue is what the organiser is to receive (subtotal post-discount).
-	// Fee is charged on (subtotal + vat) — Stripe-style fee-on-gross.
+	// Fee is charged on (subtotal + vat) - Stripe-style fee-on-gross.
 	const orderValue_cents = subtotal_cents + vat_cents;
 	const customerPays = !!ev.fee_pass_through || !!customerCoversFeeOptIn;
 	const allow_customer_optin = !ev.fee_pass_through; // org absorbs by default ⇒ allow opt-in

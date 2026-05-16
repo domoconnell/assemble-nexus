@@ -149,7 +149,7 @@ function buildTicketPage(ticket, qrDataUrl) {
 			View,
 			{ style: styles.infoRow },
 			React.createElement(Text, { style: styles.infoLabel }, "Ticket"),
-			React.createElement(Text, { style: styles.infoValue }, ticket.ticket_type_label || "—"),
+			React.createElement(Text, { style: styles.infoValue }, ticket.ticket_type_label || "-"),
 		),
 		ticket.holder_name && React.createElement(
 			View,
@@ -183,7 +183,7 @@ function buildTicketPage(ticket, qrDataUrl) {
 		React.createElement(
 			Text,
 			{ style: styles.footer },
-			"Present this QR at the door — staff will scan to admit you.",
+			"Present this QR at the door - staff will scan to admit you.",
 		),
 	);
 }
@@ -195,7 +195,7 @@ export async function buildTicketPdfBuffer(ticket) {
 }
 
 /**
- * One PDF, one page per ticket — the customer's bundle for a whole order.
+ * One PDF, one page per ticket - the customer's bundle for a whole order.
  * Each ticket has its own QR / holder / status, but they share event + venue
  * meta. Order is preserved as passed in.
  */

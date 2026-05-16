@@ -17,7 +17,7 @@ const formatGbp = (c) => gbp.format((c ?? 0) / 100);
 
 export async function generateMetadata({ params }) {
 	const { reference } = await params;
-	return { title: `Pay balance · ${reference} — The Assembly Rooms` };
+	return { title: `Pay balance · ${reference} - The Assembly Rooms` };
 }
 
 export default async function BookingPayBalancePage({ params }) {
@@ -29,7 +29,7 @@ export default async function BookingPayBalancePage({ params }) {
 		redirect(`/booking/${reference}`);
 	}
 	if (b.status !== "confirmed") {
-		// Pending / approved / rejected / cancelled — show status page only.
+		// Pending / approved / rejected / cancelled - show status page only.
 		redirect(`/booking/${reference}`);
 	}
 

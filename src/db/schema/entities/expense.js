@@ -22,7 +22,7 @@ export const expense = pgTable(
 		attachment_file_id: uuid("attachment_file_id").references(() => file.id, { onDelete: "set null" }),
 		linked_event_id: uuid("linked_event_id").references(() => event.id, { onDelete: "set null" }),
 		linked_booking_id: uuid("linked_booking_id").references(() => booking.id, { onDelete: "set null" }),
-		// Optional CRM link — tag an expense as paid TO a specific
+		// Optional CRM link - tag an expense as paid TO a specific
 		// organisation, e.g. an organiser payout.
 		organisation_id: uuid("organisation_id"),
 		notes: text("notes"),

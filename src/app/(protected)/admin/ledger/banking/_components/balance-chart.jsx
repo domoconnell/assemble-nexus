@@ -75,7 +75,7 @@ export default function BalanceChart({ series, defaultBucket = "day" }) {
 			{data.length === 0 ? (
 				<div className="rounded-xl border border-dashed border-foreground/15 bg-card p-10 text-center">
 					<p className="text-sm text-muted-foreground">
-						No snapshots yet — the nightly cron writes one per day. Hit
+						No snapshots yet - the nightly cron writes one per day. Hit
 						&ldquo;Sync now&rdquo; in Settings → Bank account to capture the
 						first one.
 					</p>

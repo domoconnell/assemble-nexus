@@ -297,7 +297,7 @@ export async function countPendingBookings(venueId) {
 }
 
 /**
- * Total outstanding across approved/confirmed bookings — what hirers
+ * Total outstanding across approved/confirmed bookings - what hirers
  * still owe the venue. Excludes pending (not yet approved) and finished
  * statuses.
  */

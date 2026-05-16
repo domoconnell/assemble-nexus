@@ -13,7 +13,7 @@ const Schema = z.object({
 });
 
 /**
- * Public — anyone with a booking reference can start a deposit payment.
+ * Public - anyone with a booking reference can start a deposit payment.
  * Reuses any existing pending intent for the booking; otherwise creates a
  * fresh one via the active PSP. Returns the intent + provider for the
  * client-side <PaymentForm>.

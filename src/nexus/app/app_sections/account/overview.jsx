@@ -11,11 +11,11 @@ import { byPrefixAndName } from "@awesome.me/kit-71c392801a/icons";
 import { UserAvatar } from "@/nexus/components/user-avatar";
 
 function formatDate(date) {
-    if (!date) return "—";
+    if (!date) return "-";
     return new Intl.DateTimeFormat("en-GB", { dateStyle: "long" }).format(new Date(date));
 }
 
-function Row({ label, value, empty = "—" }) {
+function Row({ label, value, empty = "-" }) {
     return (
         <div className="flex items-center justify-between py-3">
             <dt className="text-muted-foreground">{label}</dt>
@@ -71,7 +71,7 @@ export default function MyAccount_Overview() {
         refreshProfile();
     }
 
-    const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || "—";
+    const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || "-";
 
     return (
         <div className="flex justify-center py-8 px-4">
@@ -82,7 +82,7 @@ export default function MyAccount_Overview() {
                     <UserAvatar user={user} className="h-16 w-16" />
                     <div>
                         <p className="text-lg font-semibold leading-tight">{fullName}</p>
-                        <p className="text-sm text-muted-foreground">{user?.email ?? "—"}</p>
+                        <p className="text-sm text-muted-foreground">{user?.email ?? "-"}</p>
                     </div>
                 </div>
 
@@ -166,7 +166,7 @@ export default function MyAccount_Overview() {
 
                 <Separator />
 
-                {/* Account info — read-only */}
+                {/* Account info - read-only */}
                 <div className="space-y-4">
                     <div>
                         <h2 className="text-base font-semibold">Account Information</h2>
@@ -177,20 +177,20 @@ export default function MyAccount_Overview() {
                             label="Email"
                             value={
                                 <span className="flex items-center gap-2">
-                                    {user?.email ?? "—"}
+                                    {user?.email ?? "-"}
                                     {user?.emailVerified
                                         ? <Badge variant="secondary" className="text-xs">Verified</Badge>
                                         : <Badge variant="destructive" className="text-xs">Unverified</Badge>}
                                 </span>
                             }
                         />
-                        <Row label="Access Level" value={user?.level ?? "—"} />
+                        <Row label="Access Level" value={user?.level ?? "-"} />
                         <Row label="Member Since" value={formatDate(user?.createdAt)} />
                         <Row
                             label="User ID"
                             value={
                                 <span className="font-mono text-xs text-muted-foreground">
-                                    {user?.id ?? "—"}
+                                    {user?.id ?? "-"}
                                 </span>
                             }
                         />

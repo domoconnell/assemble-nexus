@@ -73,7 +73,7 @@ export async function generateMetadata({ params }) {
 	const { id } = await params;
 	const ev = await getEventById(id);
 	return {
-		title: ev ? `${ev.title} — The Assembly Rooms` : "Event — The Assembly Rooms",
+		title: ev ? `${ev.title} - The Assembly Rooms` : "Event - The Assembly Rooms",
 		robots: { index: false, follow: false },
 	};
 }
@@ -89,7 +89,7 @@ export default async function MyEventDetailPage({ params }) {
 					height="short"
 					kicker="Your event"
 					title="Sign in to see this event."
-					subtitle="No password needed — we'll email you a one-click link."
+					subtitle="No password needed - we'll email you a one-click link."
 				/>
 				<Container className="pt-6 pb-12 lg:pb-16">
 					<MagicLinkForm
@@ -230,7 +230,7 @@ export default async function MyEventDetailPage({ params }) {
 					</h2>
 					{orders.length === 0 ? (
 						<p className="text-sm text-muted-foreground">
-							No orders yet — once tickets are sold they&apos;ll show up here.
+							No orders yet - once tickets are sold they&apos;ll show up here.
 						</p>
 					) : (
 						<ul className="space-y-2">
@@ -263,7 +263,7 @@ export default async function MyEventDetailPage({ params }) {
 									</div>
 									<div className="text-right shrink-0 space-y-0.5">
 										<div className="font-mono text-sm">
-											{isPaid ? formatGbp(o.organiser_net_cents) : "—"}
+											{isPaid ? formatGbp(o.organiser_net_cents) : "-"}
 										</div>
 										<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
 											{isPaid ? "Your earnings" : "Pending"}

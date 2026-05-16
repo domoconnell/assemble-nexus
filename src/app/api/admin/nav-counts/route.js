@@ -17,7 +17,7 @@ function json(status, body) {
 /**
  * Light-weight counts the sidebar uses to render notification badges.
  * Currently:
- *   bookings_pending — bookings awaiting admin review (status=pending).
+ *   bookings_pending - bookings awaiting admin review (status=pending).
  *
  * Extend by adding more rollups; the response shape is a flat object so
  * the client can match on key without ceremony.

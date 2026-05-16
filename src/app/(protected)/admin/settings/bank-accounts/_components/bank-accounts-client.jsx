@@ -68,7 +68,7 @@ export default function BankAccountsClient({ accounts }) {
 			const result = await syncBankAccountNowAction({ id: account.id, force });
 			if (result.ok) {
 				toast.success(
-					`Synced — ${result.inserted} new, ${result.updated} updated${result.backfilled ? `, ${result.backfilled} balance points` : ""}.`,
+					`Synced - ${result.inserted} new, ${result.updated} updated${result.backfilled ? `, ${result.backfilled} balance points` : ""}.`,
 				);
 				router.refresh();
 			} else {

@@ -19,7 +19,7 @@ export async function getActivePsp(venueId) {
 
 /**
  * Synchronous lookup used in spots without a venue context (e.g. early
- * payment-form rendering). Stripe instances are unconfigured — call
+ * payment-form rendering). Stripe instances are unconfigured - call
  * `getActivePsp(venueId)` for the real one. Returns null for unknown keys.
  */
 export function getPspByKey(key) {

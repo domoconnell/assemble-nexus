@@ -61,7 +61,7 @@ function orderStatusClass(status) {
 export async function generateMetadata({ params }) {
 	const { reference } = await params;
 	return {
-		title: `Order ${reference} — The Assembly Rooms`,
+		title: `Order ${reference} - The Assembly Rooms`,
 		robots: { index: false, follow: false },
 	};
 }
@@ -77,7 +77,7 @@ export default async function MyOrderDetailPage({ params }) {
 					height="short"
 					kicker="Your order"
 					title="Sign in to see this order."
-					subtitle="No password needed — we'll email you a one-click link."
+					subtitle="No password needed - we'll email you a one-click link."
 				/>
 				<Container className="pt-6 pb-12 lg:pb-16">
 					<MagicLinkForm
@@ -92,7 +92,7 @@ export default async function MyOrderDetailPage({ params }) {
 	const order = await getOrderForUserByReference(reference, session.user.id);
 	if (!order) {
 		// Order may exist but be tied to a different user (common right after a
-		// purchase made while signed in as someone else — admin testing,
+		// purchase made while signed in as someone else - admin testing,
 		// shared device, etc.). Surface a magic-link prompt rather than 404.
 		const publicOrder = await getOrderByReference(reference);
 		if (!publicOrder) notFound();
@@ -108,7 +108,7 @@ export default async function MyOrderDetailPage({ params }) {
 					<MagicLinkForm
 						callbackURL={`/my-orders/${reference}`}
 						heading={`Sign in as ${publicOrder.customer_email}`}
-						body="Pop the email you used at checkout in — we'll send a one-click sign-in link."
+						body="Pop the email you used at checkout in - we'll send a one-click sign-in link."
 					/>
 				</Container>
 			</>

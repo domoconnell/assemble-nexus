@@ -12,7 +12,7 @@ export const room_blockout = pgTable(
 		ends_at: timestamp("ends_at", { withTimezone: true }).notNull(),
 
 		// Short label shown to admins and (optionally) on the public availability
-		// calendar — e.g. "Maintenance", "Private event", "Holiday".
+		// calendar - e.g. "Maintenance", "Private event", "Holiday".
 		reason: text("reason").notNull(),
 		notes: text("notes"),
 
@@ -21,7 +21,7 @@ export const room_blockout = pgTable(
 		// nothing leaks externally.
 		is_public: boolean("is_public").default(false).notNull(),
 
-		// Identifies a recurring series — every occurrence generated together
+		// Identifies a recurring series - every occurrence generated together
 		// shares the same series_id. Singleton blockouts leave this null.
 		series_id: uuid("series_id"),
 

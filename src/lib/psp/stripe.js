@@ -1,12 +1,12 @@
 /**
- * Stripe driver — factory-shaped because each venue's credentials live in
+ * Stripe driver - factory-shaped because each venue's credentials live in
  * its own `stripe` setting row (secret key, publishable key, webhook
  * signing secret, environment). Call `createStripeDriver(settings)` to get
  * a driver instance bound to those credentials.
  *
  * Payment-flow methods (createPaymentIntent, confirmPayment, createRefund,
  * parseWebhook) are still stubbed pending the Stripe go-live phase. Only
- * `getActualFeeForIntent` is implemented today — once a venue saves a
+ * `getActualFeeForIntent` is implemented today - once a venue saves a
  * secret key in Settings → Payments, paid orders begin back-filling
  * `stripe_fee_actual_cents` automatically.
  */
@@ -79,7 +79,7 @@ export function createStripeDriver(settings) {
 }
 
 /**
- * Probe the supplied credentials — used by the settings page's "Test
+ * Probe the supplied credentials - used by the settings page's "Test
  * connection" button. Lists the first balance entry, which works on any
  * Stripe account and confirms the key has at least read access.
  */

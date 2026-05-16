@@ -1,8 +1,8 @@
 /**
  * Payment Service Provider abstraction.
  *
- * Every card-payment touch-point in the app — booking deposits, balance
- * invoices, ticket orders, refunds — goes through this interface. Concrete
+ * Every card-payment touch-point in the app - booking deposits, balance
+ * invoices, ticket orders, refunds - goes through this interface. Concrete
  * drivers (FakePSP, Stripe) implement it identically so consumers don't care
  * which provider is active.
  *
@@ -54,7 +54,7 @@
  *
  * @property {(intent_id: string) => Promise<number | null>} getActualFeeForIntent
  *   PSP-side processing fee for a settled intent, in minor units (pence). Returns
- *   `null` when the driver can't (or doesn't need to) report a real fee — Fake
+ *   `null` when the driver can't (or doesn't need to) report a real fee - Fake
  *   PSP has no fees; Stripe returns `null` if the key isn't configured.
  */
 

@@ -6,7 +6,7 @@ import { requireCurrentVenue } from "@/db/queries/venue";
 import { getPageContent } from "@/db/queries/site-content";
 
 export const metadata = {
-	title: "Rooms — The Assembly Rooms",
+	title: "Rooms - The Assembly Rooms",
 	description: "Rooms for hire at The Assembly Rooms.",
 };
 
@@ -26,7 +26,7 @@ export default async function RoomsPage() {
 				height="medium"
 				kicker={hero.kicker ?? "Rooms"}
 				title={hero.title ?? "Pick your room."}
-				subtitle={hero.subtitle ?? "From the concert hall to the smaller reception spaces — each one set up to do its thing better than anywhere else in town."}
+				subtitle={hero.subtitle ?? "From the concert hall to the smaller reception spaces - each one set up to do its thing better than anywhere else in town."}
 			/>
 			<Section>
 				{rooms.length ? (

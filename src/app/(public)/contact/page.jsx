@@ -5,7 +5,7 @@ import { requireCurrentVenue } from "@/db/queries/venue";
 import { getPageContent } from "@/db/queries/site-content";
 
 export const metadata = {
-	title: "Contact — The Assembly Rooms",
+	title: "Contact - The Assembly Rooms",
 	description: "Get in touch with The Assembly Rooms.",
 };
 
@@ -37,7 +37,7 @@ export default async function ContactPage() {
 								{hireBlock.title ?? "Hire enquiries"}
 							</h2>
 							<p className="mt-3 text-base text-muted-foreground leading-relaxed">
-								{hireBlock.body ?? "The booking form is fastest — we respond within a working day."}
+								{hireBlock.body ?? "The booking form is fastest. We respond within a working day."}
 							</p>
 							<div className="mt-5">
 								<CtaButton href="/book">

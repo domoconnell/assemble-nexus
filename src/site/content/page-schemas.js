@@ -1,5 +1,5 @@
 /**
- * Page CMS schemas — declare what's editable for each page. Pages read these
+ * Page CMS schemas - declare what's editable for each page. Pages read these
  * via `getPageContent(venueId, pageKey)` and fall back to code-level defaults
  * when a field isn't set.
  *

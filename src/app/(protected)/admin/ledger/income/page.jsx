@@ -24,7 +24,7 @@ export default async function ManualIncomePage({ searchParams }) {
 			<div>
 				<h1 className="text-2xl font-semibold">Manual income</h1>
 				<p className="mt-1 text-sm text-muted-foreground">
-					Donations and ad-hoc receipts that don't come through bookings, tickets, or the POS — {monthLabel(month.year, month.month1)}.
+					Donations and ad-hoc receipts that don't come through bookings, tickets, or the POS - {monthLabel(month.year, month.month1)}.
 				</p>
 			</div>
 			<ManualIncomeClient

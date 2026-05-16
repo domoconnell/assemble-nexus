@@ -218,7 +218,7 @@ export async function saveBlockoutAction(input) {
 				pattern: parsed.recurrence,
 			});
 		} else if (!parsed.recurrence && existing.series_id) {
-			// Recurrence removed — leave the row standalone, do not touch siblings.
+			// Recurrence removed - leave the row standalone, do not touch siblings.
 			await db
 				.update(room_blockout)
 				.set({ series_id: null })

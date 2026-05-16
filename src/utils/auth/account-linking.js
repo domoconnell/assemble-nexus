@@ -6,7 +6,7 @@ import { role } from "@/db/schema/entities/role.js";
 
 /**
  * Find an existing user by email, or create a new one with the supplied details.
- * Optionally grants the user a role. Idempotent — calling with an existing email
+ * Optionally grants the user a role. Idempotent - calling with an existing email
  * just attaches the role if missing.
  *
  * Returns the user row.

@@ -465,9 +465,9 @@ export default function BlockoutsClient({ blockouts, rooms }) {
 												</SelectTrigger>
 												<SelectContent>
 													<SelectItem value="weekly">Weekly</SelectItem>
-													<SelectItem value="monthly_day">Monthly — on a specific date</SelectItem>
+													<SelectItem value="monthly_day">Monthly - on a specific date</SelectItem>
 													<SelectItem value="monthly_weekday">
-														Monthly — on a specific weekday
+														Monthly - on a specific weekday
 													</SelectItem>
 												</SelectContent>
 											</Select>

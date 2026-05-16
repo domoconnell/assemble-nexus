@@ -1,5 +1,5 @@
 /**
- * Recurrence helpers — used for both recurring bookings and recurring
+ * Recurrence helpers - used for both recurring bookings and recurring
  * blockouts. Supports three pattern kinds:
  *
  *   weekly:           { kind: "weekly", interval: 1, count?: N, until_date?: "YYYY-MM-DD" }
@@ -9,7 +9,7 @@
  *   weekday: 0=Sun, 1=Mon, ..., 6=Sat
  *   position: 1=first, 2=second, 3=third, 4=fourth, -1=last
  *
- * Each expander takes a TEMPLATE (the first occurrence — start + end date)
+ * Each expander takes a TEMPLATE (the first occurrence - start + end date)
  * and returns the *additional* occurrences. The template itself is NOT
  * included in the returned array.
  *
@@ -17,7 +17,7 @@
  */
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_OCCURRENCES = 156; // ~3 years weekly / 13 years monthly — protects against typos
+const MAX_OCCURRENCES = 156; // ~3 years weekly / 13 years monthly - protects against typos
 
 function toDate(d) {
 	const out = d instanceof Date ? d : new Date(d);
@@ -184,7 +184,7 @@ export function expandMonthlyByWeekdayPattern({
 }
 
 /**
- * Dispatcher — picks the right expander based on pattern.kind.
+ * Dispatcher - picks the right expander based on pattern.kind.
  */
 export function expandPattern({ templateStart, templateEnd, pattern }) {
 	if (!pattern) return [];
@@ -222,7 +222,7 @@ export function expandPattern({ templateStart, templateEnd, pattern }) {
 }
 
 /**
- * Given an arbitrary date, return its weekday position within the month —
+ * Given an arbitrary date, return its weekday position within the month -
  * 1, 2, 3, 4, or -1 (if it's the last of that weekday in the month).
  * Useful for inferring defaults when an admin opens an existing blockout's
  * edit modal: we can suggest "this is the second Tuesday of the month".

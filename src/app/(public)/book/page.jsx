@@ -6,7 +6,7 @@ import { getPageContent } from "@/db/queries/site-content";
 import BookingWidget from "@/site/booking/booking-widget";
 
 export const metadata = {
-	title: "Book — The Assembly Rooms",
+	title: "Book - The Assembly Rooms",
 	description: "Start a hire booking at The Assembly Rooms.",
 };
 

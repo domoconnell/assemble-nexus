@@ -17,7 +17,7 @@ const OPTIONS = [
 		key: "stripe",
 		title: "Stripe",
 		blurb:
-			"Live card payments. Saves processing fees against each order. Requires credentials in the Stripe section below — switching here without keys saved will fall back to FakePSP until they are.",
+			"Live card payments. Saves processing fees against each order. Requires credentials in the Stripe section below - switching here without keys saved will fall back to FakePSP until they are.",
 	},
 ];
 

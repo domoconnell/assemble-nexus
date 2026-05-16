@@ -126,7 +126,7 @@ export default function SquareEditor({ initial }) {
 						Square Developer Dashboard
 					</a>
 					, the Location ID for the venue&apos;s till, and pick the environment.
-					We read Orders, Payments and Refunds — no writes.
+					We read Orders, Payments and Refunds - no writes.
 				</p>
 
 				<div className="grid gap-4 sm:grid-cols-2">
@@ -199,7 +199,7 @@ export default function SquareEditor({ initial }) {
 						{testResult.ok ? (
 							<>
 								<span className="font-medium">Connected.</span>{" "}
-								Location: {testResult.location_name ?? "—"} ·{" "}
+								Location: {testResult.location_name ?? "-"} ·{" "}
 								<span className="uppercase tracking-[0.15em] text-[10px]">
 									{testResult.env}
 								</span>

@@ -87,7 +87,7 @@ export default async function VatPage({ searchParams }) {
 				<h1 className="mt-2 text-2xl font-semibold">VAT return</h1>
 				<p className="text-sm text-muted-foreground mt-1">
 					Output VAT (VAT charged on sales) rolled up across bookings, ticket
-					sales and POS. Cash basis — each stream uses its natural &ldquo;money
+					sales and POS. Cash basis - each stream uses its natural &ldquo;money
 					received&rdquo; timestamp.
 				</p>
 			</div>

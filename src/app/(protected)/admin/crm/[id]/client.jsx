@@ -57,7 +57,7 @@ const dateOnly = new Intl.DateTimeFormat("en-GB", {
 });
 
 function formatYmd(ymd) {
-	if (!ymd) return "—";
+	if (!ymd) return "-";
 	const [y, m, d] = ymd.split("-").map(Number);
 	return dateOnly.format(new Date(Date.UTC(y, m - 1, d)));
 }
@@ -227,7 +227,7 @@ export default function OrganisationDetailClient({
 						<h2 className="text-sm uppercase tracking-[0.2em] text-destructive">Danger zone</h2>
 						<p className="text-sm text-foreground/80">
 							Removing the organisation soft-deletes it. Linked bookings, events,
-							expenses, and contacts remain — they just lose the org link.
+							expenses, and contacts remain - they just lose the org link.
 						</p>
 						<Button variant="outline" onClick={() => setConfirmDeleteOrg(true)}>
 							Remove organisation
@@ -262,8 +262,8 @@ export default function OrganisationDetailClient({
 												{c.first_name} {c.last_name}
 											</td>
 											<td className="px-4 py-2 text-muted-foreground">{roleLabel(c.role)}</td>
-											<td className="px-4 py-2">{c.email || "—"}</td>
-											<td className="px-4 py-2 text-muted-foreground">{c.phone || "—"}</td>
+											<td className="px-4 py-2">{c.email || "-"}</td>
+											<td className="px-4 py-2 text-muted-foreground">{c.phone || "-"}</td>
 											<td className="px-2 py-2 text-right whitespace-nowrap">
 												<Button variant="ghost" size="sm" onClick={() => openEditContact(c)}>
 													Edit
@@ -302,8 +302,8 @@ export default function OrganisationDetailClient({
 								</Link>,
 								<span className="text-muted-foreground capitalize">{b.status}</span>,
 								fmt(b.total_cents),
-								outstanding > 0 ? <span className="text-amber-600 font-mono">{fmt(outstanding)}</span> : <span className="text-muted-foreground">—</span>,
-								b.submitted_at ? dateFmt.format(new Date(b.submitted_at)) : "—",
+								outstanding > 0 ? <span className="text-amber-600 font-mono">{fmt(outstanding)}</span> : <span className="text-muted-foreground">-</span>,
+								b.submitted_at ? dateFmt.format(new Date(b.submitted_at)) : "-",
 							];
 						})}
 					/>
@@ -318,7 +318,7 @@ export default function OrganisationDetailClient({
 								{e.title}
 							</Link>,
 							<span className="text-muted-foreground capitalize">{e.status}</span>,
-							e.starts_at ? dateFmt.format(new Date(e.starts_at)) : "—",
+							e.starts_at ? dateFmt.format(new Date(e.starts_at)) : "-",
 						])}
 					/>
 				</TabsContent>
@@ -333,7 +333,7 @@ export default function OrganisationDetailClient({
 							</Link>,
 							<span className="text-muted-foreground capitalize">{t.status}</span>,
 							fmt(t.total_cents),
-							t.paid_at ? dateFmt.format(new Date(t.paid_at)) : "—",
+							t.paid_at ? dateFmt.format(new Date(t.paid_at)) : "-",
 						])}
 					/>
 				</TabsContent>

@@ -21,7 +21,7 @@ export default async function PosSettingsPage() {
 				<h1 className="mt-2 text-2xl font-semibold">POS</h1>
 				<p className="text-sm text-muted-foreground mt-1">
 					Connect the venue&apos;s point-of-sale so daily takings sync into the
-					ledger. Read-only — Nexus never issues refunds or moves money on
+					ledger. Read-only - Nexus never issues refunds or moves money on
 					Square&apos;s side.
 				</p>
 			</div>

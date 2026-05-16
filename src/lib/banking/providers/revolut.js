@@ -9,14 +9,14 @@ import crypto from "node:crypto";
  *   1. Generates an RSA key pair (private.pem + public.pem) with openssl.
  *   2. Uploads the PUBLIC cert in Revolut Business → Settings → APIs → Add.
  *   3. Revolut returns a `client_id` once the cert is accepted.
- *   4. Visits the authorise URL we render — Revolut redirects back to the
+ *   4. Visits the authorise URL we render - Revolut redirects back to the
  *      `redirect_uri` with an `?code=<authorisation_code>` parameter.
  *   5. Pastes the code into our settings UI. We POST to /auth/token signing
  *      a short-lived JWT with the private key, exchanging the code for an
  *      access_token (40 min) + refresh_token (~90 days, rotating).
  *
  * Subsequent calls auto-refresh the access token before it expires. The
- * private key NEVER leaves the server — it's stored in the bank_account
+ * private key NEVER leaves the server - it's stored in the bank_account
  * `credentials` JSONB.
  *
  * Credentials shape:
@@ -24,7 +24,7 @@ import crypto from "node:crypto";
  *     environment:           "sandbox" | "production",
  *     client_id:             string,
  *     private_key_pem:       string,   // -----BEGIN PRIVATE KEY----- …
- *     issuer:                string,   // JWT `iss` claim — your app domain
+ *     issuer:                string,   // JWT `iss` claim - your app domain
  *     redirect_uri:          string,
  *     access_token:          string | null,
  *     refresh_token:         string | null,
@@ -64,7 +64,7 @@ function signJwt({ issuer, clientId, privateKeyPem }) {
 			sub: clientId,
 			aud: "https://revolut.com",
 			iat: now,
-			exp: now + 60 * 30, // 30 min — well inside the 24h cap
+			exp: now + 60 * 30, // 30 min - well inside the 24h cap
 		}),
 	);
 	const signer = crypto.createSign("RSA-SHA256");
@@ -152,7 +152,7 @@ export async function exchangeAuthCode(credentials, code) {
 
 async function refreshAccessToken(credentials) {
 	if (!credentials.refresh_token) {
-		return { ok: false, error: "No refresh token — re-authorise the account." };
+		return { ok: false, error: "No refresh token - re-authorise the account." };
 	}
 	const body = new URLSearchParams({
 		grant_type: "refresh_token",
@@ -167,7 +167,7 @@ async function refreshAccessToken(credentials) {
 		credentials: {
 			...credentials,
 			access_token: tokens.access_token,
-			// Revolut rotates refresh tokens — always honour the new one if present.
+			// Revolut rotates refresh tokens - always honour the new one if present.
 			refresh_token: tokens.refresh_token ?? credentials.refresh_token,
 			access_token_expires_at: expiresAt.toISOString(),
 			scopes: tokens.scopes ?? credentials.scopes,
@@ -233,7 +233,7 @@ export const revolutProvider = {
 		if (!tokenExpiringSoon(creds)) return account;
 		const res = await refreshAccessToken(creds);
 		if (!res.ok) {
-			// Don't throw — let the next API call fail with a clearer error
+			// Don't throw - let the next API call fail with a clearer error
 			console.error("[revolut.refreshCredentials]", res.error);
 			return account;
 		}
@@ -246,7 +246,7 @@ export const revolutProvider = {
 			return { ok: false, error: "Upload a private key and save Client ID first." };
 		}
 		if (!creds.access_token) {
-			return { ok: false, error: "Not yet authorised — paste an authorisation code." };
+			return { ok: false, error: "Not yet authorised - paste an authorisation code." };
 		}
 		const res = await authedFetch(account, "/accounts");
 		if (!res.ok) {
@@ -295,7 +295,7 @@ export const revolutProvider = {
 			return { ok: false, error: "Missing access token or account UID." };
 		}
 
-		// Paginate using `to` as the next page's upper bound — Revolut returns
+		// Paginate using `to` as the next page's upper bound - Revolut returns
 		// transactions in descending completed_at order, so we walk backwards.
 		const items = [];
 		let upper = to;

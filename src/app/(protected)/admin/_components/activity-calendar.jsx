@@ -1,5 +1,5 @@
 /**
- * Month-grid heatmap of activity for the dashboard. Server component — no
+ * Month-grid heatmap of activity for the dashboard. Server component - no
  * interaction yet, just colour-by-density per day.
  */
 

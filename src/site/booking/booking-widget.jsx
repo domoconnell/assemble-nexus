@@ -220,7 +220,7 @@ export default function BookingWidget({
 	// Recurrence: null when the booking is a single occurrence; otherwise the
 	// pattern object that gets expanded client-side into multiple identical
 	// segments. Only valid when the booking has exactly one event row and no
-	// setup/rehearsal/teardown — i.e. the typical regular-hire shape.
+	// setup/rehearsal/teardown - i.e. the typical regular-hire shape.
 	const [recurrence, setRecurrence] = useState(null);
 
 	const [quote, setQuote] = useState(null);
@@ -238,7 +238,7 @@ export default function BookingWidget({
 		else if (!layouts.find((l) => l.layout_id === layoutId)) setLayoutId("");
 	}, [roomId]);
 
-	// Skip the room-picker step when the room is already chosen — either
+	// Skip the room-picker step when the room is already chosen - either
 	// locked programmatically (popup mode) or arrived via `?room=` on
 	// /book. The user lands directly on the date step in both cases.
 	const skipRoomStep =
@@ -297,7 +297,7 @@ export default function BookingWidget({
 		}
 	}
 
-	// Whether the recurrence option is available — only when there's exactly
+	// Whether the recurrence option is available - only when there's exactly
 	// one main event row and none of the auxiliary segment types are in use.
 	// This keeps the recurrence semantics unambiguous (one repeating slot per
 	// occurrence) without trying to repeat setup/rehearsal/teardown.
@@ -721,7 +721,7 @@ export default function BookingWidget({
 			/>
 			<div className="grid gap-8 lg:grid-cols-[1.85fr_1fr] lg:items-start">
 				<div>
-					{/* No card chrome on phones — the form sits directly on the page
+					{/* No card chrome on phones - the form sits directly on the page
 					    background so the limited screen real estate isn't eaten by
 					    border + padding. Card returns from `md` upwards. */}
 					<div className="md:rounded-xl md:border md:border-foreground/10 md:bg-card md:p-8">
@@ -778,7 +778,7 @@ function MobileSummaryBar({ summary, room, eventRows, quote }) {
 						Total
 					</div>
 					<div className="font-mono font-medium tabular-nums text-sm">
-						{total != null ? formatGbp(total) : "—"}
+						{total != null ? formatGbp(total) : "-"}
 					</div>
 				</div>
 				{chevronIcon && (
@@ -869,7 +869,7 @@ function DateRow({ row, onChange, onRemove, canRemove, roomId, onConflictChange 
 			onConflictChange?.(false);
 			return;
 		}
-		// Pessimistically block until the server confirms availability — this
+		// Pessimistically block until the server confirms availability - this
 		// closes the race where the user changes dates and clicks Next before
 		// the new check returns.
 		setAvailability(null);
@@ -953,7 +953,7 @@ function DateRow({ row, onChange, onRemove, canRemove, roomId, onConflictChange 
 
 function ConflictWarning({ conflicts, bufferMinutes }) {
 	const first = conflicts[0];
-	// Show the *effective* unavailable window — the booked/event time
+	// Show the *effective* unavailable window - the booked/event time
 	// plus the room's required buffer either side.
 	const bufferMs = (bufferMinutes ?? 0) * 60 * 1000;
 	const blockedStart = new Date(new Date(first.starts_at).getTime() - bufferMs);
@@ -1170,8 +1170,8 @@ function RecurrenceBlock({ templateRow, recurrence, onChange }) {
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="weekly">Weekly</SelectItem>
-								<SelectItem value="monthly_day">Monthly — on the {defaultDayOfMonth}{getOrdinal(defaultDayOfMonth)}</SelectItem>
-								<SelectItem value="monthly_weekday">Monthly — on a specific weekday</SelectItem>
+								<SelectItem value="monthly_day">Monthly on the {defaultDayOfMonth}{getOrdinal(defaultDayOfMonth)}</SelectItem>
+								<SelectItem value="monthly_weekday">Monthly on a specific weekday</SelectItem>
 							</SelectContent>
 						</Select>
 					</div>
@@ -1402,7 +1402,7 @@ function FacilitiesStep({ packages, selections, onChange }) {
 			<div>
 				<h2 className="font-display text-2xl tracking-tight">Add anything to your booking?</h2>
 				<p className="mt-1 text-sm text-muted-foreground">
-					Optional add-ons. Tick what you&apos;d like — quantities default to one.
+					Optional add-ons. Tick what you&apos;d like. Quantities default to one.
 				</p>
 			</div>
 
@@ -1640,7 +1640,7 @@ function TicketingStep({
 								<span className="text-foreground/85">
 									{setupPct}% of your event-day hire
 									{enabled && setupFeeCents != null && eventBasis != null
-										? ` — ${formatGbp(setupFeeCents)} on ${formatGbp(eventBasis)}`
+										? ` - ${formatGbp(setupFeeCents)} on ${formatGbp(eventBasis)}`
 										: ""}
 								</span>
 								. Discounts don&apos;t apply to this fee.
@@ -1687,12 +1687,12 @@ function TicketSetupBranch({ mode, onModeChange, types, onTypesChange }) {
 					active={mode === "now"}
 					onClick={() => onModeChange("now")}
 					title="Set up the event now"
-					subtitle="Sketch out your ticket types — we&apos;ll spin up a draft event you can refine straight away."
+					subtitle="Sketch out your ticket types and we&apos;ll spin up a draft event you can refine straight away."
 				/>
 				<ModePill
 					active={mode === "later"}
 					onClick={() => onModeChange("later")}
-					title="Skip — set it up later"
+					title="Skip, set it up later"
 					subtitle="Submit the booking first and design the event afterwards."
 				/>
 			</div>
@@ -1741,7 +1741,7 @@ function TicketSetupBranch({ mode, onModeChange, types, onTypesChange }) {
 									type="number"
 									min="1"
 									step="1"
-									placeholder="—"
+									placeholder="-"
 									value={t.max_quantity}
 									onChange={(e) => update(i, { max_quantity: e.target.value })}
 								/>
@@ -1846,7 +1846,7 @@ function EventBriefStep({ value, onChange }) {
 			<div>
 				<h2 className="font-display text-2xl tracking-tight">Tell us about your event</h2>
 				<p className="mt-1 text-sm text-muted-foreground">
-					A few sentences is plenty — what you&apos;re putting on, expected
+					A few sentences is plenty: what you&apos;re putting on, expected
 					attendance, anything we should know.
 				</p>
 			</div>
@@ -1858,7 +1858,7 @@ function EventBriefStep({ value, onChange }) {
 					required
 					value={value}
 					onChange={(e) => onChange(e.target.value)}
-					placeholder="e.g. our annual choir concert — around 200 guests, doors at 7, performance 7.30–9.30. We'll bring our own staging."
+					placeholder="e.g. our annual choir concert, around 200 guests, doors at 7, performance 7.30 to 9.30. We'll bring our own staging."
 				/>
 			</div>
 		</div>
@@ -1881,7 +1881,7 @@ function ReviewStep({ rooms, room, bookingTypes, eventRows, setupRows, rehearsal
 				org: identity.newOrgName,
 			};
 		}
-		return { name: sessionEmail || "—", org: null };
+		return { name: sessionEmail || "-", org: null };
 	})();
 	const totals = quote
 		? {
@@ -1906,14 +1906,14 @@ function ReviewStep({ rooms, room, bookingTypes, eventRows, setupRows, rehearsal
 			<div>
 				<h2 className="font-display text-2xl tracking-tight">Review your enquiry</h2>
 				<p className="mt-1 text-sm text-muted-foreground">
-					Have a final look — submitting won&apos;t charge anything. We&apos;ll respond within a working day.
+					Have a final look. Submitting won&apos;t charge anything. We&apos;ll respond within a working day.
 				</p>
 			</div>
 
 			<div className="space-y-4">
 				<div className="rounded-lg border border-foreground/10 bg-background p-4">
 					<div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Room</div>
-					<div className="mt-1 font-display text-xl tracking-tight">{room?.name ?? "—"}</div>
+					<div className="mt-1 font-display text-xl tracking-tight">{room?.name ?? "-"}</div>
 				</div>
 				{groups.map((g) => (
 					<div key={g.label} className="rounded-lg border border-foreground/10 bg-background p-4">
@@ -2052,7 +2052,7 @@ function QuoteSummary({
 		for (const seg of quote.segments) {
 			const t = typeById.get(seg.booking_type_id);
 			const key = t?.key ?? "other";
-			if (!byKey.has(key)) byKey.set(key, { key, label: groupLabels[key] ?? t?.label ?? "—", segments: [] });
+			if (!byKey.has(key)) byKey.set(key, { key, label: groupLabels[key] ?? t?.label ?? "-", segments: [] });
 			byKey.get(key).segments.push(seg);
 		}
 		const ordered = [];

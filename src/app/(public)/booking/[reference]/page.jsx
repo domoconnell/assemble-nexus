@@ -30,7 +30,7 @@ const STATUS_COPY = {
 	},
 	approved: {
 		kicker: "Approved",
-		title: "Approved — deposit pending.",
+		title: "Approved - deposit pending.",
 		subtitle:
 			"Check your email for the booking agreement and the link to pay your deposit. Once paid, your booking is confirmed.",
 	},
@@ -60,7 +60,7 @@ const STATUS_COPY = {
 export async function generateMetadata({ params }) {
 	const { reference } = await params;
 	return {
-		title: `Booking ${reference} — The Assembly Rooms`,
+		title: `Booking ${reference} - The Assembly Rooms`,
 	};
 }
 

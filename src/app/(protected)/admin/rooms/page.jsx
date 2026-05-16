@@ -52,7 +52,7 @@ export default async function AdminRoomsPage() {
 								<td className="px-4 py-3 text-muted-foreground">
 									{r.capacities?.length
 										? r.capacities.map((c) => `${c.label} ${c.value}`).join(" · ")
-										: "—"}
+										: "-"}
 								</td>
 								<td className="px-4 py-3">
 									{r.is_published ? (

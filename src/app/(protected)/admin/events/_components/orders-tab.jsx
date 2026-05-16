@@ -121,7 +121,7 @@ export default function OrdersTab({ eventId, orders = [] }) {
 											{formatGbp(o.total_cents)}
 										</td>
 										<td className="px-4 py-3 text-right font-mono text-muted-foreground">
-											{isPaid ? formatGbp(o.organiser_net_cents) : "—"}
+											{isPaid ? formatGbp(o.organiser_net_cents) : "-"}
 										</td>
 										<td
 											className={`px-4 py-3 text-right font-mono ${
@@ -132,7 +132,7 @@ export default function OrdersTab({ eventId, orders = [] }) {
 														: "text-destructive"
 											}`}
 										>
-											{venueProfit == null ? "—" : formatGbp(venueProfit)}
+											{venueProfit == null ? "-" : formatGbp(venueProfit)}
 										</td>
 										<td className="px-4 py-3">
 											<span

@@ -83,7 +83,7 @@ export default function GoogleWalletEditor({ initial }) {
 						Issue Google Wallet event tickets. Requires a Google Cloud project with the
 						Wallet API enabled, a service-account JSON key, and an Issuer ID.{" "}
 						<span className="text-amber-600 dark:text-amber-400">
-							Settings are saved but the issuing flow itself isn&apos;t wired yet — Apple
+							Settings are saved but the issuing flow itself isn&apos;t wired yet - Apple
 							Wallet first.
 						</span>
 					</p>

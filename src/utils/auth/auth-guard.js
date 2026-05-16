@@ -20,7 +20,7 @@ function getUserLevel(session) {
  *   const { user, access } = gate;
  *
  * Options:
- *   - minLevel:   numeric `user.level` minimum (deprecated — prefer role/permission)
+ *   - minLevel:   numeric `user.level` minimum (deprecated - prefer role/permission)
  *   - role:       string or string[] of role keys (any-of)
  *   - permission: string or string[] of permission keys (any-of)
  *

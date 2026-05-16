@@ -102,7 +102,7 @@ export default async function AdminBookingDetailPage({ params }) {
 					</span>
 				</div>
 				<p className="mt-1 text-sm text-muted-foreground">
-					Submitted {booking.submitted_at ? stampFmt.format(new Date(booking.submitted_at)) : "—"}
+					Submitted {booking.submitted_at ? stampFmt.format(new Date(booking.submitted_at)) : "-"}
 				</p>
 			</div>
 

@@ -114,7 +114,7 @@ export default function BuyerIdentity({ value, onChange }) {
 				email: v.email.trim(),
 				otp: code,
 			});
-			if (err) throw new Error(err.message || "That code didn't match — try again.");
+			if (err) throw new Error(err.message || "That code didn't match. Try again.");
 			if (data?.user) {
 				set({
 					phase: "session",
@@ -125,7 +125,7 @@ export default function BuyerIdentity({ value, onChange }) {
 				throw new Error("Sign-in succeeded but no user was returned.");
 			}
 		} catch (e) {
-			setError(e?.message || "That code didn't match — try again.");
+			setError(e?.message || "That code didn't match. Try again.");
 			set({ otp: "" });
 		} finally {
 			setBusy(false);

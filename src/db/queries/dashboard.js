@@ -3,7 +3,7 @@ import { db } from "@/db/index.js";
 
 /**
  * Top events by ticket-sales revenue. `revenue_cents` sums paid (and
- * partially-refunded — still net positive) order totals; `orders_count`
+ * partially-refunded - still net positive) order totals; `orders_count`
  * is the number of distinct paid orders. Optional date window applies
  * to the order's `paid_at` so an event opens a sales window without
  * appearing in months it didn't actually sell tickets.
@@ -36,7 +36,7 @@ export async function getTopEventsBySales(venueId, { limit = 5, fromDate, toDate
 /**
  * Revenue rollup grouped by the event's CRM organisation. Events without
  * an `organiser_organisation_id` (typically own-promoted house shows)
- * are excluded — they wouldn't have anything to credit anyway.
+ * are excluded - they wouldn't have anything to credit anyway.
  */
 export async function getPerOrganiserRevenue(venueId, { limit = 5, fromDate, toDate } = {}) {
 	const fromIso = fromDate ? fromDate.toISOString() : null;
@@ -85,8 +85,8 @@ export async function getBookingPipelineCounts(venueId, { monthsBack = 3 } = {})
 }
 
 /**
- * Unified feed of recent state changes — booking status events + ticket
- * orders flipping to paid — for the dashboard activity widget. Ordered
+ * Unified feed of recent state changes - booking status events + ticket
+ * orders flipping to paid - for the dashboard activity widget. Ordered
  * by occurrence, newest first.
  */
 export async function getRecentActivity(venueId, { limit = 10 } = {}) {

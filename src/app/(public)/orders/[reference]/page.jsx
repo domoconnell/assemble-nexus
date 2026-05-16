@@ -4,7 +4,7 @@ import { getOrderByReference } from "@/db/queries/orders";
 export const dynamic = "force-dynamic";
 
 /**
- * Public entry-point for a ticket order — routes to /pay while pending,
+ * Public entry-point for a ticket order - routes to /pay while pending,
  * otherwise to the delegate portal page (which handles auth/magic-link).
  */
 export default async function OrderEntryPage({ params }) {

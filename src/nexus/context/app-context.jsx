@@ -102,7 +102,7 @@ export const AppContextProvider = ({ children }) => {
 
     // ✅ backwards compat for your existing DataService:
     // DataService reads AppExport.state.accessToken as the encryption key.
-    // We keep it, but it is NOT an auth token — it’s a local cache encryption key.
+    // We keep it, but it is NOT an auth token - it’s a local cache encryption key.
     accessToken: null,
 
     refs: {},

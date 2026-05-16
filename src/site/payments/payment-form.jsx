@@ -106,7 +106,7 @@ function FakeCardForm({ intentId, amountCents, currency, onSuccess, onError }) {
 			<div>
 				<h2 className="text-xs uppercase tracking-[0.22em] text-foreground/70">Card details</h2>
 				<p className="mt-2 text-xs text-muted-foreground">
-					This venue is currently running on <span className="font-medium">FakePSP</span> — no real card
+					This venue is currently running on <span className="font-medium">FakePSP</span> - no real card
 					is charged. Use any card number (16 digits, e.g. <span className="font-mono">4242 4242 4242 4242</span>);
 					numbers ending in <span className="font-mono">0000</span> simulate a decline.
 				</p>

@@ -97,7 +97,7 @@ export default async function AdminOrderDetailPage({ params }) {
 	const usedTickets = tickets.filter((t) => t.status === "used").length;
 	const voidTickets = tickets.filter((t) => t.status !== "valid").length;
 
-	// Display reads from stored snapshot only — what the customer was actually
+	// Display reads from stored snapshot only - what the customer was actually
 	// charged at order time. We deliberately don't project current ticketing
 	// settings onto historical orders, otherwise the organiser-net captured at
 	// order time and the projected fee would contradict each other on screen.
@@ -300,7 +300,7 @@ export default async function AdminOrderDetailPage({ params }) {
 									</span>
 								</dt>
 								<dd className="font-mono shrink-0">
-									{isPaid ? `−${formatGbp(stripeFee)}` : "—"}
+									{isPaid ? `−${formatGbp(stripeFee)}` : "-"}
 								</dd>
 							</div>
 							<div
@@ -314,7 +314,7 @@ export default async function AdminOrderDetailPage({ params }) {
 							>
 								<dt>Venue profit</dt>
 								<dd className="font-mono">
-									{venueProfit == null ? "—" : formatGbp(venueProfit)}
+									{venueProfit == null ? "-" : formatGbp(venueProfit)}
 								</dd>
 							</div>
 						</dl>

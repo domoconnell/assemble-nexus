@@ -56,7 +56,7 @@ function statusClass(status) {
 export async function generateMetadata({ params }) {
 	const { id } = await params;
 	return {
-		title: `Booking ${id.slice(0, 6)} — The Assembly Rooms`,
+		title: `Booking ${id.slice(0, 6)} - The Assembly Rooms`,
 		robots: { index: false, follow: false },
 	};
 }
@@ -72,7 +72,7 @@ export default async function MyBookingDetailPage({ params }) {
 					height="short"
 					kicker="Your booking"
 					title="Sign in to see this booking."
-					subtitle="No password needed — we'll email you a one-click link."
+					subtitle="No password needed - we'll email you a one-click link."
 				/>
 				<Container className="pt-6 pb-12 lg:pb-16">
 					<MagicLinkForm
@@ -121,7 +121,7 @@ export default async function MyBookingDetailPage({ params }) {
 					</span>
 					<span className="text-sm text-muted-foreground">
 						Submitted{" "}
-						{b.submitted_at ? stampFmt.format(new Date(b.submitted_at)) : "—"}
+						{b.submitted_at ? stampFmt.format(new Date(b.submitted_at)) : "-"}
 					</span>
 				</div>
 

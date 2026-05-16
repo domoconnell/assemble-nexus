@@ -64,7 +64,7 @@ export default async function BlockoutsPage() {
 			<div>
 				<h1 className="text-2xl font-semibold">Room blockouts</h1>
 				<p className="mt-1 text-sm text-muted-foreground max-w-2xl">
-					Dates when one or more rooms are unavailable — maintenance, private events, holidays.
+					Dates when one or more rooms are unavailable - maintenance, private events, holidays.
 					New bookings can't be made over these. Blockouts ending more than 30 days ago are hidden.
 				</p>
 			</div>

@@ -27,7 +27,7 @@ export default function CheckinLinkCard({ eventId, initialCheckinCode }) {
 			await navigator.clipboard.writeText(url);
 			toast.success("Check-in link copied");
 		} catch {
-			toast.error("Couldn't copy — long-press to copy manually");
+			toast.error("Couldn't copy - long-press to copy manually");
 		}
 	}
 
@@ -42,7 +42,7 @@ export default function CheckinLinkCard({ eventId, initialCheckinCode }) {
 		startTransition(async () => {
 			const res = await rotateEventCheckinCodeAction(eventId);
 			setCode(res.checkin_code);
-			toast.success("New link generated — old one is now invalid");
+			toast.success("New link generated - old one is now invalid");
 		});
 	}
 
@@ -66,7 +66,7 @@ export default function CheckinLinkCard({ eventId, initialCheckinCode }) {
 			</div>
 
 			<p className="text-sm text-muted-foreground">
-				Anyone with this link can check tickets in — no login needed. Share it with whoever's on the door.
+				Anyone with this link can check tickets in - no login needed. Share it with whoever's on the door.
 			</p>
 
 			{!code ? (

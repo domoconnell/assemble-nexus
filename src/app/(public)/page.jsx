@@ -10,7 +10,7 @@ import { getPageContent } from "@/db/queries/site-content";
 import { RichText } from "@/site/ui/rich-text";
 
 export const metadata = {
-	title: "The Assembly Rooms — Music venue & corporate hire",
+	title: "The Assembly Rooms - Music venue & corporate hire",
 	description:
 		"Three rooms, a working café, and a team that knows the room. Concerts, conferences, weddings.",
 };

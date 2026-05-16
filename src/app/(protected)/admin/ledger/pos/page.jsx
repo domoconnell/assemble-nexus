@@ -43,7 +43,7 @@ export default async function PosPage({ searchParams }) {
 		<div className="mx-auto p-6 lg:p-10 max-w-5xl space-y-6">
 			<div className="flex items-baseline justify-between gap-4 flex-wrap">
 				<div>
-					<h1 className="text-2xl font-semibold">POS takings — {monthLabel(month.year, month.month1)}</h1>
+					<h1 className="text-2xl font-semibold">POS takings - {monthLabel(month.year, month.month1)}</h1>
 					<p className="mt-1 text-sm text-muted-foreground">
 						Daily totals synced from Square. Refunds net out of gross.
 					</p>

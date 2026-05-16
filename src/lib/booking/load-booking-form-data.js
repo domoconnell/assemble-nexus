@@ -10,7 +10,7 @@ import { discount } from "@/db/schema/entities/discount.js";
 import { getTicketingSettings } from "@/db/queries/settings.js";
 
 /**
- * Loads everything the BookingWidget needs to render — rooms with their
+ * Loads everything the BookingWidget needs to render - rooms with their
  * offered booking types and facility packages, all bookingTypes,
  * active discounts, and ticketing settings. Shared between the public
  * `/book` page and the admin `/admin/bookings/new` page.

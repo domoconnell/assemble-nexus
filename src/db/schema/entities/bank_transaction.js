@@ -8,7 +8,7 @@ export const BANK_DIRECTIONS = ["IN", "OUT"];
  * One row per feed item we've ever seen for one of a venue's bank
  * accounts. `external_id` is the provider's stable id (Starling
  * `feedItemUid`, Revolut `${tx.id}:${leg.leg_id}`) and is unique per
- * bank account — the sync upserts on (bank_account_id, external_id).
+ * bank account - the sync upserts on (bank_account_id, external_id).
  *
  * `is_transfer` flags movements between two of the venue's own bank
  * accounts so we can exclude them from income/expense totals. Set during

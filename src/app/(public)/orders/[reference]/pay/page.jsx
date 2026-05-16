@@ -20,7 +20,7 @@ const formatGbp = (c) => gbp.format((c ?? 0) / 100);
 export async function generateMetadata({ params }) {
 	const { reference } = await params;
 	return {
-		title: `Pay · ${reference} — The Assembly Rooms`,
+		title: `Pay · ${reference} - The Assembly Rooms`,
 		robots: { index: false, follow: false },
 	};
 }
@@ -30,7 +30,7 @@ export default async function TicketOrderPayPage({ params }) {
 	const order = await getOrderByReference(reference);
 	if (!order) notFound();
 
-	// Already paid (or beyond) — kick over to the delegate portal page.
+	// Already paid (or beyond) - kick over to the delegate portal page.
 	if (order.status === "paid" || order.status === "partially_refunded") {
 		redirect(`/my-orders/${reference}`);
 	}
@@ -46,12 +46,12 @@ export default async function TicketOrderPayPage({ params }) {
 	]);
 
 	if (succeeded) {
-		// Defensive — payment landed but status didn't flip yet.
+		// Defensive - payment landed but status didn't flip yet.
 		redirect(`/my-orders/${reference}`);
 	}
 
 	if (!pending) {
-		// No active intent — fall back to the order detail page so the user can
+		// No active intent - fall back to the order detail page so the user can
 		// see status; we don't currently auto-create a new intent here.
 		redirect(`/my-orders/${reference}`);
 	}

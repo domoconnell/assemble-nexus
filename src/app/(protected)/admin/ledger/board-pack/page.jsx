@@ -22,7 +22,7 @@ export async function generateMetadata({ searchParams }) {
 	const sp = await searchParams;
 	const ym = typeof sp?.month === "string" ? sp.month : currentMonthLondon().ym;
 	return {
-		title: `Director board pack · ${ym} — ${VENUE_NAME}`,
+		title: `Director board pack · ${ym} - ${VENUE_NAME}`,
 		robots: { index: false, follow: false },
 	};
 }
@@ -72,7 +72,7 @@ export default async function BoardPackPage({ searchParams }) {
 						Director board pack
 					</div>
 					<h1 className="font-display text-4xl tracking-tight">
-						{VENUE_NAME} — {monthLabel(month.year, month.month1)}
+						{VENUE_NAME} - {monthLabel(month.year, month.month1)}
 					</h1>
 					<p className="text-sm text-muted-foreground">
 						Monthly P&amp;L and ministry-gift calculation. Generated {generatedAt}.

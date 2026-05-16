@@ -52,7 +52,7 @@ function parsePasskeyName(rawName) {
 }
 
 function formatDate(date) {
-    if (!date) return "—";
+    if (!date) return "-";
     return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(date));
 }
 

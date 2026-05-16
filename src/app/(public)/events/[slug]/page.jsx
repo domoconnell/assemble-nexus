@@ -41,7 +41,7 @@ export async function generateMetadata({ params }) {
 	const ev = await getEventBySlug(venue.id, slug);
 	if (!ev) return {};
 	return {
-		title: `${ev.title} — The Assembly Rooms`,
+		title: `${ev.title} - The Assembly Rooms`,
 		description: ev.summary ?? "",
 	};
 }
@@ -91,7 +91,7 @@ export default async function EventPage({ params, searchParams }) {
 
 	const externalHref = ev.external_url || null;
 
-	// schema.org Event structured data — picked up by Google for rich results.
+	// schema.org Event structured data - picked up by Google for rich results.
 	// Lowest-price ticket type is surfaced via offers.price (advisory; the
 	// actual ticket selector handles real availability).
 	const cheapestTicket = (ticketTypes ?? [])
@@ -148,7 +148,7 @@ export default async function EventPage({ params, searchParams }) {
 			/>
 			{!isPublic && preview && (
 				<div className="bg-amber-500/10 border-b border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs px-6 py-2 text-center">
-					Preview — this event is{" "}
+					Preview - this event is{" "}
 					<span className="font-medium">{ev.status}</span> /{" "}
 					<span className="font-medium">{ev.visibility}</span> and not visible to the public.
 				</div>
@@ -248,19 +248,19 @@ export default async function EventPage({ params, searchParams }) {
 										<dt className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
 											Doors
 										</dt>
-										<dd className="mt-1 font-mono text-sm">{doorsTime ?? "—"}</dd>
+										<dd className="mt-1 font-mono text-sm">{doorsTime ?? "-"}</dd>
 									</div>
 									<div>
 										<dt className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
 											Start
 										</dt>
-										<dd className="mt-1 font-mono text-sm">{timeStart ?? "—"}</dd>
+										<dd className="mt-1 font-mono text-sm">{timeStart ?? "-"}</dd>
 									</div>
 									<div>
 										<dt className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
 											End
 										</dt>
-										<dd className="mt-1 font-mono text-sm">{timeEnd ?? "—"}</dd>
+										<dd className="mt-1 font-mono text-sm">{timeEnd ?? "-"}</dd>
 									</div>
 								</dl>
 							)}
@@ -310,7 +310,7 @@ export default async function EventPage({ params, searchParams }) {
 									Entry
 								</h2>
 								<p className="text-sm text-foreground/85">
-									Free entry — no booking required.
+									Free entry - no booking required.
 								</p>
 							</div>
 						)}

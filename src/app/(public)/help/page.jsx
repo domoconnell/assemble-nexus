@@ -3,7 +3,7 @@ import { Hero } from "@/site/ui/hero";
 import { Section } from "@/site/ui/section";
 
 export const metadata = {
-	title: "Help — The Assembly Rooms",
+	title: "Help - The Assembly Rooms",
 	description: "Everything you need to know about visiting, tickets, payments and refunds at The Assembly Rooms.",
 };
 
@@ -59,11 +59,11 @@ export default function HelpPage() {
 					</p>
 					<Qa
 						question="When are you open?"
-						answer="The café is open six days a week (closed Mondays). Event nights run later — check the listing for door times. For hire enquiries, our office hours are weekdays 9am–5pm."
+						answer="The café is open six days a week (closed Mondays). Event nights run later, so check the listing for door times. For hire enquiries, our office hours are weekdays 9am to 5pm."
 					/>
 					<Qa
 						question="Where do I check in for an event?"
-						answer="Front door, ticket on phone or paper. We scan the QR code on the door and that's it — no need to print unless you'd prefer to."
+						answer="Front door, ticket on phone or paper. We scan the QR code on the door and that's it. No need to print unless you'd prefer to."
 					/>
 					<Qa
 						question="What time should I arrive?"
@@ -86,11 +86,11 @@ export default function HelpPage() {
 					</p>
 					<Qa
 						question="I didn't get my email."
-						answer="Check spam first. If it's not there, sign in at /my-orders with the email you used to buy — you'll see every order and you can re-download tickets from there. If you still can't find it, contact us with the email address you used."
+						answer="Check spam first. If it's not there, sign in at /my-orders with the email you used to buy. You'll see every order and you can re-download tickets from there. If you still can't find it, contact us with the email address you used."
 					/>
 					<Qa
 						question="Can I transfer my ticket to someone else?"
-						answer="Yes — just forward the wallet email or the PDF. The QR code is what we scan, not the name on it. We don't check IDs on the door for general admission."
+						answer="Yes. Just forward the wallet email or the PDF. The QR code is what we scan, not the name on it. We don't check IDs on the door for general admission."
 					/>
 					<Qa
 						question="What if I've lost my ticket?"
@@ -110,14 +110,14 @@ export default function HelpPage() {
 			>
 				<div className="space-y-6 max-w-2xl text-base leading-relaxed">
 					<p className="text-muted-foreground">
-						We take card payments through Stripe — same checkout you see on most
+						We take card payments through Stripe, the same checkout you see on most
 						modern sites. Visa, Mastercard, Amex, Apple Pay and Google Pay are all
-						supported. The price you see is the price you pay; there are no booking
+						supported. The price you see is the price you pay. There are no booking
 						fees added at checkout.
 					</p>
 					<Qa
 						question="Is my card information secure?"
-						answer="We never see or store your card number. Stripe handles the card details directly — they're PCI-DSS Level 1 certified, the highest tier of payment security."
+						answer="We never see or store your card number. Stripe handles the card details directly. They're PCI-DSS Level 1 certified, the highest tier of payment security."
 					/>
 					<Qa
 						question="Can I pay in cash on the door?"
@@ -141,18 +141,18 @@ export default function HelpPage() {
 			>
 				<div className="space-y-6 max-w-2xl text-base leading-relaxed">
 					<p className="text-muted-foreground">
-						Tickets are non-refundable as standard — that's how most venues work, and
+						Tickets are non-refundable as standard. That's how most venues work, and
 						it's how we plan staffing and stock. That said, we're not robots about it.
 						If something has gone wrong on our end, or you've got a good reason and a
 						bit of notice, we'll usually find a way to help.
 					</p>
 					<Qa
 						question="The event was cancelled or postponed. What now?"
-						answer="If we cancel an event, you get a full refund automatically — no need to ask. For postponements, your existing ticket usually rolls over to the new date; if the new date doesn't work, email us and we'll refund."
+						answer="If we cancel an event, you get a full refund automatically. No need to ask. For postponements, your existing ticket usually rolls over to the new date. If the new date doesn't work, email us and we'll refund."
 					/>
 					<Qa
 						question="I can't make it any more. Can I get a refund?"
-						answer="Standard tickets aren't refundable, but if you can give us 7+ days' notice we'll often let you swap to another show of similar value, or pass the ticket to a friend (no name change needed — just forward the email)."
+						answer="Standard tickets aren't refundable, but if you can give us 7+ days' notice we'll often let you swap to another show of similar value, or pass the ticket to a friend (no name change needed, just forward the email)."
 					/>
 					<Qa
 						question="My card was charged but I didn't get tickets."
@@ -160,7 +160,7 @@ export default function HelpPage() {
 					/>
 					<Qa
 						question="How long does a refund take?"
-						answer="We process refunds the same day we receive the request. Stripe takes 5–10 working days to put the money back on your card — that part's out of our hands. It'll show up as a credit against the original charge."
+						answer="We process refunds the same day we receive the request. Stripe takes 5 to 10 working days to put the money back on your card, which is out of our hands. It'll show up as a credit against the original charge."
 					/>
 				</div>
 			</Section>
@@ -174,12 +174,12 @@ export default function HelpPage() {
 					<p className="text-muted-foreground">
 						Step-free access from the main entrance, accessible toilets on the ground
 						floor, a hearing loop in the main hall, and a lift to the upstairs rooms.
-						We hold a small number of wheelchair-bay spaces for each event — book one
+						We hold a small number of wheelchair-bay spaces for each event. Book one
 						in advance by emailing us with the order reference.
 					</p>
 					<Qa
 						question="Do you offer companion tickets?"
-						answer="Yes — one complimentary companion ticket per disabled patron. Email us with a copy of your Access Card, DLA/PIP/AA letter, or similar before booking and we'll set it up."
+						answer="Yes. One complimentary companion ticket per disabled patron. Email us with a copy of your Access Card, DLA/PIP/AA letter, or similar before booking and we'll set it up."
 					/>
 					<Qa
 						question="Is there a quiet space if I need a break?"
@@ -199,14 +199,14 @@ export default function HelpPage() {
 			>
 				<div className="space-y-6 max-w-2xl text-base leading-relaxed">
 					<p className="text-muted-foreground">
-						We run a working café out of the front of the building — open six days a
+						We run a working café out of the front of the building, open six days a
 						week. Speciality coffee, pastries from a local baker, a short lunch menu.
 						On show nights the bar opens about an hour before doors and stays open
 						through the interval.
 					</p>
 					<Qa
 						question="Can I bring outside food or drink?"
-						answer="Sealed water bottles are fine. Beyond that, please support the café — we keep prices reasonable so the venue runs as a venue and not just a wedding hall."
+						answer="Sealed water bottles are fine. Beyond that, please support the café. We keep prices reasonable so the venue runs as a venue and not just a wedding hall."
 					/>
 					<Qa
 						question="Do you cater for dietary requirements?"
@@ -224,7 +224,7 @@ export default function HelpPage() {
 					<p className="text-muted-foreground">
 						We hire out all three rooms for everything from corporate awaydays and
 						wedding receptions to small gigs and rehearsal sessions. The booking form
-						is the fastest way to start a conversation — most enquiries get a reply
+						is the fastest way to start a conversation. Most enquiries get a reply
 						the same working day.
 					</p>
 					<div className="pt-2">
@@ -241,7 +241,7 @@ export default function HelpPage() {
 					/>
 					<Qa
 						question="Do I need to pay a deposit?"
-						answer="For most hires, yes — typically 25% of the total, payable on confirmation. The balance is due before the event. We send the balance invoice automatically so you don't have to chase us."
+						answer="For most hires, yes. Typically 25% of the total, payable on confirmation. The balance is due before the event. We send the balance invoice automatically so you don't have to chase us."
 					/>
 					<Qa
 						question="What does the hire fee include?"
@@ -263,7 +263,7 @@ export default function HelpPage() {
 						</Link>{" "}
 						has the right email address for what you need. For anything time-sensitive
 						about a ticket you've already bought, please include the order reference
-						(it starts with <span className="font-mono">TX-</span>) — that's the
+						(it starts with <span className="font-mono">TX-</span>). That's the
 						fastest way for us to find you in the system.
 					</p>
 				</div>

@@ -35,7 +35,7 @@ function useNavCounts() {
 				const data = await res.json()
 				if (!cancelled) setCounts(data ?? {})
 			} catch {
-				// Silent — badges just don't render
+				// Silent - badges just don't render
 			}
 		}
 		load()

@@ -9,7 +9,7 @@ import { Label } from "@/shadcn/components/ui/label";
 export default function MagicLinkForm({
 	callbackURL,
 	heading = "Sign in to your portal",
-	body = "Pop your email in. We'll send a one-click sign-in link — no password needed.",
+	body = "Pop your email in. We'll send a one-click sign-in link - no password needed.",
 }) {
 	const [email, setEmail] = useState("");
 	const [submitting, setSubmitting] = useState(false);
@@ -44,7 +44,7 @@ export default function MagicLinkForm({
 				<h2 className="font-display text-2xl tracking-tight">Check your email.</h2>
 				<p className="text-sm text-muted-foreground">
 					We've sent a sign-in link to <span className="font-medium text-foreground">{email}</span>.
-					Click it on this device — the link works for 15 minutes.
+					Click it on this device - the link works for 15 minutes.
 				</p>
 				<button
 					type="button"

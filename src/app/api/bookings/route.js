@@ -100,7 +100,7 @@ const PendingTicketTypeSchema = z.object({
 });
 
 // `recurrence_rule` is captured client-side after the customer toggled
-// "make recurring" — the segments array has already been expanded to include
+// "make recurring" - the segments array has already been expanded to include
 // every occurrence, so we just store the rule here for audit / display.
 const RecurrenceRuleSchema = z
 	.object({
@@ -360,7 +360,7 @@ async function resolveIdentity({ identity, venueId }) {
 	if (identity.mode === "existing_org") {
 		const session = await getServerSession();
 		if (!session?.user) {
-			return { error: "Sign-in expired — please re-verify your email.", status: 401 };
+			return { error: "Sign-in expired - please re-verify your email.", status: 401 };
 		}
 		const linkedUser = await loadUserById(session.user.id);
 		if (!linkedUser) return { error: "Account not found.", status: 401 };
@@ -389,7 +389,7 @@ async function resolveIdentity({ identity, venueId }) {
 	if (identity.mode === "new_org_existing_user") {
 		const session = await getServerSession();
 		if (!session?.user) {
-			return { error: "Sign-in expired — please re-verify your email.", status: 401 };
+			return { error: "Sign-in expired - please re-verify your email.", status: 401 };
 		}
 		const linkedUser = await loadUserById(session.user.id);
 		if (!linkedUser) return { error: "Account not found.", status: 401 };

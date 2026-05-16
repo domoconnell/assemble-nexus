@@ -1,5 +1,5 @@
 /**
- * Minimal public layout — no site header, no footer, just the site theme.
+ * Minimal public layout - no site header, no footer, just the site theme.
  * Used for "single-purpose" public pages where chrome would distract from
  * the one task on screen (e.g. wallet-bound ticket gallery).
  */

@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/index.js";
 import { event } from "@/db/schema/entities/event.js";
 
-// Unambiguous alphabet — no 0/o, 1/l/i, etc. Lowercase only so a copied URL
+// Unambiguous alphabet - no 0/o, 1/l/i, etc. Lowercase only so a copied URL
 // works regardless of caps lock.
 const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 

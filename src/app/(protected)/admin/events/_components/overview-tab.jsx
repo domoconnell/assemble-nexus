@@ -25,7 +25,7 @@ const expenseDayFmt = new Intl.DateTimeFormat("en-GB", {
 	timeZone: "UTC",
 });
 function formatExpenseDate(ymd) {
-	if (!ymd) return "—";
+	if (!ymd) return "-";
 	const [y, m, d] = ymd.split("-").map(Number);
 	return expenseDayFmt.format(new Date(Date.UTC(y, m - 1, d)));
 }
@@ -160,7 +160,7 @@ export default function OverviewTab({
 									{linkedOrganisation.name}
 								</Link>
 							) : (
-								<span className="font-medium">Internal — The Assembly Rooms</span>
+								<span className="font-medium">Internal - The Assembly Rooms</span>
 							)}
 						</div>
 						{linkedOrganisation?.notes && (
@@ -190,7 +190,7 @@ export default function OverviewTab({
 								</div>
 							) : (
 								<span className="text-muted-foreground italic">
-									No booking — internal event
+									No booking - internal event
 								</span>
 							)}
 						</div>
@@ -255,7 +255,7 @@ export default function OverviewTab({
 											{formatExpenseDate(e.date)}
 										</td>
 										<td className="py-1.5">{e.description}</td>
-										<td className="py-1.5 text-muted-foreground">{e.category_name ?? "—"}</td>
+										<td className="py-1.5 text-muted-foreground">{e.category_name ?? "-"}</td>
 										<td className="py-1.5 text-right font-mono whitespace-nowrap">
 											{formatGbp(e.amount_cents)}
 										</td>

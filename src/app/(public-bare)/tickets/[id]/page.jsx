@@ -33,12 +33,12 @@ function looksLikeUuid(s) {
 
 export async function generateMetadata({ params }) {
 	const { id } = await params;
-	if (!looksLikeUuid(id)) return { title: "Tickets — The Assembly Rooms" };
+	if (!looksLikeUuid(id)) return { title: "Tickets - The Assembly Rooms" };
 	const order = await getOrderForTicketGallery(id);
 	return {
 		title: order
-			? `Tickets for ${order.event_title} — The Assembly Rooms`
-			: "Tickets — The Assembly Rooms",
+			? `Tickets for ${order.event_title} - The Assembly Rooms`
+			: "Tickets - The Assembly Rooms",
 		robots: { index: false, follow: false },
 	};
 }

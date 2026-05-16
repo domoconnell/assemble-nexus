@@ -4,7 +4,7 @@ import { PKPass } from "passkit-generator";
 
 const WWDR_PATH = path.join(process.cwd(), "secrets/wallets/apple-wwdr.pem");
 
-// Brand assets live under public/. Apple wants standard pass image slots —
+// Brand assets live under public/. Apple wants standard pass image slots -
 // we map our existing icon + wordmark onto them. Retina @2x/@3x reuse the
 // same files; iOS will scale appropriately for our needs in v1.
 const ICON_PATH = path.join(process.cwd(), "public/assembly-rooms-icon-white.png");

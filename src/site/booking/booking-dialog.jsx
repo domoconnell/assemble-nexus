@@ -52,7 +52,7 @@ export default function BookingDialog({
 						</h2>
 					</DialogTitle>
 					<p className="mt-2 text-sm text-muted-foreground">
-						Submit an enquiry — we&apos;ll respond within a working day. Nothing is charged until you accept the booking agreement.
+						Submit an enquiry. We&apos;ll respond within a working day. Nothing is charged until you accept the booking agreement.
 					</p>
 				</div>
 				<div className="flex-1 min-h-0 px-6 pb-6 sm:px-8 sm:pb-8 lg:px-10 lg:pb-10">

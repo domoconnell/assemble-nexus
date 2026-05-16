@@ -18,7 +18,7 @@ export const event = pgTable(
 
 		banner_file_id: uuid("banner_file_id").references(() => file.id, { onDelete: "set null" }),
 		hero_file_id: uuid("hero_file_id").references(() => file.id, { onDelete: "set null" }),
-		// Photo from the actual event — used by room pages' "previous events"
+		// Photo from the actual event - used by room pages' "previous events"
 		// gallery in preference to the promo `banner_file_id`. Optional; admin
 		// uploads after the event.
 		gallery_photo_file_id: uuid("gallery_photo_file_id").references(() => file.id, { onDelete: "set null" }),
@@ -32,7 +32,7 @@ export const event = pgTable(
 
 		booking_id: uuid("booking_id").references(() => booking.id, { onDelete: "set null" }),
 		event_organiser_id: uuid("event_organiser_id").references(() => event_organiser.id, { onDelete: "set null" }),
-		// Optional CRM link — the organisation that's running this event.
+		// Optional CRM link - the organisation that's running this event.
 		// Distinct from `event_organiser_id` (a public-facing branded entity
 		// for ticket pages). Used for organiser payouts and CRM roll-ups.
 		organiser_organisation_id: uuid("organiser_organisation_id"),

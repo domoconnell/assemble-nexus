@@ -4,7 +4,7 @@ import CrmListClient from "./client";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "CRM — Nexus" };
+export const metadata = { title: "CRM - Nexus" };
 
 export default async function CrmListPage() {
 	const venue = await requireCurrentVenue();
@@ -16,7 +16,7 @@ export default async function CrmListPage() {
 				<h1 className="text-2xl font-semibold">Organisations</h1>
 				<p className="mt-1 text-sm text-muted-foreground max-w-2xl">
 					Hirers and organisers you do ongoing business with. Each row shows
-					their net position — what they owe the venue (open hire balances) and
+					their net position - what they owe the venue (open hire balances) and
 					what the venue owes them (organiser net from tickets, after fees and
 					expense payouts).
 				</p>

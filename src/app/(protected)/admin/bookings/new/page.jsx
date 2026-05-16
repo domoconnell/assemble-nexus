@@ -7,7 +7,7 @@ import BookingWidget from "@/site/booking/booking-widget";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-	title: "New booking — Nexus",
+	title: "New booking - Nexus",
 };
 
 export default async function AdminNewBookingPage({ searchParams }) {
@@ -33,7 +33,7 @@ export default async function AdminNewBookingPage({ searchParams }) {
 				<h1 className="mt-2 text-2xl font-semibold">New booking</h1>
 				<p className="mt-1 text-sm text-muted-foreground">
 					Create a booking on a customer&apos;s behalf. They&apos;ll appear in the
-					inbox as pending — approve immediately if you&apos;ve already taken the
+					inbox as pending - approve immediately if you&apos;ve already taken the
 					enquiry, or leave for them to confirm via the deposit link.
 				</p>
 			</div>

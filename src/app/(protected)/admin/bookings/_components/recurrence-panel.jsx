@@ -195,7 +195,7 @@ export default function RecurrencePanel({
 					<DialogHeader>
 						<DialogTitle>Generate recurring occurrences</DialogTitle>
 						<DialogDescription>
-							Pick one segment as the template — its date, time, room and price are
+							Pick one segment as the template - its date, time, room and price are
 							copied to the new occurrences. Conflicts with existing bookings, events,
 							or blockouts are skipped automatically.
 						</DialogDescription>

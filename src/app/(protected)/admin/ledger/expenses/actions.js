@@ -23,7 +23,7 @@ const ExpenseSchema = z.object({
 	expense_category_id: z.string().uuid().optional().nullable(),
 	description: z.string().min(1).max(500),
 	amount_pounds: z.coerce.number().min(0),
-	// Input VAT — pounds (so the form mirrors `amount_pounds`). Optional;
+	// Input VAT - pounds (so the form mirrors `amount_pounds`). Optional;
 	// defaults to 0 when the supplier isn't VAT-registered.
 	vat_pounds: z.coerce.number().min(0).optional().default(0),
 	supplier_name: z.string().max(200).optional().nullable(),

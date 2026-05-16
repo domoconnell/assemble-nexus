@@ -276,7 +276,7 @@ async function backfillBalanceFromTransactions(accountId, venueId, {
  * `external_account_uid` for the same venue is flagged. Run after each
  * sync so newly-imported transfer pairs get tagged.
  *
- * Cheap, idempotent UPDATE — re-running just rewrites the same rows.
+ * Cheap, idempotent UPDATE - re-running just rewrites the same rows.
  */
 async function markTransfersForVenue(venueId) {
 	const accounts = await listActiveBankAccounts(venueId);

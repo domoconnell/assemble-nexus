@@ -117,7 +117,7 @@ export async function POST(request) {
 		if (existing) {
 			return json(409, {
 				error:
-					"An account already exists for that email — sign in with the magic link instead.",
+					"An account already exists for that email - sign in with the magic link instead.",
 			});
 		}
 		const [createdUser] = await db
@@ -188,7 +188,7 @@ export async function POST(request) {
 			.returning();
 	}
 
-	// Create the order — retry on reference collision.
+	// Create the order - retry on reference collision.
 	let createdOrder = null;
 	for (let attempt = 0; attempt < 5 && !createdOrder; attempt++) {
 		const reference = generateOrderReference();

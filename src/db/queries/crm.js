@@ -62,10 +62,10 @@ export async function listContactsForOrganisation(organisationId) {
 
 /**
  * For each organisation in the venue, sum:
- *   they_owe_us — outstanding hire balances on bookings linked to the org
- *   we_owe_them — events organised by the org, gross ticket revenue MINUS
+ *   they_owe_us - outstanding hire balances on bookings linked to the org
+ *   we_owe_them - events organised by the org, gross ticket revenue MINUS
  *                 commission, booking fees, and any expenses paid to the org.
- *                 Approximation in v1 — refunds aren't subtracted; that
+ *                 Approximation in v1 - refunds aren't subtracted; that
  *                 comes when the payout flow is built.
  */
 export async function listOrganisationsWithBalances(venueId) {
@@ -73,7 +73,7 @@ export async function listOrganisationsWithBalances(venueId) {
 	if (orgs.length === 0) return [];
 	const ids = orgs.map((o) => o.id);
 
-	// they_owe_us — booking outstanding (total - deposit_paid - balance_paid)
+	// they_owe_us - booking outstanding (total - deposit_paid - balance_paid)
 	// for any non-cancelled, non-rejected booking linked to the org.
 	const bookingOutstanding = await db
 		.select({
@@ -94,7 +94,7 @@ export async function listOrganisationsWithBalances(venueId) {
 		)
 		.groupBy(booking.organisation_id);
 
-	// we_owe_them — sum of ticket revenue for events organised by the org,
+	// we_owe_them - sum of ticket revenue for events organised by the org,
 	// minus commission and platform fees that the venue keeps.
 	const ticketsForOrgEvents = await db
 		.select({

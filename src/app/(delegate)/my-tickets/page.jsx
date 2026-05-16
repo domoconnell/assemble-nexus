@@ -17,7 +17,7 @@ const googleIcon = byPrefixAndName.fab["google-wallet"];
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-	title: "My tickets — The Assembly Rooms",
+	title: "My tickets - The Assembly Rooms",
 };
 
 const dateFmt = new Intl.DateTimeFormat("en-GB", {
@@ -57,7 +57,7 @@ export default async function MyTicketsPage() {
 					height="short"
 					kicker="Your tickets"
 					title="Sign in to see your tickets."
-					subtitle="No password needed — we'll email you a one-click link."
+					subtitle="No password needed - we'll email you a one-click link."
 				/>
 				<Container className="pt-6 pb-12 lg:pb-16">
 					<MagicLinkForm

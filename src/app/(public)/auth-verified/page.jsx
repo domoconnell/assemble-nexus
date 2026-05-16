@@ -10,7 +10,7 @@ export default function AuthVerifiedPage() {
 	// for the magic-link click and just needs to confirm and (politely) get
 	// out of the way.
 	useEffect(() => {
-		document.title = "Signed in — The Assembly Rooms";
+		document.title = "Signed in - The Assembly Rooms";
 	}, []);
 
 	function tryClose() {
@@ -25,7 +25,7 @@ export default function AuthVerifiedPage() {
 				height="short"
 				kicker="Signed in"
 				title="You're signed in."
-				subtitle="Pop back to the booking window in your other tab — it'll pick up automatically."
+				subtitle="Pop back to the booking window in your other tab - it'll pick up automatically."
 			/>
 			<Container className="pt-4 pb-12 lg:pb-16">
 				<div className="max-w-md mx-auto text-center space-y-4">

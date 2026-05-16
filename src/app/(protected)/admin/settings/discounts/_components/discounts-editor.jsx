@@ -167,7 +167,7 @@ export default function DiscountsEditor({ initialDiscounts }) {
 								value={(editing.percent_x100 / 100).toString()}
 								onChange={(e) => update("percent_x100", Math.round(Number(e.target.value || 0) * 100))}
 							/>
-							<p className="text-xs text-muted-foreground">Applied to room hire only — not to add-ons.</p>
+							<p className="text-xs text-muted-foreground">Applied to room hire only - not to add-ons.</p>
 						</div>
 						<div className="space-y-2">
 							<Label htmlFor="sort_order">Sort order</Label>

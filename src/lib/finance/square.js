@@ -5,7 +5,7 @@
  * environment). Legacy env-var values are honoured as a fallback so existing
  * deploys keep working until the new settings page is filled in.
  *
- * We deliberately avoid the SDK to keep deps lean — REST against the public
+ * We deliberately avoid the SDK to keep deps lean - REST against the public
  * Orders / Payments / Refunds endpoints is enough.
  *
  * Square timestamps are RFC 3339 in UTC; we bucket per Europe/London date so a
@@ -55,7 +55,7 @@ async function squareFetch(cfg, path, init = {}) {
 }
 
 /**
- * Probe that the supplied credentials work — used by the settings page's
+ * Probe that the supplied credentials work - used by the settings page's
  * "Test connection" button. Calls /v2/locations/{id} which is a cheap
  * sanity check that doesn't pull large lists.
  */

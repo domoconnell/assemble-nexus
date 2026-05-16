@@ -8,7 +8,7 @@ import { getPageContent } from "@/db/queries/site-content";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-	title: "What's On — The Assembly Rooms",
+	title: "What's On - The Assembly Rooms",
 	description: "Upcoming events at The Assembly Rooms.",
 };
 
@@ -35,7 +35,7 @@ export default async function WhatsOnPage() {
 					<div className="rounded-xl border border-foreground/10 bg-card p-10 text-center max-w-md mx-auto">
 						<h2 className="font-display text-2xl tracking-tight">{empty.title ?? "Nothing on yet."}</h2>
 						<p className="mt-3 text-sm text-muted-foreground">
-							{empty.body ?? "Check back soon — we’re putting the next few months together."}
+							{empty.body ?? "Check back soon - we’re putting the next few months together."}
 						</p>
 					</div>
 				) : (

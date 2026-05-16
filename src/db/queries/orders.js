@@ -13,7 +13,7 @@ import { organisation_contact } from "@/db/schema/entities/organisation_contact.
 
 /**
  * Public-access order lookup by ID for the no-auth ticket gallery at
- * `/tickets/[id]`. The URL acts as the capability — the unguessable UUID
+ * `/tickets/[id]`. The URL acts as the capability - the unguessable UUID
  * is what makes the page secure-enough for tickets emailed to buyers.
  */
 export async function getOrderForTicketGallery(orderId) {
@@ -88,7 +88,7 @@ export async function listOrderLines(orderId) {
 }
 
 /**
- * Tickets for the given user — both via customer.user_id (they bought
+ * Tickets for the given user - both via customer.user_id (they bought
  * directly) and via organisation_contact (their org bought).
  */
 export async function listTicketsForUser(userId) {
@@ -205,7 +205,7 @@ export async function getTicketForUserByCode(code, userId) {
 }
 
 /**
- * Order detail for the given user — ensures they own it before showing.
+ * Order detail for the given user - ensures they own it before showing.
  */
 export async function getOrderForUserByReference(reference, userId) {
 	const selectOrder = {

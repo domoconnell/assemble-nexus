@@ -15,7 +15,7 @@
  *                  what's available.
  *
  * Template IDs live in this file and nowhere else. Never put them in env vars
- * or duplicate them across the codebase — change them here.
+ * or duplicate them across the codebase - change them here.
  */
 
 export const EMAIL_TEMPLATES = {
@@ -31,7 +31,7 @@ export const EMAIL_TEMPLATES = {
 
 	"auth-otp": {
 		templateId: null,
-		description: "Six-digit one-time code sent during booking and ticket checkout. Mobile-friendly alternative to the magic link — the code is entered back in the original tab so the session lands in the right browser. 10-minute expiry.",
+		description: "Six-digit one-time code sent during booking and ticket checkout. Mobile-friendly alternative to the magic link - the code is entered back in the original tab so the session lands in the right browser. 10-minute expiry.",
 		audience: "any",
 		fields: {
 			code: "Six-digit numeric code (string).",
@@ -83,9 +83,9 @@ export const EMAIL_TEMPLATES = {
 			note: "Optional note from staff (may be empty).",
 			view_url: "Public link to the booking status page.",
 			pay_deposit_url: "When a deposit is required: link to /booking/[reference]/pay. Empty when no deposit.",
-			has_deposit: "Boolean — true when pay_deposit_url is present. Use to conditionally show the 'Pay deposit' CTA.",
+			has_deposit: "Boolean - true when pay_deposit_url is present. Use to conditionally show the 'Pay deposit' CTA.",
 			ticketing_setup_url: "When the booking had ticketing enabled: link to /my-events/[id]/edit so the hirer can design their ticketing page. Empty when ticketing was not enabled.",
-			has_ticketing_setup: "Boolean — true when ticketing_setup_url is present. Use to conditionally show the 'set up tickets' CTA in the template.",
+			has_ticketing_setup: "Boolean - true when ticketing_setup_url is present. Use to conditionally show the 'set up tickets' CTA in the template.",
 		},
 	},
 

@@ -6,11 +6,11 @@ import { getPublicNavData } from "@/db/queries/public-nav";
 export const dynamic = "force-dynamic";
 
 /**
- * Layout for the delegate-facing portal — /my-tickets and /my-orders.
+ * Layout for the delegate-facing portal - /my-tickets and /my-orders.
  *
  * Customer-facing chrome (site header + footer, no admin sidebar). Each
  * page inside this group decides for itself whether to show a magic-link
- * sign-in form or the user's data — the layout doesn't enforce auth, so
+ * sign-in form or the user's data - the layout doesn't enforce auth, so
  * we never bounce out to the admin /auth/login page from here.
  */
 export default async function DelegateLayout({ children }) {

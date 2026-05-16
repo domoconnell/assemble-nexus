@@ -265,7 +265,7 @@ export default function TicketSelector({
 			{hasAnyBundles && (
 				<div className="space-y-2">
 					<p className="text-xs text-muted-foreground">
-						Bundles available — buy these combinations together to save.
+						Bundles available. Buy these combinations together to save.
 					</p>
 					<div className="grid gap-2">
 						{bundles.map((b) => (
@@ -517,7 +517,7 @@ export default function TicketSelector({
 					<DialogHeader>
 						<DialogTitle>Who&apos;s buying?</DialogTitle>
 						<DialogDescription>
-							Tickets are emailed to this address — and you&apos;ll be signed in
+							Tickets are emailed to this address, and you&apos;ll be signed in
 							so you can come back any time to see them.
 						</DialogDescription>
 					</DialogHeader>
@@ -685,8 +685,8 @@ function FeeOptIn({
 			<p className="text-foreground/85 leading-relaxed">
 				{borneByCustomer ? (
 					<>
-						You&apos;ve covered the booking fee — {subject} will receive the full
-						{" "}{formatGbp(orderValueCents)}.
+						You&apos;ve covered the booking fee. {subject} will receive the full{" "}
+						{formatGbp(orderValueCents)}.
 					</>
 				) : (
 					<>

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
 /**
- * Google Wallet — Event Ticket pass generator.
+ * Google Wallet - Event Ticket pass generator.
  *
  * Two-step model: a `class` defines the pass design (per event), an `object`
  * is the individual ticket instance. We ensure the class exists, then ensure
@@ -12,7 +12,7 @@ import crypto from "node:crypto";
  * separate RS256 JWT pointing at the object IDs, served at
  * `https://pay.google.com/gp/v/save/<jwt>`.
  *
- * No external dependency — uses Node `crypto`, same as our DB-side probe.
+ * No external dependency - uses Node `crypto`, same as our DB-side probe.
  */
 
 const ISSUER_API = "https://walletobjects.googleapis.com/walletobjects/v1";
@@ -155,7 +155,7 @@ function buildObjectBody({ objectId, classId, ticket }) {
 }
 
 /**
- * Main entry. Idempotent — calling repeatedly for the same ticket reuses the
+ * Main entry. Idempotent - calling repeatedly for the same ticket reuses the
  * existing class + object and just returns a fresh save URL.
  */
 export async function getGoogleWalletSaveUrl({ ticket, settings, baseUrl }) {

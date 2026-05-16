@@ -21,7 +21,7 @@ export const psp_intent = pgTable(
 		currency: text("currency").notNull().default("gbp"),
 		metadata: jsonb("metadata").default({}).notNull(),
 
-		// Application links — at most one of these is set per row.
+		// Application links - at most one of these is set per row.
 		ticket_order_id: uuid("ticket_order_id").references(() => ticket_order.id, { onDelete: "set null" }),
 		booking_id: uuid("booking_id").references(() => booking.id, { onDelete: "set null" }),
 		// invoice_id reference added later when the invoice table lands in Phase 5.

@@ -4,7 +4,7 @@ import { db } from "@/db/index.js";
 import { psp_intent } from "@/db/schema/entities/psp_intent.js";
 
 /**
- * FakePSP — collects fake card details and simulates auth/decline so every
+ * FakePSP - collects fake card details and simulates auth/decline so every
  * downstream flow (orders → emails → wallet passes → refunds) works
  * end-to-end without a live Stripe account.
  *
@@ -143,11 +143,11 @@ export const fakePsp = {
 	},
 
 	async parseWebhook() {
-		throw new Error("FakePSP has no webhooks — success is synchronous on confirmPayment.");
+		throw new Error("FakePSP has no webhooks - success is synchronous on confirmPayment.");
 	},
 
 	async getActualFeeForIntent() {
-		// Fake card payments have no real fees — caller writes 0/null and moves on.
+		// Fake card payments have no real fees - caller writes 0/null and moves on.
 		return null;
 	},
 };

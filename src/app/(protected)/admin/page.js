@@ -831,7 +831,7 @@ function WaterfallBox({ step }) {
 					</span>
 				</div>
 			) : (
-				<div className="pt-2 border-t border-foreground/10 text-xs invisible">—</div>
+				<div className="pt-2 border-t border-foreground/10 text-xs invisible">-</div>
 			)}
 		</div>
 	);

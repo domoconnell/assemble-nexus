@@ -10,7 +10,7 @@ import OrganiserNav from "../_components/organiser-nav";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-	title: "My events — The Assembly Rooms",
+	title: "My events - The Assembly Rooms",
 };
 
 const stampFmt = new Intl.DateTimeFormat("en-GB", {
@@ -43,7 +43,7 @@ export default async function MyEventsPage() {
 					height="short"
 					kicker="Your events"
 					title="Sign in to see your events."
-					subtitle="No password needed — we'll email you a one-click link."
+					subtitle="No password needed - we'll email you a one-click link."
 				/>
 				<Container className="pt-6 pb-12 lg:pb-16">
 					<MagicLinkForm callbackURL="/my-events" heading="See your events" />
@@ -75,7 +75,7 @@ export default async function MyEventsPage() {
 						<h2 className="font-display text-2xl tracking-tight">No events yet.</h2>
 						<p className="text-muted-foreground max-w-md mx-auto">
 							When a booking with ticketing is approved we&apos;ll spin up a draft
-							event for you here — that&apos;s where you set ticket types,
+							event for you here - that&apos;s where you set ticket types,
 							capacity and the public-facing page.
 						</p>
 						<CtaButton href="/book">Start an enquiry</CtaButton>

@@ -20,7 +20,7 @@ const timeFmt = new Intl.DateTimeFormat("en-GB", {
  * by the ticketed/free tag, title, summary, and a CTA line.
  *
  * Accepts the event row shape returned by `listPublishedEvents` /
- * `listPublishedEventsForRoom` — snake_case fields plus `banner_url`.
+ * `listPublishedEventsForRoom` - snake_case fields plus `banner_url`.
  */
 export function EventCard({ event, variant = "default" }) {
 	const ev = event;

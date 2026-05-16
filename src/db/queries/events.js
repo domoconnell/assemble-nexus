@@ -93,7 +93,7 @@ export async function listUpcomingEvents(venueId, { limit = 10, fromDate = new D
 
 /**
  * Events sitting in pending_review for an admin to publish. Used by the
- * dashboard widget — keep the column set lean.
+ * dashboard widget - keep the column set lean.
  */
 export async function listEventsAwaitingApproval(venueId) {
 	return db

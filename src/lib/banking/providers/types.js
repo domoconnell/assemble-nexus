@@ -2,7 +2,7 @@
  * Banking provider plugin contract.
  *
  * Every connected bank account is owned by exactly one provider plugin
- * (Starling, Revolut, etc). The sync service is provider-agnostic — it
+ * (Starling, Revolut, etc). The sync service is provider-agnostic - it
  * dispatches `fetchBalance` / `listTransactions` on the registered plugin
  * for each account and persists the normalised results.
  *
@@ -24,7 +24,7 @@
  * @property {string} currency
  * @property {string | null} counterparty_name
  * @property {string | null} counterparty_account
- *   Best-effort identifier for the OTHER side — sort-code+number,
+ *   Best-effort identifier for the OTHER side - sort-code+number,
  *   IBAN, account uid, or whatever's available. Used for transfer
  *   detection so try to be consistent within a provider.
  * @property {string | null} reference

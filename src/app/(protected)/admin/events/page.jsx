@@ -100,7 +100,7 @@ export default async function AdminEventsPage({ searchParams }) {
 										)}
 									</td>
 									<td className="px-4 py-3 text-muted-foreground">
-										{r.starts_at ? dateFmt.format(new Date(r.starts_at)) : "—"}
+										{r.starts_at ? dateFmt.format(new Date(r.starts_at)) : "-"}
 									</td>
 									<td className="px-4 py-3">
 										<span
@@ -113,7 +113,7 @@ export default async function AdminEventsPage({ searchParams }) {
 										{r.visibility}
 									</td>
 									<td className="px-4 py-3 text-muted-foreground">
-										{r.is_ticketed ? "Yes" : "—"}
+										{r.is_ticketed ? "Yes" : "-"}
 									</td>
 								</tr>
 							))}

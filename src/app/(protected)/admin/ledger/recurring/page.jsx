@@ -12,11 +12,11 @@ export const dynamic = "force-dynamic";
 const TYPE_META = {
 	utilities: {
 		label: "Utilities",
-		description: "Gas, electricity, water, internet, telephone — the bills that arrive month after month.",
+		description: "Gas, electricity, water, internet, telephone - the bills that arrive month after month.",
 	},
 	staff: {
 		label: "Staff",
-		description: "Headline monthly cost of the core team (just the total — payroll detail isn't tracked here).",
+		description: "Headline monthly cost of the core team (just the total - payroll detail isn't tracked here).",
 	},
 	mortgage: {
 		label: "Mortgage",
@@ -52,7 +52,7 @@ export default async function RecurringCostsPage() {
 				<h1 className="text-2xl font-semibold">Recurring costs</h1>
 				<p className="mt-1 text-sm text-muted-foreground max-w-2xl">
 					Fixed monthly costs that feed into the ministry-gift formula. Edits apply
-					from the month you choose forwards — the old amount stays on file for
+					from the month you choose forwards - the old amount stays on file for
 					previous months.
 				</p>
 			</div>

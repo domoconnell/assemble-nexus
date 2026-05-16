@@ -37,7 +37,7 @@ export function Logo({
 	if (!href) return img;
 
 	return (
-		<Link href={href} aria-label="The Assembly Rooms — home" className="inline-flex items-center">
+		<Link href={href} aria-label="The Assembly Rooms - home" className="inline-flex items-center">
 			{img}
 		</Link>
 	);

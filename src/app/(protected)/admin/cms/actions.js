@@ -20,7 +20,7 @@ const SaveSchema = z.object({
 
 /**
  * Upsert a page's content for the current venue. We validate that each
- * section.field present in the submitted blob exists in the page schema —
+ * section.field present in the submitted blob exists in the page schema -
  * unknown fields are silently dropped.
  */
 export async function savePageContentAction(input) {

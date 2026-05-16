@@ -16,7 +16,7 @@ function fileToBase64(file) {
 		const reader = new FileReader();
 		reader.onload = () => {
 			const result = reader.result;
-			// FileReader returns a data URL — strip the prefix.
+			// FileReader returns a data URL - strip the prefix.
 			const comma = String(result).indexOf(",");
 			resolve(comma >= 0 ? String(result).slice(comma + 1) : String(result));
 		};

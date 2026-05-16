@@ -17,7 +17,7 @@ const formatGbp = (c) => gbp.format((c ?? 0) / 100);
 
 export async function generateMetadata({ params }) {
 	const { reference } = await params;
-	return { title: `Pay deposit · ${reference} — The Assembly Rooms` };
+	return { title: `Pay deposit · ${reference} - The Assembly Rooms` };
 }
 
 export default async function BookingPayPage({ params }) {
@@ -26,11 +26,11 @@ export default async function BookingPayPage({ params }) {
 	if (!b) notFound();
 
 	if (b.status === "confirmed" || b.status === "completed") {
-		// Already paid — kick back to the status page so they see confirmation.
+		// Already paid - kick back to the status page so they see confirmation.
 		redirect(`/booking/${reference}`);
 	}
 	if (b.status !== "approved") {
-		// Pending / rejected / cancelled — show status page only.
+		// Pending / rejected / cancelled - show status page only.
 		redirect(`/booking/${reference}`);
 	}
 	if ((b.deposit_required_cents ?? 0) <= 0) {

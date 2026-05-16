@@ -3,7 +3,7 @@ import Link from "next/link";
 const cards = [
 	{
 		title: "Booking types",
-		description: "Event day, setup day, rehearsal — and their default rate modifiers.",
+		description: "Event day, setup day, rehearsal - and their default rate modifiers.",
 		href: "/admin/settings/booking-types",
 	},
 	{

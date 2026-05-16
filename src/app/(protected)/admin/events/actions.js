@@ -91,7 +91,7 @@ export async function saveEventAction(input) {
 	// ministry-gift formula and per-org roll-ups have a clear owner.
 	if (!parsed.booking_id && !parsed.organiser_organisation_id) {
 		throw new Error(
-			"Pick a CRM organisation for this event — required when it isn't linked to a booking.",
+			"Pick a CRM organisation for this event - required when it isn't linked to a booking.",
 		);
 	}
 
@@ -199,7 +199,7 @@ export async function publishEventAction(id) {
 }
 
 /**
- * Cancel (soft-cancel) an event without deleting it — leaves the row in
+ * Cancel (soft-cancel) an event without deleting it - leaves the row in
  * place for historical reporting but flips status to "cancelled". The
  * public page is removed from listings (filter excludes cancelled), and
  * the ledger / orders still link to it for refund-friendly accounting.

@@ -7,7 +7,7 @@ import CmsEditor from "./editor";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Website CMS — Nexus" };
+export const metadata = { title: "Website CMS - Nexus" };
 
 export default async function CmsPage({ searchParams }) {
 	const sp = await searchParams;
@@ -31,7 +31,7 @@ export default async function CmsPage({ searchParams }) {
 				<h1 className="text-2xl font-semibold">Website CMS</h1>
 				<p className="mt-1 text-sm text-muted-foreground max-w-2xl">
 					Editable copy and images for the public site. Empty fields fall back to
-					the built-in defaults — leave anything blank to use the code's version.
+					the built-in defaults - leave anything blank to use the code's version.
 				</p>
 			</div>
 

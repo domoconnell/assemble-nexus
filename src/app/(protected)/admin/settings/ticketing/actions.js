@@ -33,7 +33,7 @@ const AppleWalletSchema = z.object({
 	pass_type_identifier: z.string().min(1).max(200),
 	team_identifier: z.string().min(1).max(40),
 	organisation_name: z.string().min(1).max(200),
-	// New .p12 upload — base64 encoded by the client. Optional on subsequent
+	// New .p12 upload - base64 encoded by the client. Optional on subsequent
 	// saves so the admin can edit the text fields without re-uploading.
 	p12_base64: z.string().optional().nullable(),
 	p12_passphrase: z.string().optional().nullable(),
@@ -42,7 +42,7 @@ const AppleWalletSchema = z.object({
 /**
  * Persist the venue's Apple Wallet configuration. When a fresh .p12 is
  * uploaded we decrypt with node-forge and extract the cert + key as PEM
- * before storing — so the runtime pass generator never has to handle the
+ * before storing - so the runtime pass generator never has to handle the
  * P12 format itself.
  */
 export async function saveAppleWalletSettingsAction(input) {
@@ -69,7 +69,7 @@ export async function saveAppleWalletSettingsAction(input) {
 		organisation_name: parsed.organisation_name.trim(),
 		signer_cert_pem,
 		signer_key_pem,
-		// Keep around in case we ever need to re-export — but the PEM key is
+		// Keep around in case we ever need to re-export - but the PEM key is
 		// already unencrypted so this is only here for traceability.
 		uploaded_at: parsed.p12_base64 ? new Date().toISOString() : existing.uploaded_at ?? null,
 	};

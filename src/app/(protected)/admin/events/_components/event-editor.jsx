@@ -267,7 +267,7 @@ export default function EventEditor({
 		setError(null);
 		try {
 			// Only persist datetimes that include a time. Date-only values mean
-			// "user hasn't finished picking" — save as null so the DB doesn't end
+			// "user hasn't finished picking" - save as null so the DB doesn't end
 			// up with misleading midnight stamps.
 			const onlyComplete = (v) => (typeof v === "string" && v.includes("T") ? v : null);
 			const payload = {
@@ -607,7 +607,7 @@ export default function EventEditor({
 										}
 									>
 										<SelectTrigger>
-											<SelectValue placeholder="Optional — public-facing branded organiser" />
+											<SelectValue placeholder="Optional - public-facing branded organiser" />
 										</SelectTrigger>
 										<SelectContent>
 											<SelectItem value={NO_ORGANISER}>None</SelectItem>
@@ -679,7 +679,7 @@ export default function EventEditor({
 								/>
 								<p className="text-xs text-muted-foreground">
 									Total delegates allowed across all ticket types. Counts each ticket by its
-									&quot;admits per ticket&quot; setting — so a family-of-4 ticket uses 4 of the
+									&quot;admits per ticket&quot; setting - so a family-of-4 ticket uses 4 of the
 									available occupancy.
 								</p>
 							</div>
@@ -709,7 +709,7 @@ export default function EventEditor({
 									rows={8}
 									value={draft.summary ?? ""}
 									onChange={(e) => update("summary", e.target.value)}
-									placeholder="Short hook used in listings — and the longer description shown on the event page. Line breaks are preserved."
+									placeholder="Short hook used in listings - and the longer description shown on the event page. Line breaks are preserved."
 								/>
 								<p className="text-xs text-muted-foreground">
 									New lines are preserved when this renders on the public event page.
@@ -723,7 +723,7 @@ export default function EventEditor({
 							<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Rooms</h2>
 							{initialEvent?.booking_id ? (
 								<p className="text-sm text-muted-foreground">
-									This event is tied to a booking — rooms come from the booking&apos;s
+									This event is tied to a booking - rooms come from the booking&apos;s
 									segments and can&apos;t be changed here.
 								</p>
 							) : (
@@ -965,7 +965,7 @@ export default function EventEditor({
 				open={confirmCancelOpen}
 				onOpenChange={setConfirmCancelOpen}
 				title="Cancel this event?"
-				description={`"${draft.title || "Untitled"}" will be marked as cancelled and pulled from the public listings. The event row stays in place for reporting and refunds — use Delete to remove it entirely.`}
+				description={`"${draft.title || "Untitled"}" will be marked as cancelled and pulled from the public listings. The event row stays in place for reporting and refunds - use Delete to remove it entirely.`}
 				confirmLabel="Cancel event"
 				destructive
 				onConfirm={performCancel}

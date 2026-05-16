@@ -11,7 +11,7 @@ const googleIcon = byPrefixAndName.fab["google-wallet"];
  * Themed QR card. QR modules themselves are painted with a linear gradient
  * from the theme primary into a lighter tint, on a transparent background.
  * Single SVG <linearGradient> defs node is referenced by id from the QR's
- * fill attribute — works because browsers resolve fill="url(#id)" against
+ * fill attribute - works because browsers resolve fill="url(#id)" against
  * any same-document SVG defs.
  */
 export default function TicketQrCard({

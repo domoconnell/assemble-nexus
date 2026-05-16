@@ -223,7 +223,7 @@ export default function AddonsTab({
 				)}
 				{!hasTicketTypes && (
 					<div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-						Add a ticket type first — add-ons need at least one ticket type to attach to.
+						Add a ticket type first - add-ons need at least one ticket type to attach to.
 					</div>
 				)}
 				{addons.length === 0 ? (

@@ -34,7 +34,7 @@ export default function RichTextEditor({ value, onChange }) {
 		immediatelyRender: false,
 		onUpdate({ editor: ed }) {
 			const html = ed.getHTML();
-			// Empty editor reports `<p></p>` — normalise to empty string.
+			// Empty editor reports `<p></p>` - normalise to empty string.
 			onChange?.(html === "<p></p>" ? "" : html);
 		},
 	});

@@ -33,7 +33,7 @@ const dayFmt = new Intl.DateTimeFormat("en-GB", {
 	timeZone: "UTC",
 });
 function formatDate(ymd) {
-	if (!ymd) return "—";
+	if (!ymd) return "-";
 	const [y, m, d] = ymd.split("-").map(Number);
 	return dayFmt.format(new Date(Date.UTC(y, m - 1, d)));
 }

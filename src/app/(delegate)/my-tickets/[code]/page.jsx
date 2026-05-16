@@ -28,7 +28,7 @@ const timeFmt = new Intl.DateTimeFormat("en-GB", {
 export async function generateMetadata({ params }) {
 	const { code } = await params;
 	return {
-		title: `Ticket ${code} — The Assembly Rooms`,
+		title: `Ticket ${code} - The Assembly Rooms`,
 		robots: { index: false, follow: false },
 	};
 }
@@ -44,7 +44,7 @@ export default async function MyTicketDetailPage({ params }) {
 					height="short"
 					kicker="Your ticket"
 					title="Sign in to see this ticket."
-					subtitle="No password needed — we'll email you a one-click link."
+					subtitle="No password needed - we'll email you a one-click link."
 				/>
 				<Container className="pt-6 pb-12 lg:pb-16">
 					<MagicLinkForm
