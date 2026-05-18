@@ -1,0 +1,65 @@
+<!--
+  Template: booking-balance-paid
+  Audience: hirer (balance fully paid; booking completed)
+  Variables:
+    {{venue_name}}    Public venue name.
+    {{first_name}}    Hirer's first name.
+    {{reference}}     Booking reference.
+    {{total}}         GBP-formatted booking total.
+    {{view_url}}      Public booking status link.
+-->
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#0f172a;font-size:14px;line-height:1.55;">
+  <tr>
+    <td style="padding:0 24px;">
+      <p style="margin:0 0 14px;">Hi {{first_name}},</p>
+      <p style="margin:0 0 14px;color:#334155;">
+        Your balance is paid in full — booking
+        <strong style="font-family:'SF Mono','Menlo',monospace;">{{reference}}</strong>
+        with {{venue_name}} is now fully settled.
+      </p>
+      <p style="margin:0 0 14px;color:#334155;">
+        We're looking forward to having you. If there's anything you need
+        before the day, just reply to this email.
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:14px 24px 0;">
+      <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin:0 0 12px;">
+        Payment summary
+      </div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tr>
+          <td style="padding:5px 0;color:#64748b;width:160px;">Reference</td>
+          <td style="padding:5px 0;font-family:'SF Mono','Menlo',monospace;font-size:13px;">{{reference}}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:#64748b;">Total paid</td>
+          <td style="padding:5px 0;font-weight:600;color:#0f766e;">{{total}}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:#64748b;">Balance</td>
+          <td style="padding:5px 0;color:#0f766e;">£0.00</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:24px;text-align:center;">
+      <a href="{{view_url}}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;">
+        View booking →
+      </a>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:0 24px 12px;">
+      <p style="margin:0;color:#0f172a;">
+        Thanks,<br />
+        {{venue_name}}
+      </p>
+    </td>
+  </tr>
+</table>

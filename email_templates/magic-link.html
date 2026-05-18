@@ -1,0 +1,63 @@
+<!--
+  Template: magic-link
+  Audience: any (staff or hirer requesting a sign-in link)
+  Variables:
+    {{venue_name}}   Public venue name.
+    {{magic_link}}   Full URL the user clicks to sign in.
+    {{first_name}}   Recipient's first name (empty for accounts without one).
+    {{last_name}}    Recipient's last name (empty for accounts without one).
+-->
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#0f172a;font-size:14px;line-height:1.55;">
+  <tr>
+    <td style="padding:0 24px;">
+      {{#if first_name}}
+      <p style="margin:0 0 14px;">Hi {{first_name}},</p>
+      {{/if}}
+      <h1 style="font-size:22px;font-weight:600;margin:0 0 14px;color:#0f172a;letter-spacing:-0.3px;">
+        Sign in to {{venue_name}}
+      </h1>
+      <p style="margin:0 0 18px;color:#334155;">
+        Click the button below to sign in. This link can only be used once
+        and will expire shortly for security.
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:8px 24px 22px;text-align:center;">
+      <a href="{{magic_link}}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:6px;font-weight:600;font-size:14px;">
+        Sign in →
+      </a>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:0 24px 12px;">
+      <p style="margin:0;color:#64748b;font-size:12px;">
+        Button not working? Paste this URL into your browser:
+      </p>
+      <p style="margin:6px 0 0;word-break:break-all;font-size:12px;color:#334155;">
+        <a href="{{magic_link}}" style="color:#0f766e;text-decoration:none;">{{magic_link}}</a>
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:18px 24px 0;border-top:1px solid #e2e8f0;">
+      <p style="margin:18px 0 0;font-size:12px;color:#64748b;">
+        Didn't request this? You can safely ignore this email — the link
+        will expire on its own and no one can sign in to your account
+        without it.
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:18px 24px 12px;">
+      <p style="margin:0;color:#0f172a;">
+        Thanks,<br />
+        {{venue_name}}
+      </p>
+    </td>
+  </tr>
+</table>

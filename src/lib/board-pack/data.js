@@ -16,7 +16,7 @@ import { resolveMonth, monthLabel } from "@/lib/finance/months";
  * stay in sync. Returns a plain serialisable object ready to feed into
  * the PDF document component.
  */
-export async function gatherBoardPackData({ venueId, ym, venueName = "The Assembly Rooms" }) {
+export async function gatherBoardPackData({ venueId, ym, venueName }) {
 	const month = resolveMonth(ym);
 
 	const [

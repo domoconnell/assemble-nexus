@@ -29,3 +29,30 @@ export async function listActiveVenues() {
         .where(and(eq(venue.is_active, true), isNull(venue.deletedAt)))
         .orderBy(asc(venue.createdAt));
 }
+
+/**
+ * Fetch a venue by id. Used by email senders so the venue name is read
+ * from the DB rather than baked into a hardcoded constant.
+ */
+export async function getVenueById(id) {
+    if (!id) return null;
+    const [v] = await db
+        .select()
+        .from(venue)
+        .where(and(eq(venue.id, id), isNull(venue.deletedAt)))
+        .limit(1);
+    return v ?? null;
+}
+
+/**
+ * Update mutable profile fields on a venue. Only the keys explicitly
+ * listed in the action layer get through - this just performs the write.
+ */
+export async function updateVenueProfile(id, patch) {
+    const [updated] = await db
+        .update(venue)
+        .set(patch)
+        .where(eq(venue.id, id))
+        .returning();
+    return updated;
+}

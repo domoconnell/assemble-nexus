@@ -7,10 +7,7 @@ import { customer } from "@/db/schema/entities/customer.js";
 import { event } from "@/db/schema/entities/event.js";
 import { generateTicketCode } from "./codes.js";
 import { getActivePsp } from "@/lib/psp/index.js";
-import {
-	sendTicketOrderConfirmationEmail,
-	sendTicketsWalletEmail,
-} from "@/utils/email/ticket-emails.js";
+import { sendTicketDeliveryEmail } from "@/utils/email/ticket-emails.js";
 
 /**
  * Finalise a ticket order once payment has succeeded.
@@ -90,22 +87,11 @@ export async function finaliseTicketOrder(orderId, { paymentRef } = {}) {
 		}
 	}
 
-	// Fire-and-forget confirmation email.
+	// Fire-and-forget ticket-delivery email: PDF + order summary + wallet
+	// gallery link, all in one message.
 	try {
 		if (cust && ev) {
-			// Wallet email is the primary delivery (PDF attached + link to the
-			// `/tickets/[id]` gallery for Add-to-Wallet). The bare confirmation
-			// template is kept around for venues that prefer a no-attachment
-			// notice; safeSend silently no-ops when its template ID isn't set.
-			await Promise.all([
-				sendTicketsWalletEmail({ order: updated, customer: cust }),
-				sendTicketOrderConfirmationEmail({
-					order: updated,
-					customer: cust,
-					eventTitle: ev.title,
-					ticketsCount: newTickets.length,
-				}),
-			]);
+			await sendTicketDeliveryEmail({ order: updated, customer: cust });
 		}
 	} catch (err) {
 		console.error("[finaliseTicketOrder] email send failed", err);

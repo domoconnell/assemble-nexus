@@ -2,6 +2,12 @@ import Link from "next/link";
 
 const groups = [
 	{
+		section: "Venue",
+		cards: [
+			{ title: "Venue profile", description: "Venue name used in every email signoff, the board pack PDF, and anywhere else the platform displays it.", href: "/admin/settings/venue" },
+		],
+	},
+	{
 		section: "Booking",
 		cards: [
 			{ title: "Booking types", description: "Event day, setup day, rehearsal — and their default rate modifiers.", href: "/admin/settings/booking-types" },

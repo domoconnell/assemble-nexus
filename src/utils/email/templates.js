@@ -24,25 +24,28 @@ export const EMAIL_TEMPLATES = {
 		description: "Passwordless sign-in link sent to staff or hirers when they request to log in.",
 		audience: "any",
 		fields: {
+			venue_name: "Public venue name (e.g. 'The Assembly Rooms Newark').",
 			magic_link: "Full URL the user clicks to sign in.",
-			expires_in_minutes: "How long the link is valid (number).",
+			first_name: "Recipient's first name (empty for accounts without one).",
+			last_name: "Recipient's last name (empty for accounts without one).",
 		},
 	},
 
 	"auth-otp": {
-		templateId: null,
+		templateId: "d-a0f5c5d0d93144d9bbe70d71bf63f3a2",
 		description: "Six-digit one-time code sent during booking and ticket checkout. Mobile-friendly alternative to the magic link - the code is entered back in the original tab so the session lands in the right browser. 10-minute expiry.",
 		audience: "any",
 		fields: {
+			venue_name: "Public venue name.",
 			code: "Six-digit numeric code (string).",
 			expires_in_minutes: "How long the code is valid (number).",
-			firstName: "Recipient's first name. Empty string for new users.",
-			lastName: "Recipient's last name. Empty string for new users.",
+			first_name: "Recipient's first name. Empty string for new users.",
+			last_name: "Recipient's last name. Empty string for new users.",
 		},
 	},
 
 	"booking-enquiry-received": {
-		templateId: null,
+		templateId: "d-cbc78969db0a415c96297c423b5e16fb",
 		description: "Sent to the hirer immediately after they submit a booking enquiry.",
 		audience: "hirer",
 		fields: {
@@ -55,7 +58,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"booking-staff-notification": {
-		templateId: null,
+		templateId: "d-82c748ef5236448e957804f9476ca182",
 		description: "Sent to all staff/admin users when a new booking enquiry is submitted.",
 		audience: "staff",
 		fields: {
@@ -67,11 +70,19 @@ export const EMAIL_TEMPLATES = {
 			customer_organisation: "Hirer's organisation (may be empty).",
 			total: "GBP-formatted total.",
 			review_url: "Internal admin link: /admin/bookings/[id].",
+			room_name: "Comma-separated room name(s) across the booking's segments.",
+			starts_at: "First segment start - formatted London time (e.g. 'Sat 14 Jun 2026, 09:00').",
+			ends_at: "Last segment end - formatted London time.",
+			date_range: "Pre-formatted span. Same-day collapses to 'Sat 14 Jun 2026, 09:00 – 17:00'; multi-day shows both dates.",
+			is_ticketed: "Boolean - true if the booking enabled ticketing. Use with {{#if is_ticketed}} … {{/if}}.",
+			ticketing_label: "Human string: 'Yes' or 'No'. Use when you just want a plain label cell.",
+			segment_count: "Number of segments in the booking (>=1; >1 for recurring/multi-day).",
+			segments: "Array of segments for {{#each segments}} iteration. Each item has: room_name, booking_type, starts_at, ends_at, range, subtotal.",
 		},
 	},
 
 	"booking-approved": {
-		templateId: null,
+		templateId: "d-fa287c2caf64478ba885f9d6289cff7d",
 		description: "Sent to the hirer when an admin approves their pending booking. When the booking had ticketing enabled, a draft event is auto-created and ticketing_setup_url points the hirer at the designer.",
 		audience: "hirer",
 		fields: {
@@ -90,7 +101,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"booking-balance-invoice": {
-		templateId: null,
+		templateId: "d-12dfaa28bd9e4846a53fb189e0ce51e1",
 		description: "Sent to the hirer when an admin issues the balance invoice. Includes the amount due and a link to pay.",
 		audience: "hirer",
 		fields: {
@@ -106,7 +117,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"booking-balance-paid": {
-		templateId: null,
+		templateId: "d-770ec0c446c240938e88dfa11d8d738a",
 		description: "Sent to the hirer when the balance is fully paid and the booking flips to completed.",
 		audience: "hirer",
 		fields: {
@@ -119,7 +130,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"booking-deposit-paid": {
-		templateId: null,
+		templateId: "d-c9fc4fabbfba4a2893af9b116bf98d17",
 		description: "Sent to the hirer after their deposit payment succeeds and the booking flips to confirmed.",
 		audience: "hirer",
 		fields: {
@@ -134,7 +145,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"booking-rejected": {
-		templateId: null,
+		templateId: "d-f471def9290c4559974f82c64af03fc1",
 		description: "Sent to the hirer when an admin declines their pending booking.",
 		audience: "hirer",
 		fields: {
@@ -146,13 +157,18 @@ export const EMAIL_TEMPLATES = {
 		},
 	},
 
-	"apple-wallet-ticket": {
+	"ticket-delivery": {
 		templateId: "d-2eddfe82946043219b3af5c4cd6d8ee4",
-		description: "Delivers a signed .pkpass to the ticket holder so they can tap-to-add to Apple Wallet on their iPhone. Pass file is sent as an attachment.",
+		description: "Single delivery email sent to the buyer when a ticket order is finalised. Attaches a multi-page PDF of every ticket, includes the order summary inline, and links to the public gallery page where each ticket exposes its Apple Wallet + Google Wallet add buttons.",
 		audience: "delegate",
 		fields: {
-			firstName: "Ticket holder's first name.",
-			eventName: "Title of the event.",
+			venue_name: "Public venue name.",
+			first_name: "Ticket holder's first name. Defaults to 'there' if unknown.",
+			event_title: "Title of the event.",
+			reference: "Order reference (e.g. 'TX-2026-0042').",
+			total: "GBP-formatted total paid (e.g. '£45.00').",
+			tickets_count: "Number of tickets in the order (integer).",
+			tickets_url: "Public no-auth gallery (/tickets/[order-id]) where each ticket has its Add-to-Wallet buttons.",
 		},
 	},
 
@@ -169,20 +185,6 @@ export const EMAIL_TEMPLATES = {
 		},
 	},
 
-	"ticket-order-confirmation": {
-		templateId: null,
-		description: "Sent to a delegate after they successfully pay for a ticket order. Includes the order reference and a link to view tickets.",
-		audience: "delegate",
-		fields: {
-			venue_name: "Public venue name.",
-			first_name: "Buyer's first name.",
-			event_title: "Title of the event.",
-			reference: "Order reference (e.g. 'TX-2026-0042').",
-			total: "GBP-formatted total paid.",
-			tickets_count: "Number of tickets in the order.",
-			view_url: "Public link to the order detail page (/my-orders/[reference]).",
-		},
-	},
 };
 
 export function listEmailTemplateKeys() {

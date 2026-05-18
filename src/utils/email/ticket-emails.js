@@ -3,8 +3,6 @@ import { db } from "@/db/index.js";
 import { sendTemplate } from "./email.service.js";
 import { buildOrderTicketsPdfBuffer } from "@/lib/tickets/pdf.js";
 
-const VENUE_NAME = "The Assembly Rooms";
-
 function baseUrl() {
 	return (process.env.BASE_URL || "").replace(/\/$/, "");
 }
@@ -34,27 +32,17 @@ async function safeSend(templateKey, to, data, options) {
 	}
 }
 
-export async function sendTicketOrderConfirmationEmail({ order, customer, eventTitle, ticketsCount }) {
-	await safeSend("ticket-order-confirmation", customer.email, {
-		venue_name: VENUE_NAME,
-		first_name: customer.first_name,
-		event_title: eventTitle,
-		reference: order.reference,
-		total: gbp(order.total_cents),
-		tickets_count: ticketsCount,
-		view_url: `${baseUrl()}/my-orders/${order.reference}`,
-	});
-}
-
 /**
- * Wallet-pass delivery email - fires on order finalisation. Includes:
- *   - A multi-page PDF of every ticket as an attachment
- *   - A `ticketsURL` to the public no-auth gallery (`/tickets/[order-id]`)
- *     which has the "Add to Apple Wallet" buttons per ticket
+ * Single ticket-delivery email - fires on order finalisation. Bundles:
+ *   - A multi-page PDF of every ticket in the order, attached.
+ *   - Inline order summary (event, reference, total, tickets count).
+ *   - A `tickets_url` to the public no-auth gallery
+ *     (`/tickets/[order-id]`) where each ticket exposes its Apple Wallet
+ *     and Google Wallet add buttons.
  *
  * Tickets are queried fresh so the caller doesn't need to pre-join.
  */
-export async function sendTicketsWalletEmail({ order, customer }) {
+export async function sendTicketDeliveryEmail({ order, customer }) {
 	if (!customer?.email) return;
 
 	const tickets = await db.execute(sql`
@@ -83,12 +71,16 @@ export async function sendTicketsWalletEmail({ order, customer }) {
 	const ticketsURL = `${baseUrl()}/tickets/${order.id}`;
 
 	await safeSend(
-		"apple-wallet-ticket",
+		"ticket-delivery",
 		customer.email,
 		{
-			firstName: customer.first_name || "there",
-			eventName: eventTitle,
-			ticketsURL,
+			venue_name: tickets[0].venue_name ?? "",
+			first_name: customer.first_name || "there",
+			event_title: eventTitle,
+			reference: order.reference,
+			total: gbp(order.total_cents),
+			tickets_count: tickets.length,
+			tickets_url: ticketsURL,
 		},
 		{
 			attachments: [

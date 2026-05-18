@@ -7,6 +7,7 @@ import { sendTemplate } from "@/utils/email/email.service.js";
 import * as authSchema from "@/db/schema/auth_schema.js";
 import { user } from "@/db/schema/entities/user.js";
 import { eq } from "drizzle-orm";
+import { getCurrentVenue } from "@/db/queries/venue.js";
 
 const baseUrl = process.env.BASE_URL || "http://localhost:3000";
 const baseUrlParsed = new URL(baseUrl);
@@ -50,11 +51,13 @@ export const auth = betterAuth({
                     .from(user)
                     .where(eq(user.email, email))
                     .limit(1);
+                const venue = await getCurrentVenue();
 
                 await sendTemplate("magic-link", email, {
-                    magicLink: url,
-                    firstName: u?.first_name ?? "",
-                    lastName: u?.last_name ?? "",
+                    venue_name: venue?.name ?? "",
+                    magic_link: url,
+                    first_name: u?.first_name ?? "",
+                    last_name: u?.last_name ?? "",
                 });
             },
         }),
@@ -80,11 +83,13 @@ export const auth = betterAuth({
                 // template is being set up. safeSend silently no-ops when
                 // the template ID is null.
                 console.log(`[auth-otp] ${email} → ${otp}`);
+                const venue = await getCurrentVenue();
                 await sendTemplate("auth-otp", email, {
+                    venue_name: venue?.name ?? "",
                     code: otp,
                     expires_in_minutes: 10,
-                    firstName: u?.first_name ?? "",
-                    lastName: u?.last_name ?? "",
+                    first_name: u?.first_name ?? "",
+                    last_name: u?.last_name ?? "",
                 });
             },
         }),

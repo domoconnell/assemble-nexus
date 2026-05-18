@@ -1,11 +1,56 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { sendTemplate } from "./email.service.js";
 import { db } from "@/db/index.js";
 import { user } from "@/db/schema/entities/user.js";
 import { user_role } from "@/db/schema/entities/user_role.js";
 import { role } from "@/db/schema/entities/role.js";
+import { booking_segment } from "@/db/schema/entities/booking_segment.js";
+import { room } from "@/db/schema/entities/room.js";
+import { booking_type } from "@/db/schema/entities/booking_type.js";
+import { getVenueById, getCurrentVenue } from "@/db/queries/venue.js";
 
-const VENUE_NAME = "The Assembly Rooms";
+async function venueNameFor(venueId) {
+	const v = venueId ? await getVenueById(venueId) : await getCurrentVenue();
+	return v?.name ?? "";
+}
+
+const dateTimeFmt = new Intl.DateTimeFormat("en-GB", {
+	weekday: "short",
+	day: "numeric",
+	month: "short",
+	year: "numeric",
+	hour: "2-digit",
+	minute: "2-digit",
+	timeZone: "Europe/London",
+});
+
+const timeFmt = new Intl.DateTimeFormat("en-GB", {
+	hour: "2-digit",
+	minute: "2-digit",
+	timeZone: "Europe/London",
+});
+
+const dayKeyFmt = new Intl.DateTimeFormat("en-CA", {
+	year: "numeric",
+	month: "2-digit",
+	day: "2-digit",
+	timeZone: "Europe/London",
+});
+
+function fmtDateTime(d) {
+	if (!d) return "";
+	return dateTimeFmt.format(new Date(d));
+}
+
+function fmtRange(start, end) {
+	if (!start) return "";
+	const s = new Date(start);
+	if (!end) return dateTimeFmt.format(s);
+	const e = new Date(end);
+	return dayKeyFmt.format(s) === dayKeyFmt.format(e)
+		? `${dateTimeFmt.format(s)} – ${timeFmt.format(e)}`
+		: `${dateTimeFmt.format(s)} – ${dateTimeFmt.format(e)}`;
+}
 
 const STAFF_ROLE_KEYS = ["admin", "staff"];
 
@@ -58,8 +103,9 @@ async function listStaffNotificationRecipients() {
 }
 
 export async function sendEnquiryReceivedEmail({ booking, customer }) {
+	const venue_name = await venueNameFor(booking.venue_id);
 	await safeSend("booking-enquiry-received", customer.email, {
-		venue_name: VENUE_NAME,
+		venue_name,
 		first_name: customer.first_name,
 		reference: booking.reference,
 		total: gbp(booking.total_cents),
@@ -70,8 +116,35 @@ export async function sendEnquiryReceivedEmail({ booking, customer }) {
 export async function sendStaffNotificationEmail({ booking, customer }) {
 	const recipients = await listStaffNotificationRecipients();
 	if (recipients.length === 0) return;
+
+	const segments = await db
+		.select({
+			id: booking_segment.id,
+			starts_at: booking_segment.starts_at,
+			ends_at: booking_segment.ends_at,
+			subtotal_cents: booking_segment.computed_subtotal_cents,
+			room_name: room.name,
+			booking_type_label: booking_type.label,
+		})
+		.from(booking_segment)
+		.innerJoin(room, eq(room.id, booking_segment.room_id))
+		.innerJoin(booking_type, eq(booking_type.id, booking_segment.booking_type_id))
+		.where(
+			and(
+				eq(booking_segment.booking_id, booking.id),
+				isNull(booking_segment.deletedAt),
+			),
+		)
+		.orderBy(asc(booking_segment.starts_at));
+
+	const firstStart = segments[0]?.starts_at ?? null;
+	const lastEnd = segments[segments.length - 1]?.ends_at ?? null;
+	const roomNames = [...new Set(segments.map((s) => s.room_name))];
+	const isTicketed = !!booking.ticketing_enabled;
+
+	const venue_name = await venueNameFor(booking.venue_id);
 	const data = {
-		venue_name: VENUE_NAME,
+		venue_name,
 		reference: booking.reference,
 		customer_name: `${customer.first_name} ${customer.last_name}`.trim(),
 		customer_email: customer.email,
@@ -79,6 +152,21 @@ export async function sendStaffNotificationEmail({ booking, customer }) {
 		customer_organisation: customer.organisation ?? "",
 		total: gbp(booking.total_cents),
 		review_url: bookingAdminUrl(booking.id),
+		room_name: roomNames.join(", "),
+		starts_at: fmtDateTime(firstStart),
+		ends_at: fmtDateTime(lastEnd),
+		date_range: fmtRange(firstStart, lastEnd),
+		is_ticketed: isTicketed,
+		ticketing_label: isTicketed ? "Yes" : "No",
+		segment_count: segments.length,
+		segments: segments.map((s) => ({
+			room_name: s.room_name,
+			booking_type: s.booking_type_label,
+			starts_at: fmtDateTime(s.starts_at),
+			ends_at: fmtDateTime(s.ends_at),
+			range: fmtRange(s.starts_at, s.ends_at),
+			subtotal: gbp(s.subtotal_cents),
+		})),
 	};
 	await Promise.all(
 		recipients.map((to) => safeSend("booking-staff-notification", to, data)),
@@ -92,8 +180,9 @@ export async function sendBookingApprovedEmail({ booking, customer, note, event 
 		(booking.deposit_required_cents ?? 0) > 0
 			? `${baseUrl()}/booking/${booking.reference}/pay`
 			: "";
+	const venue_name = await venueNameFor(booking.venue_id);
 	await safeSend("booking-approved", customer.email, {
-		venue_name: VENUE_NAME,
+		venue_name,
 		first_name: customer.first_name,
 		reference: booking.reference,
 		total: gbp(booking.total_cents),
@@ -111,8 +200,9 @@ export async function sendBookingDepositPaidEmail({ booking, customer, depositPa
 	const total = booking.total_cents ?? 0;
 	const deposit = depositPaidCents ?? booking.deposit_paid_cents ?? 0;
 	const balance = Math.max(0, total - deposit);
+	const venue_name = await venueNameFor(booking.venue_id);
 	await safeSend("booking-deposit-paid", customer.email, {
-		venue_name: VENUE_NAME,
+		venue_name,
 		first_name: customer.first_name,
 		reference: booking.reference,
 		deposit_paid: gbp(deposit),
@@ -126,8 +216,9 @@ export async function sendBookingBalanceInvoiceEmail({ booking, customer }) {
 	const total = booking.total_cents ?? 0;
 	const depositPaid = booking.deposit_paid_cents ?? 0;
 	const balanceDue = Math.max(0, total - depositPaid - (booking.balance_paid_cents ?? 0));
+	const venue_name = await venueNameFor(booking.venue_id);
 	await safeSend("booking-balance-invoice", customer.email, {
-		venue_name: VENUE_NAME,
+		venue_name,
 		first_name: customer.first_name,
 		reference: booking.reference,
 		total: gbp(total),
@@ -139,8 +230,9 @@ export async function sendBookingBalanceInvoiceEmail({ booking, customer }) {
 }
 
 export async function sendBookingBalancePaidEmail({ booking, customer }) {
+	const venue_name = await venueNameFor(booking.venue_id);
 	await safeSend("booking-balance-paid", customer.email, {
-		venue_name: VENUE_NAME,
+		venue_name,
 		first_name: customer.first_name,
 		reference: booking.reference,
 		total: gbp(booking.total_cents ?? 0),
@@ -149,8 +241,9 @@ export async function sendBookingBalancePaidEmail({ booking, customer }) {
 }
 
 export async function sendBookingRejectedEmail({ booking, customer, reason }) {
+	const venue_name = await venueNameFor(booking.venue_id);
 	await safeSend("booking-rejected", customer.email, {
-		venue_name: VENUE_NAME,
+		venue_name,
 		first_name: customer.first_name,
 		reference: booking.reference,
 		reason: reason ?? "",

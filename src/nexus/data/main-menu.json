@@ -84,6 +84,12 @@
 				"icon": "gear",
 				"sections": [
 					{
+						"section": "Venue",
+						"items": [
+							{ "title": "Venue profile", "url": "/admin/settings/venue" }
+						]
+					},
+					{
 						"section": "Booking",
 						"items": [
 							{ "title": "Booking types", "url": "/admin/settings/booking-types" },
