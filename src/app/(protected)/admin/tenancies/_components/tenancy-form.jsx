@@ -7,6 +7,17 @@ import { Button } from "@/shadcn/components/ui/button";
 import { Input } from "@/shadcn/components/ui/input";
 import { Label } from "@/shadcn/components/ui/label";
 import { Textarea } from "@/shadcn/components/ui/textarea";
+import {
+	Select,
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectLabel,
+	SelectSeparator,
+	SelectTrigger,
+	SelectValue,
+} from "@/shadcn/components/ui/select";
+import { DatePicker } from "@/site/booking/date-picker";
 import { createTenancyAction, updateTenancyAction } from "../actions";
 
 const WEEKDAYS = [
@@ -30,17 +41,12 @@ function toCents(pounds) {
 	return Math.round(n * 100);
 }
 
-/**
- * Tenancy form - used for both new and edit. Pass `initial` to pre-fill.
- * For "edit" mode the kind/customer/room are locked (changing them mid-
- * tenancy is messy; if needed, end the tenancy and start a new one).
- */
-export default function TenancyForm({ customers, rooms, initial = null }) {
+export default function TenancyForm({ organisations, rooms, initial = null }) {
 	const router = useRouter();
 	const isEdit = !!initial;
 
 	const [kind, setKind] = useState(initial?.kind ?? "private_rental");
-	const [customerId, setCustomerId] = useState(initial?.customer_id ?? "");
+	const [organisationId, setOrganisationId] = useState(initial?.organisation_id ?? "");
 	const [roomId, setRoomId] = useState(initial?.room_id ?? "");
 	const [label, setLabel] = useState(initial?.label ?? "");
 	const [startsOn, setStartsOn] = useState(initial?.starts_on ?? "");
@@ -54,23 +60,27 @@ export default function TenancyForm({ customers, rooms, initial = null }) {
 	const [notes, setNotes] = useState(initial?.notes ?? "");
 	const [saving, setSaving] = useState(false);
 
+	// Mutually-exclusive open state. Radix Select's outside-click detection
+	// doesn't reliably dismiss a sibling Select when its trigger is clicked,
+	// so we coordinate "which one's open" explicitly via this key.
+	const [openSelect, setOpenSelect] = useState(null);
+	const selectOpen = (key) => (v) => setOpenSelect(v ? key : (openSelect === key ? null : openSelect));
+
 	function toggleWeekday(key) {
-		setWeekdays((cur) =>
-			cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key],
-		);
+		setWeekdays((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
 	}
 
 	async function submit(e) {
 		e.preventDefault();
-		if (!customerId || !roomId || !startsOn) {
-			toast.error("Customer, room, and start date are required.");
+		if (!organisationId || !roomId || !startsOn) {
+			toast.error("Organisation, room and start date are required.");
 			return;
 		}
 		setSaving(true);
 		try {
 			const payload = {
 				kind,
-				customer_id: customerId,
+				organisation_id: organisationId,
 				room_id: roomId,
 				label: label || null,
 				starts_on: startsOn,
@@ -135,44 +145,88 @@ export default function TenancyForm({ customers, rooms, initial = null }) {
 
 				<div className="grid gap-4 sm:grid-cols-2">
 					<div className="space-y-2">
-						<Label htmlFor="customer">Customer</Label>
-						<select
-							id="customer"
-							value={customerId}
-							onChange={(e) => setCustomerId(e.target.value)}
+						<Label htmlFor="organisation">Organisation</Label>
+						<Select
+							value={organisationId}
+							onValueChange={setOrganisationId}
 							disabled={isEdit}
-							required
-							className="w-full h-9 rounded-md border border-foreground/15 bg-background px-3 text-sm"
+							open={openSelect === "org"}
+							onOpenChange={selectOpen("org")}
 						>
-							<option value="">— select —</option>
-							{customers.map((c) => (
-								<option key={c.id} value={c.id}>
-									{c.first_name} {c.last_name}
-									{c.organisation ? ` · ${c.organisation}` : ""}
-									{c.email ? ` (${c.email})` : ""}
-								</option>
-							))}
-						</select>
+							<SelectTrigger id="organisation">
+								<SelectValue placeholder="Choose an organisation" />
+							</SelectTrigger>
+							<SelectContent>
+								{organisations.length === 0 ? (
+									<div className="px-2 py-1.5 text-sm text-muted-foreground">
+										No organisations yet — add one in CRM.
+									</div>
+								) : (
+									organisations.map((o) => (
+										<SelectItem key={o.id} value={o.id}>
+											{o.name}
+											{o.primary_contact_name && (
+												<span className="text-muted-foreground">
+													{" · "}
+													{o.primary_contact_name}
+												</span>
+											)}
+										</SelectItem>
+									))
+								)}
+							</SelectContent>
+						</Select>
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="room">Room</Label>
-						<select
-							id="room"
+						<Select
 							value={roomId}
-							onChange={(e) => setRoomId(e.target.value)}
+							onValueChange={setRoomId}
 							disabled={isEdit}
-							required
-							className="w-full h-9 rounded-md border border-foreground/15 bg-background px-3 text-sm"
+							open={openSelect === "room"}
+							onOpenChange={selectOpen("room")}
 						>
-							<option value="">— select —</option>
-							{rooms.map((r) => (
-								<option key={r.id} value={r.id}>
-									{r.name}
-									{!r.is_public ? " (private)" : ""}
-									{!r.is_published ? " · unpublished" : ""}
-								</option>
-							))}
-						</select>
+							<SelectTrigger id="room">
+								<SelectValue placeholder="Choose a room" />
+							</SelectTrigger>
+							<SelectContent>
+								{(() => {
+									const privateRooms = rooms.filter((r) => r.is_public === false);
+									const publicRooms = rooms.filter((r) => r.is_public !== false);
+									return (
+										<>
+											{privateRooms.length > 0 && (
+												<SelectGroup>
+													<SelectLabel>Non-public rooms</SelectLabel>
+													{privateRooms.map((r) => (
+														<SelectItem key={r.id} value={r.id}>
+															{r.name}
+															{!r.is_published && (
+																<span className="text-muted-foreground"> · unpublished</span>
+															)}
+														</SelectItem>
+													))}
+												</SelectGroup>
+											)}
+											{privateRooms.length > 0 && publicRooms.length > 0 && <SelectSeparator />}
+											{publicRooms.length > 0 && (
+												<SelectGroup>
+													<SelectLabel>Public rooms</SelectLabel>
+													{publicRooms.map((r) => (
+														<SelectItem key={r.id} value={r.id}>
+															{r.name}
+															{!r.is_published && (
+																<span className="text-muted-foreground"> · unpublished</span>
+															)}
+														</SelectItem>
+													))}
+												</SelectGroup>
+											)}
+										</>
+									);
+								})()}
+							</SelectContent>
+						</Select>
 					</div>
 				</div>
 
@@ -182,7 +236,7 @@ export default function TenancyForm({ customers, rooms, initial = null }) {
 						id="label"
 						value={label}
 						onChange={(e) => setLabel(e.target.value)}
-						placeholder="e.g. Sarah's pottery studio"
+						placeholder="e.g. WebWorks office tenancy"
 						maxLength={200}
 					/>
 				</div>
@@ -194,24 +248,25 @@ export default function TenancyForm({ customers, rooms, initial = null }) {
 				</h2>
 				<div className="grid gap-4 sm:grid-cols-3">
 					<div className="space-y-2">
-						<Label htmlFor="starts-on">Starts on</Label>
-						<Input
-							id="starts-on"
-							type="date"
+						<Label>Starts on</Label>
+						<DatePicker
 							value={startsOn}
-							onChange={(e) => setStartsOn(e.target.value)}
-							required
+							onChange={setStartsOn}
+							placeholder="Pick a date"
+							allowPast
 						/>
 					</div>
 					<div className="space-y-2">
-						<Label htmlFor="ends-on">Ends on (optional)</Label>
-						<Input
-							id="ends-on"
-							type="date"
+						<Label>Ends on (optional)</Label>
+						<DatePicker
 							value={endsOn}
-							onChange={(e) => setEndsOn(e.target.value)}
+							onChange={setEndsOn}
+							placeholder="Open-ended"
+							allowPast
 						/>
-						<p className="text-[10px] text-muted-foreground">Leave blank for open-ended.</p>
+						<p className="text-[10px] text-muted-foreground">
+							Leave blank for an ongoing tenancy.
+						</p>
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="invoice-day">Invoice day of month</Label>
@@ -223,7 +278,7 @@ export default function TenancyForm({ customers, rooms, initial = null }) {
 							value={invoiceDay}
 							onChange={(e) => setInvoiceDay(e.target.value)}
 						/>
-						<p className="text-[10px] text-muted-foreground">1–28; we cap at 28 so it lands every month.</p>
+						<p className="text-[10px] text-muted-foreground">1–28; capped at 28 so it lands every month.</p>
 					</div>
 				</div>
 			</section>

@@ -8,6 +8,15 @@ import { Input } from "@/shadcn/components/ui/input";
 import { Label } from "@/shadcn/components/ui/label";
 import { Textarea } from "@/shadcn/components/ui/textarea";
 import { Checkbox } from "@/shadcn/components/ui/checkbox";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/shadcn/components/ui/select";
+import { DatePicker } from "@/site/booking/date-picker";
+import { DateTimePicker } from "@/global/ui/components/date-time-picker";
 import { createChurchEventAction } from "../actions";
 
 const WEEKDAYS = [
@@ -186,24 +195,12 @@ export default function ChurchEventForm({ rooms }) {
 					</h2>
 					<div className="grid gap-4 sm:grid-cols-2">
 						<div className="space-y-2">
-							<Label htmlFor="starts-at">Starts</Label>
-							<Input
-								id="starts-at"
-								type="datetime-local"
-								value={adhocStart}
-								onChange={(e) => setAdhocStart(e.target.value)}
-								required
-							/>
+							<Label>Starts</Label>
+							<DateTimePicker value={adhocStart} onChange={setAdhocStart} allowPast />
 						</div>
 						<div className="space-y-2">
-							<Label htmlFor="ends-at">Ends</Label>
-							<Input
-								id="ends-at"
-								type="datetime-local"
-								value={adhocEnd}
-								onChange={(e) => setAdhocEnd(e.target.value)}
-								required
-							/>
+							<Label>Ends</Label>
+							<DateTimePicker value={adhocEnd} onChange={setAdhocEnd} allowPast />
 						</div>
 					</div>
 				</section>
@@ -248,12 +245,12 @@ export default function ChurchEventForm({ rooms }) {
 					</div>
 					<div className="grid gap-4 sm:grid-cols-2">
 						<div className="space-y-2">
-							<Label htmlFor="starts-on">Starts on</Label>
-							<Input id="starts-on" type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} required />
+							<Label>Starts on</Label>
+							<DatePicker value={startsOn} onChange={setStartsOn} allowPast />
 						</div>
 						<div className="space-y-2">
-							<Label htmlFor="ends-on">Ends on (optional)</Label>
-							<Input id="ends-on" type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
+							<Label>Ends on (optional)</Label>
+							<DatePicker value={endsOn} onChange={setEndsOn} placeholder="Open-ended" allowPast />
 							<p className="text-[10px] text-muted-foreground">Leave blank for an ongoing weekly event.</p>
 						</div>
 					</div>
@@ -267,19 +264,19 @@ export default function ChurchEventForm({ rooms }) {
 					</h2>
 					<div className="grid gap-4 sm:grid-cols-3">
 						<div className="space-y-2">
-							<Label htmlFor="run-weekday">Weekday</Label>
-							<select
-								id="run-weekday"
-								value={runWeekday}
-								onChange={(e) => setRunWeekday(e.target.value)}
-								className="w-full h-9 rounded-md border border-foreground/15 bg-background px-3 text-sm"
-							>
-								{WEEKDAYS.map((d) => (
-									<option key={d.key} value={d.key}>
-										{d.label}
-									</option>
-								))}
-							</select>
+							<Label>Weekday</Label>
+							<Select value={runWeekday} onValueChange={setRunWeekday}>
+								<SelectTrigger>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{WEEKDAYS.map((d) => (
+										<SelectItem key={d.key} value={d.key}>
+											{d.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
 						</div>
 						<div className="space-y-2">
 							<Label htmlFor="time-start">Start time</Label>
@@ -292,8 +289,8 @@ export default function ChurchEventForm({ rooms }) {
 					</div>
 					<div className="grid gap-4 sm:grid-cols-2">
 						<div className="space-y-2">
-							<Label htmlFor="starts-on">First week starting</Label>
-							<Input id="starts-on" type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} required />
+							<Label>First week starting</Label>
+							<DatePicker value={startsOn} onChange={setStartsOn} allowPast />
 						</div>
 						<div className="space-y-2">
 							<Label htmlFor="weeks">Number of weeks</Label>

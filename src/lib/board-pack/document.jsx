@@ -260,26 +260,73 @@ function MainRow({ label, value, spaceTop }) {
 	);
 }
 
-function SubItem({ label, value }) {
+function SubItem({ label, value, sub }) {
 	return (
 		<View style={styles.rowSub}>
-			<Text style={styles.subLabel}>{label}</Text>
+			<View style={{ flexDirection: "column", flex: 1 }}>
+				<Text style={styles.subLabel}>{label}</Text>
+				{sub && (
+					<Text style={{ fontSize: 7.5, color: COLOURS.muted, marginTop: 1 }}>
+						{sub}
+					</Text>
+				)}
+			</View>
 			<Text style={styles.subValue}>{value}</Text>
 		</View>
 	);
 }
 
-function PaymentsOwedBlock({ paymentsOwed }) {
-	const total = paymentsOwed.this_month.total + paymentsOwed.previous.total;
+function PaymentsOwedBlock({ paymentsOwed, tenancyOwed }) {
+	const eventsTotal = paymentsOwed.this_month.total + paymentsOwed.previous.total;
+	const tenancyTotal = tenancyOwed?.grand_total ?? 0;
+	const total = eventsTotal + tenancyTotal;
 	return (
 		<View>
 			<View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
 				<Text style={styles.sectionTitle}>Payments owed</Text>
 				<Text style={{ fontSize: 14, fontFamily: "Helvetica-Bold" }}>{fmt(total)}</Text>
 			</View>
-			<View style={{ flexDirection: "row", gap: 12 }}>
+			<View style={{ flexDirection: "row", gap: 8 }}>
 				<PaymentsOwedColumn title="From events this month" bucket={paymentsOwed.this_month} />
 				<PaymentsOwedColumn title="From previous events" bucket={paymentsOwed.previous} />
+				<TenancyOwedColumnPdf split={tenancyOwed} />
+			</View>
+		</View>
+	);
+}
+
+function TenancyOwedColumnPdf({ split }) {
+	const thisMonth = split?.this_month ?? { total: 0, count: 0 };
+	const previous = split?.previous ?? { total: 0, count: 0 };
+	const total = split?.grand_total ?? 0;
+	return (
+		<View
+			style={{
+				flex: 1,
+				borderWidth: 1,
+				borderColor: COLOURS.border,
+				borderRadius: 6,
+				padding: 10,
+			}}
+		>
+			<Text style={{ fontSize: 8, letterSpacing: 2, textTransform: "uppercase", color: COLOURS.muted, marginBottom: 6 }}>
+				Tenancy invoices
+			</Text>
+			<View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 }}>
+				<Text style={styles.subLabel}>
+					This month{thisMonth.count > 0 ? ` (${thisMonth.count})` : ""}
+				</Text>
+				<Text style={styles.subValue}>{fmt(thisMonth.total)}</Text>
+			</View>
+			<View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 }}>
+				<Text style={styles.subLabel}>
+					Earlier months{previous.count > 0 ? ` (${previous.count})` : ""}
+				</Text>
+				<Text style={styles.subValue}>{fmt(previous.total)}</Text>
+			</View>
+			<View style={{ flexDirection: "row", justifyContent: "space-between", borderTopWidth: 0.5, borderTopColor: COLOURS.border, paddingTop: 5, marginTop: 4 }}>
+				<Text style={styles.mainLabel}>Total</Text>
+				<Text style={styles.mainValue}>{fmt(total)}</Text>
 			</View>
 		</View>
 	);
@@ -388,6 +435,7 @@ export function BoardPackDocument({ data }) {
 		bankDaily,
 		bankLatest,
 		paymentsOwed,
+		tenancyOwed,
 		topHirers,
 		incomeItems,
 		codItems,
@@ -402,6 +450,7 @@ export function BoardPackDocument({ data }) {
 		{ name: "Ticket fees (net of Stripe)", value: pnl.income.tickets },
 		{ name: "Cafe POS", value: pnl.income.pos_net },
 		{ name: "Manual income", value: pnl.income.manual },
+		{ name: "Rental (tenancies)", value: pnl.income.tenancy ?? 0 },
 	];
 
 	return (
@@ -428,7 +477,12 @@ export function BoardPackDocument({ data }) {
 
 					<MainRow label="Income" value={fmt(pnl.income.total)} />
 					{incomeItems.map((it) => (
-						<SubItem key={it.label} label={it.label} value={fmt(it.value)} />
+						<SubItem
+							key={it.label}
+							label={it.label}
+							value={fmt(it.value)}
+							sub={it.sub}
+						/>
 					))}
 
 					<MainRow
@@ -520,7 +574,7 @@ export function BoardPackDocument({ data }) {
 			{/* PAGE 2 - PAYMENTS OWED + INCOME MIX + TOP HIRERS */}
 			<Page size="A4" style={styles.page}>
 				<View style={styles.section}>
-					<PaymentsOwedBlock paymentsOwed={paymentsOwed} />
+					<PaymentsOwedBlock paymentsOwed={paymentsOwed} tenancyOwed={tenancyOwed} />
 				</View>
 
 				<View style={styles.section}>

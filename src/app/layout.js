@@ -1,4 +1,4 @@
-import { Geist, Geist_Mono, Fraunces } from "next/font/google";
+import { Geist, Geist_Mono, Fraunces, Caveat } from "next/font/google";
 import "./globals.css";
 import { AppContextProvider } from "../nexus/context/app-context.jsx";
 import { BrowserContextProvider } from "../nexus/context/browser-context";
@@ -22,6 +22,13 @@ const fraunces = Fraunces({
 	display: "swap",
 });
 
+const caveat = Caveat({
+	variable: "--font-caveat",
+	subsets: ["latin"],
+	weight: ["500", "600", "700"],
+	display: "swap",
+});
+
 export const metadata = {
 	title: "The Assembly Rooms",
 	description: "A music venue and corporate hire space at the heart of Assemble Church.",
@@ -30,7 +37,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
 	return (
 		<html lang="en">
-			<body className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} antialiased`}>
+			<body className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} ${caveat.variable} antialiased`}>
 				<AppContextProvider>
 					<BrowserContextProvider>
 						{children}

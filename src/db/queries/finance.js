@@ -10,6 +10,7 @@ import { ticket_order } from "@/db/schema/entities/ticket_order.js";
 import { event } from "@/db/schema/entities/event.js";
 import { recurring_cost_item } from "@/db/schema/entities/recurring_cost_item.js";
 import { sumChurchTransfers } from "@/db/queries/bank.js";
+import { sumTenancyRentalForMonth } from "@/db/queries/tenancies.js";
 
 export async function listEventsForExpenseLinking(venueId) {
 	return db
@@ -680,11 +681,13 @@ export async function getMonthlyPnl(venueId, {
 	monthStartDate,
 	monthEndDate,
 }) {
+	const periodYm = ymdFirstOfMonth.slice(0, 7);
 	const [
 		ticket_income,
 		booking_income,
 		pos,
 		manual,
+		tenancy_rental,
 		expenses_delivery,
 		recurring,
 		organiser_payouts,
@@ -694,6 +697,7 @@ export async function getMonthlyPnl(venueId, {
 		sumBookingIncomeForMonth(venueId, monthStartDate, monthEndDate),
 		sumPosForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth),
 		sumManualIncomeForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth),
+		sumTenancyRentalForMonth(venueId, monthStartDate, monthEndDate, periodYm),
 		sumExpensesForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth),
 		getAllMonthlyRecurringAmounts(venueId, ymdFirstOfMonth),
 		sumOrganiserPayoutsForMonth(venueId, monthStartDate, monthEndDate),
@@ -705,6 +709,14 @@ export async function getMonthlyPnl(venueId, {
 	// delivery" line, so the displayed income figure reflects what the
 	// venue actually keeps.
 	const tickets_net_of_stripe = ticket_income - stripe_fees;
+	// Tenancy rental: headline number is the *issued* total for the month
+	// (accrual basis) - that's what was agreed/billed and what the
+	// dashboard surfaces as the rental income. `tenancy_paid` is exposed
+	// alongside so the UI can show "£2,400 issued (£1,800 paid)" without
+	// distorting the waterfall maths. Recurring monthly invoices are
+	// generally already paid via Direct Debit by month-end so the two
+	// numbers will usually match - the split matters mid-month and when
+	// a tenant defers.
 	const income = {
 		tickets: tickets_net_of_stripe,
 		tickets_gross: ticket_income,
@@ -712,7 +724,14 @@ export async function getMonthlyPnl(venueId, {
 		bookings: booking_income,
 		pos_net: pos.net,
 		manual,
-		total: tickets_net_of_stripe + booking_income + pos.net + manual,
+		tenancy: tenancy_rental.issued,
+		tenancy_paid: tenancy_rental.paid,
+		total:
+			tickets_net_of_stripe +
+			booking_income +
+			pos.net +
+			manual +
+			tenancy_rental.issued,
 	};
 
 	const cost_of_delivery_breakdown = {

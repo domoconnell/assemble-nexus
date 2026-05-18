@@ -2,16 +2,22 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/index.js";
-import { customer } from "@/db/schema/entities/customer.js";
+import { organisation } from "@/db/schema/entities/organisation.js";
+import { contact } from "@/db/schema/entities/contact.js";
 import { room } from "@/db/schema/entities/room.js";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import {
 	getTenancyById,
 	listSessionsForTenancy,
 	listInvoicesForTenancy,
+	listAgreementsForTenancy,
 } from "@/db/queries/tenancies";
 import TenancyForm from "../_components/tenancy-form";
 import SessionRow from "../_components/session-row";
+import JourneyHeader from "../_components/journey-header";
+import AgreementsSection from "../_components/agreements-section";
+import DirectDebitSection from "../_components/direct-debit-section";
+import DangerZone from "../_components/danger-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -31,20 +37,21 @@ export default async function TenancyDetailPage({ params }) {
 	const t = await getTenancyById(id, { venueId: venue.id });
 	if (!t) notFound();
 
-	const [sessions, invoices, customers, rooms] = await Promise.all([
+	const [sessions, invoices, agreements, organisations, rooms] = await Promise.all([
 		listSessionsForTenancy(id),
 		listInvoicesForTenancy(id),
+		listAgreementsForTenancy(id),
 		db
 			.select({
-				id: customer.id,
-				first_name: customer.first_name,
-				last_name: customer.last_name,
-				email: customer.email,
-				organisation: customer.organisation,
+				id: organisation.id,
+				name: organisation.name,
+				primary_contact_id: organisation.primary_contact_id,
+				primary_contact_name: contact.first_name,
 			})
-			.from(customer)
-			.where(isNull(customer.deletedAt))
-			.orderBy(asc(customer.first_name), asc(customer.last_name)),
+			.from(organisation)
+			.leftJoin(contact, eq(contact.id, organisation.primary_contact_id))
+			.where(and(eq(organisation.venue_id, venue.id), isNull(organisation.deletedAt)))
+			.orderBy(asc(organisation.name)),
 		db
 			.select({
 				id: room.id,
@@ -70,11 +77,11 @@ export default async function TenancyDetailPage({ params }) {
 				<div className="mt-2 flex items-baseline justify-between gap-3 flex-wrap">
 					<div>
 						<h1 className="text-2xl font-semibold">
-							{t.label || `${t.customer_first_name} ${t.customer_last_name}`}
+							{t.label || t.organisation_name || "(unnamed tenancy)"}
 						</h1>
 						<p className="text-sm text-muted-foreground mt-1">
 							{t.kind === "private_rental" ? "Private rental" : "Scheduled recurring"} ·{" "}
-							{t.customer_first_name} {t.customer_last_name} · {t.room_name}
+							{t.organisation_name ?? "—"} · {t.room_name}
 						</p>
 					</div>
 					<span
@@ -90,6 +97,12 @@ export default async function TenancyDetailPage({ params }) {
 					</span>
 				</div>
 			</div>
+
+			<JourneyHeader tenancy={t} agreements={agreements} />
+
+			<DirectDebitSection tenancy={t} />
+
+			<AgreementsSection tenancy={t} agreements={agreements} />
 
 			{t.kind === "scheduled_recurring" && (
 				<section className="space-y-3">
@@ -161,8 +174,10 @@ export default async function TenancyDetailPage({ params }) {
 				<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
 					Edit
 				</h2>
-				<TenancyForm customers={customers} rooms={rooms} initial={t} />
+				<TenancyForm organisations={organisations} rooms={rooms} initial={t} />
 			</section>
+
+			<DangerZone tenancy={t} />
 		</div>
 	);
 }

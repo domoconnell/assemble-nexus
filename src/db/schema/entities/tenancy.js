@@ -10,6 +10,8 @@ import {
 import { venue } from "./venue.js";
 import { customer } from "./customer.js";
 import { room } from "./room.js";
+import { organisation } from "./organisation.js";
+import { contact } from "./contact.js";
 
 export const TENANCY_KINDS = ["private_rental", "scheduled_recurring"];
 export const TENANCY_STATUSES = ["active", "paused", "ended"];
@@ -35,7 +37,13 @@ export const tenancy = pgTable(
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
 		venue_id: uuid("venue_id").notNull().references(() => venue.id, { onDelete: "cascade" }),
-		customer_id: uuid("customer_id").notNull().references(() => customer.id, { onDelete: "restrict" }),
+		// Legacy customer pointer - kept nullable for transition; new tenancies
+		// link through organisation_id instead.
+		customer_id: uuid("customer_id").references(() => customer.id, { onDelete: "set null" }),
+		organisation_id: uuid("organisation_id").references(() => organisation.id, { onDelete: "restrict" }),
+		// Optional override for the person within the organisation we email
+		// (defaults to organisation.primary_contact_id if null).
+		contact_id: uuid("contact_id").references(() => contact.id, { onDelete: "set null" }),
 		room_id: uuid("room_id").notNull().references(() => room.id, { onDelete: "restrict" }),
 
 		kind: text("kind").notNull(),
@@ -58,14 +66,84 @@ export const tenancy = pgTable(
 
 		notes: text("notes"),
 
+		// LEGACY inline-agreement columns. Superseded by the
+		// `tenancy_agreement` table below. Kept temporarily during the
+		// migration window; not read or written by new code. Will be
+		// dropped in a follow-up migration.
+		agreement_html: text("agreement_html"),
+		agreement_token: text("agreement_token"),
+		agreement_sent_at: timestamp("agreement_sent_at", { withTimezone: true }),
+		agreement_signed_at: timestamp("agreement_signed_at", { withTimezone: true }),
+		agreement_signed_by_name: text("agreement_signed_by_name"),
+		agreement_signed_by_ip: text("agreement_signed_by_ip"),
+
+		// Public token for the standalone Direct Debit setup page. Lets
+		// the tenant manage the DD without an account, and lets the
+		// admin re-send a DD-only link without spinning up a new agreement.
+		dd_token: text("dd_token"),
+
+		// Stripe Bacs Direct Debit mandate captured after the tenant goes
+		// through the DD setup flow. `direct_debit_ready_at` is set once
+		// confirmed.
+		stripe_customer_id: text("stripe_customer_id"),
+		direct_debit_mandate_id: text("direct_debit_mandate_id"),
+		direct_debit_ready_at: timestamp("direct_debit_ready_at", { withTimezone: true }),
+
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
 		deletedAt: timestamp("deleted_at", { withTimezone: true }),
 	},
 	(t) => [
 		index("tenancy_venue_status_idx").on(t.venue_id, t.status),
-		index("tenancy_customer_idx").on(t.customer_id),
+		index("tenancy_organisation_idx").on(t.organisation_id),
 		index("tenancy_room_idx").on(t.room_id),
+		index("tenancy_agreement_token_idx").on(t.agreement_token),
+		index("tenancy_dd_token_idx").on(t.dd_token),
+	],
+);
+
+export const TENANCY_AGREEMENT_STATUSES = ["draft", "sent", "signed", "cancelled"];
+
+/**
+ * History of agreements on a tenancy. A tenancy can have many over its
+ * lifetime - the active one is the latest non-cancelled, non-deleted row.
+ * A new agreement is drafted (status="draft"), then sent (status="sent",
+ * with sent_at), then signed by the tenant (status="signed", with
+ * signed_at + signer details), or cancelled by admin (status="cancelled",
+ * with cancelled_at + reason). Cancellation triggers an email; sending
+ * triggers an email; signing triggers an email.
+ */
+export const tenancy_agreement = pgTable(
+	"tenancy_agreement",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		tenancy_id: uuid("tenancy_id").notNull().references(() => tenancy.id, { onDelete: "cascade" }),
+
+		status: text("status").notNull().default("draft"),
+
+		// Snapshot of the template HTML at the time the draft was created.
+		// Admin can hand-edit this on a draft before sending.
+		html: text("html").notNull(),
+
+		// Random opaque token used by the public sign page
+		// (/tenancy-agreement/[token]/sign) so the tenant doesn't need an
+		// account. Generated when the draft is created.
+		token: text("token").notNull(),
+
+		sent_at: timestamp("sent_at", { withTimezone: true }),
+		signed_at: timestamp("signed_at", { withTimezone: true }),
+		signed_by_name: text("signed_by_name"),
+		signed_by_ip: text("signed_by_ip"),
+		cancelled_at: timestamp("cancelled_at", { withTimezone: true }),
+		cancelled_reason: text("cancelled_reason"),
+
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+		deletedAt: timestamp("deleted_at", { withTimezone: true }),
+	},
+	(t) => [
+		index("tenancy_agreement_tenancy_status_idx").on(t.tenancy_id, t.status),
+		index("tenancy_agreement_token_unique_idx").on(t.token),
 	],
 );
 

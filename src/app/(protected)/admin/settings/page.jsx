@@ -15,6 +15,7 @@ const groups = [
 			{ title: "Deposit policy", description: "Deposit %, non-refundable %, and the cancellation window.", href: "/admin/settings/deposit-policy" },
 			{ title: "Discounts", description: "Local-business, youth-activity, and other discounts customers can apply.", href: "/admin/settings/discounts" },
 			{ title: "Hours & rate bands", description: "Operating hours and unsociable-hour rate modifiers (e.g. evening +20%).", href: "/admin/settings/hours" },
+			{ title: "Tenancy agreement", description: "WYSIWYG template copied onto each new tenancy. Handlebars-style merge variables.", href: "/admin/settings/tenancy-agreements" },
 		],
 	},
 	{

@@ -1,0 +1,39 @@
+<!--
+  Template: tenancy-dd-ready
+  Audience: delegate (tenant - Direct Debit mandate active)
+  Variables:
+    {{venue_name}}            Public venue name.
+    {{first_name}}            Tenant contact's first name.
+    {{organisation_name}}     Tenant organisation name.
+    {{invoice_day_of_month}}  Ordinal label e.g. "1st", "15th".
+-->
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#0f172a;font-size:14px;line-height:1.55;">
+  <tr>
+    <td style="padding:0 24px;">
+      {{#if first_name}}<p style="margin:0 0 14px;">Hi {{first_name}},</p>{{/if}}
+      <p style="margin:0 0 14px;color:#334155;">
+        Direct debit&apos;s in place for <strong>{{organisation_name}}</strong>
+        — that&apos;s the setup done.
+      </p>
+      <p style="margin:0 0 14px;color:#334155;">
+        Each month&apos;s invoice will be collected automatically on the
+        <strong>{{invoice_day_of_month}}</strong>. We&apos;ll email a copy of
+        each invoice as it goes out so you have it for your records. You can
+        cancel the mandate at any time via your bank — under the Direct Debit
+        Guarantee.
+      </p>
+      <p style="margin:0 0 14px;color:#334155;">
+        Welcome aboard — anything you need, just reply to this email.
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:18px 24px 12px;border-top:1px solid #e2e8f0;">
+      <p style="margin:18px 0 0;color:#0f172a;">
+        Thanks,<br />
+        {{venue_name}}
+      </p>
+    </td>
+  </tr>
+</table>

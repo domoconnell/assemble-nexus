@@ -1,6 +1,9 @@
 import { and, eq, gte, isNull, lt } from "drizzle-orm";
 import { db } from "@/db/index.js";
-import { tenancy_session } from "@/db/schema/entities/tenancy.js";
+import {
+	tenancy_session,
+	tenancy_invoice,
+} from "@/db/schema/entities/tenancy.js";
 import {
 	listActivePrivateRentals,
 	listActiveScheduledTenancies,
@@ -8,6 +11,7 @@ import {
 	insertInvoice,
 	attachSessionsToInvoice,
 } from "@/db/queries/tenancies.js";
+import { getActiveDdDriver } from "./dd-driver.js";
 
 function pad(n) {
 	return String(n).padStart(2, "0");
@@ -122,12 +126,40 @@ export async function issueTenancyInvoicesForToday(venueId, today = new Date()) 
 				await attachSessionsToInvoice(sessionIds, inv.id);
 			}
 
+			// If a Direct Debit mandate is on file, automatically initiate
+			// a Stripe charge against it. Bacs takes a few business days to
+			// clear; the resulting PaymentIntent will start as `processing`.
+			let charge = null;
+			let chargeError = null;
+			if (t.direct_debit_mandate_id && t.stripe_customer_id) {
+				try {
+					const driver = await getActiveDdDriver(t.venue_id);
+					const pi = await driver.chargeMandate({
+						customerId: t.stripe_customer_id,
+						paymentMethodId: t.direct_debit_mandate_id,
+						amountCents: subtotal_cents,
+						description: `${inv.reference} · ${periodYm}`,
+						metadata: {
+							tenancy_id: t.id,
+							tenancy_invoice_id: inv.id,
+							period_ym: periodYm,
+						},
+					});
+					charge = { payment_intent_id: pi.id, status: pi.status };
+				} catch (err) {
+					chargeError = err.message;
+					console.error(`[tenancy-charge] ${t.id}:`, err.message);
+				}
+			}
+
 			results.push({
 				tenancy_id: t.id,
 				period: periodYm,
 				invoice_id: inv.id,
 				total_cents: subtotal_cents,
 				sessions: sessionIds.length,
+				charge,
+				charge_error: chargeError,
 			});
 		} catch (err) {
 			results.push({

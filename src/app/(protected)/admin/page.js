@@ -9,6 +9,7 @@ import {
 	listDayActivityForMonth,
 } from "@/db/queries/bookings";
 import { getMonthlyPnl, listMonthlyPnlForRange } from "@/db/queries/finance";
+import { listOutstandingTenancyInvoices } from "@/db/queries/tenancies";
 import { getCombinedLatestBalance, getBankInOutBetween } from "@/db/queries/bank";
 import {
 	getTopEventsBySales,
@@ -81,6 +82,7 @@ export default async function HomePage() {
 		perOrganiser,
 		pipeline,
 		recentActivity,
+		outstandingTenancyInvoices,
 	] = await Promise.all([
 		getMonthlyPnl(venue.id, {
 			ymdFirstOfMonth: month.ymdFirstOfMonth,
@@ -101,8 +103,14 @@ export default async function HomePage() {
 		getTopEventsBySales(venue.id, { limit: 5 }),
 		getPerOrganiserRevenue(venue.id, { limit: 5 }),
 		getBookingPipelineCounts(venue.id, { monthsBack: 3 }),
-		getRecentActivity(venue.id, { limit: 10 }),
+		getRecentActivity(venue.id, { limit: 5 }),
+		listOutstandingTenancyInvoices(venue.id),
 	]);
+
+	const tenancyOwedCents = outstandingTenancyInvoices.reduce(
+		(sum, inv) => sum + (inv.total_cents ?? 0),
+		0,
+	);
 
 	const todayItems = combineScheduleItems(segments, blockouts, todayKey, true);
 	const weekItems = combineScheduleItems(segments, blockouts, todayKey, false);
@@ -121,7 +129,7 @@ export default async function HomePage() {
 
 			<WaterfallSection pnl={pnl} />
 
-			<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+			<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				<PendingBookingsWidget bookings={pendingBookings} />
 				<PendingEventsWidget events={pendingEvents} />
 				<StatCard
@@ -130,6 +138,19 @@ export default async function HomePage() {
 					tone={outstandingCents > 0 ? "default" : "muted"}
 					href="/admin/bookings"
 					sub="Across approved & confirmed bookings"
+				/>
+				<StatCard
+					label="Tenancy invoices owed"
+					value={formatGbp(tenancyOwedCents)}
+					tone={tenancyOwedCents > 0 ? "default" : "muted"}
+					href="/admin/tenancies"
+					sub={
+						outstandingTenancyInvoices.length > 0
+							? `${outstandingTenancyInvoices.length} invoice${
+									outstandingTenancyInvoices.length === 1 ? "" : "s"
+								} unpaid`
+							: "All tenancy invoices settled"
+					}
 				/>
 			</div>
 
@@ -690,11 +711,21 @@ function StatCard({ label, value, sub, tone = "default", href }) {
 }
 
 function WaterfallSection({ pnl }) {
+	const tenancyHasSplit =
+		pnl.income.tenancy !== pnl.income.tenancy_paid &&
+		pnl.income.tenancy_paid !== undefined;
 	const incomeBreakdown = [
 		{ label: "Tickets", value: pnl.income.tickets },
 		{ label: "Bookings", value: pnl.income.bookings },
 		{ label: "POS (net)", value: pnl.income.pos_net },
 		{ label: "Manual / other", value: pnl.income.manual },
+		{
+			label: "Rental (tenancies)",
+			value: pnl.income.tenancy,
+			sub: tenancyHasSplit
+				? `${formatGbp(pnl.income.tenancy_paid ?? 0)} paid`
+				: null,
+		},
 	].filter((r) => r.value !== 0);
 
 	const codBreakdown = [
@@ -828,7 +859,14 @@ function WaterfallBox({ step }) {
 								key={b.label}
 								className="flex items-baseline justify-between gap-2"
 							>
-								<span className="truncate">{b.label}</span>
+								<span className="truncate">
+									{b.label}
+									{b.sub && (
+										<span className="block text-[10px] text-muted-foreground/70 truncate">
+											{b.sub}
+										</span>
+									)}
+								</span>
 								<span className="font-mono shrink-0">{formatGbp(b.value)}</span>
 							</li>
 						))}

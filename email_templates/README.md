@@ -24,6 +24,9 @@ adding or changing a variable, update both.
 | `booking-rejected.html`             | `booking-rejected`            | hirer     |                                                             |
 | `ticket-delivery.html`              | `ticket-delivery`             | delegate  | Already in SendGrid · PDF attached · order summary inline   |
 | `monthly-board-pack.html`           | `monthly-board-pack`          | staff     | Already in SendGrid · PDF attached                          |
+| `tenancy-agreement-send.html`       | `tenancy-agreement-send`      | delegate  | Sent when admin clicks "Send agreement" on a tenancy        |
+| `tenancy-agreement-signed.html`     | `tenancy-agreement-signed`    | delegate  | Confirmation after tenant signs digitally                   |
+| `tenancy-dd-ready.html`             | `tenancy-dd-ready`            | delegate  | Confirmation after Direct Debit mandate is active           |
 
 ## Style
 

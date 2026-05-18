@@ -92,6 +92,16 @@ export async function getBoardReportHistory(venueId) {
 	return getSetting(venueId, "board_report_history", { sent: [] });
 }
 
+/**
+ * Tenancy agreement HTML template. Edited via Settings > Booking >
+ * Tenancy agreements, snapshotted onto each tenancy at creation time so
+ * later edits don't change already-signed agreements. Handlebars-style
+ * `{{starts_on}}`, `{{monthly_rate}}` etc. are rendered at view time.
+ */
+export async function getTenancyAgreementTemplate(venueId) {
+	return getSetting(venueId, "tenancy_agreement", { html: "" });
+}
+
 export async function appendBoardReportSent(venueId, entry) {
 	const current = await getBoardReportHistory(venueId);
 	const filtered = (current.sent ?? []).filter((s) => s.ym !== entry.ym);

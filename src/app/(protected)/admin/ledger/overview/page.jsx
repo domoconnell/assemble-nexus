@@ -6,6 +6,7 @@ import {
 	listMonthlyPnlForRange,
 } from "@/db/queries/finance";
 import { sumPaymentsOwedSplit } from "@/db/queries/bookings";
+import { listOutstandingTenancyInvoices } from "@/db/queries/tenancies";
 import {
 	currentMonthLondon,
 	resolveMonth,
@@ -56,6 +57,7 @@ export default async function LedgerDashboardPage({ searchParams }) {
 		recentTransfers,
 		paymentsOwed,
 		monthlyTrend,
+		tenancyOutstanding,
 	] = await Promise.all([
 		getMonthlyPnl(venue.id, {
 			ymdFirstOfMonth: month.ymdFirstOfMonth,
@@ -71,7 +73,23 @@ export default async function LedgerDashboardPage({ searchParams }) {
 		listRecentChurchTransfers(venue.id, { limit: 5 }),
 		sumPaymentsOwedSplit(venue.id, month.monthStartDate, month.monthEndDate),
 		listMonthlyPnlForRange(venue.id, { endYm: ym, monthsBack: 12 }),
+		listOutstandingTenancyInvoices(venue.id),
 	]);
+
+	// Split tenancy invoices into "this period" vs prior, mirroring the
+	// existing bookings owed split so they sit side-by-side cleanly.
+	const tenancyOwedSplit = {
+		this_month: { total: 0, count: 0 },
+		previous: { total: 0, count: 0 },
+		grand_total: 0,
+	};
+	for (const inv of tenancyOutstanding) {
+		const amount = inv.total_cents ?? 0;
+		const bucket = inv.period_ym === ym ? "this_month" : "previous";
+		tenancyOwedSplit[bucket].total += amount;
+		tenancyOwedSplit[bucket].count += 1;
+		tenancyOwedSplit.grand_total += amount;
+	}
 
 	const prev = prevMonth(month.year, month.month1);
 	const next = nextMonth(month.year, month.month1);
@@ -218,7 +236,7 @@ export default async function LedgerDashboardPage({ searchParams }) {
 				)}
 			</section>
 
-			<PaymentsOwedSection paymentsOwed={paymentsOwed} />
+			<PaymentsOwedSection paymentsOwed={paymentsOwed} tenancyOwed={tenancyOwedSplit} />
 
 			{bank && (
 				<Link
@@ -261,6 +279,15 @@ export default async function LedgerDashboardPage({ searchParams }) {
 						<Row label="Bookings (deposits collected)" value={fmt(pnl.income.bookings)} />
 						<Row label="POS (net)" value={fmt(pnl.income.pos_net)} />
 						<Row label="Manual income" value={fmt(pnl.income.manual)} />
+						<Row
+							label="Rental income (tenancies)"
+							value={fmt(pnl.income.tenancy)}
+							sub={
+								pnl.income.tenancy !== pnl.income.tenancy_paid
+									? `${fmt(pnl.income.tenancy_paid ?? 0)} paid`
+									: null
+							}
+						/>
 						<div className="border-t border-foreground/10 mt-2 pt-2">
 							<Row label="Total" value={fmt(pnl.income.total)} bold />
 						</div>
@@ -323,6 +350,12 @@ export default async function LedgerDashboardPage({ searchParams }) {
 						- donations and ad-hoc receipts
 					</li>
 					<li>
+						<Link href="/admin/tenancies" className="underline hover:text-foreground">
+							Tenancies
+						</Link>{" "}
+						- recurring room rentals + monthly invoices
+					</li>
+					<li>
 						<Link
 							href="/admin/settings/church-transfer"
 							className="underline hover:text-foreground"
@@ -337,10 +370,11 @@ export default async function LedgerDashboardPage({ searchParams }) {
 	);
 }
 
-function PaymentsOwedSection({ paymentsOwed }) {
-	const thisMonthTotal = paymentsOwed.this_month.total;
-	const previousTotal = paymentsOwed.previous.total;
-	const grandTotal = thisMonthTotal + previousTotal;
+function PaymentsOwedSection({ paymentsOwed, tenancyOwed }) {
+	const bookingsTotal =
+		paymentsOwed.this_month.total + paymentsOwed.previous.total;
+	const tenancyTotal = tenancyOwed?.grand_total ?? 0;
+	const grandTotal = bookingsTotal + tenancyTotal;
 	return (
 		<section className="rounded-lg border bg-card p-6 space-y-4">
 			<div className="flex items-baseline justify-between gap-3 flex-wrap">
@@ -349,7 +383,7 @@ function PaymentsOwedSection({ paymentsOwed }) {
 				</h2>
 				<div className="font-display text-xl">{fmt(grandTotal)}</div>
 			</div>
-			<div className="grid gap-4 sm:grid-cols-2">
+			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 				<PaymentsOwedColumn
 					title="From events this month"
 					bucket={paymentsOwed.this_month}
@@ -358,8 +392,50 @@ function PaymentsOwedSection({ paymentsOwed }) {
 					title="From previous events"
 					bucket={paymentsOwed.previous}
 				/>
+				<TenancyOwedColumn split={tenancyOwed} />
 			</div>
 		</section>
+	);
+}
+
+function TenancyOwedColumn({ split }) {
+	const thisMonth = split?.this_month ?? { total: 0, count: 0 };
+	const previous = split?.previous ?? { total: 0, count: 0 };
+	const total = (split?.grand_total ?? 0);
+	return (
+		<div className="rounded-md border border-foreground/10 bg-background p-4 space-y-2">
+			<div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+				Tenancy invoices outstanding
+			</div>
+			<dl className="space-y-1 text-sm">
+				<div className="flex items-baseline justify-between gap-3 text-foreground/85">
+					<dt>
+						This month
+						{thisMonth.count > 0 && (
+							<span className="text-[11px] text-muted-foreground/80 block">
+								{thisMonth.count} invoice{thisMonth.count === 1 ? "" : "s"}
+							</span>
+						)}
+					</dt>
+					<dd className="font-mono">{fmt(thisMonth.total)}</dd>
+				</div>
+				<div className="flex items-baseline justify-between gap-3 text-foreground/85">
+					<dt>
+						Earlier months
+						{previous.count > 0 && (
+							<span className="text-[11px] text-muted-foreground/80 block">
+								{previous.count} invoice{previous.count === 1 ? "" : "s"}
+							</span>
+						)}
+					</dt>
+					<dd className="font-mono">{fmt(previous.total)}</dd>
+				</div>
+				<div className="flex items-baseline justify-between gap-3 border-t border-foreground/10 pt-1.5 mt-1 font-medium">
+					<dt>Total</dt>
+					<dd className="font-mono">{fmt(total)}</dd>
+				</div>
+			</dl>
+		</div>
 	);
 }
 
@@ -430,11 +506,13 @@ function FlowRow({ row }) {
 }
 
 function Row({ label, value, muted, sub, bold }) {
+	const isSubVariant = sub === true;
+	const subNote = typeof sub === "string" ? sub : null;
 	return (
 		<div className="flex items-baseline justify-between gap-3">
 			<dt
 				className={
-					sub
+					isSubVariant
 						? "text-muted-foreground"
 						: muted
 							? "text-muted-foreground"
@@ -444,6 +522,11 @@ function Row({ label, value, muted, sub, bold }) {
 				}
 			>
 				{label}
+				{subNote && (
+					<span className="block text-[11px] text-muted-foreground/80">
+						{subNote}
+					</span>
+				)}
 			</dt>
 			<dd className={`font-mono ${bold ? "font-medium" : ""}`}>{value}</dd>
 		</div>

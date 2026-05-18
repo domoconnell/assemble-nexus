@@ -1,12 +1,14 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db/index.js";
 import {
 	tenancy,
 	tenancy_session,
 	tenancy_invoice,
+	tenancy_agreement,
 } from "@/db/schema/entities/tenancy.js";
-import { customer } from "@/db/schema/entities/customer.js";
 import { room } from "@/db/schema/entities/room.js";
+import { organisation } from "@/db/schema/entities/organisation.js";
+import { contact } from "@/db/schema/entities/contact.js";
 
 export async function listTenancies(venueId, { status, includeEnded = false } = {}) {
 	const conditions = [eq(tenancy.venue_id, venueId), isNull(tenancy.deletedAt)];
@@ -25,16 +27,31 @@ export async function listTenancies(venueId, { status, includeEnded = false } = 
 			per_session_rate_cents: tenancy.per_session_rate_cents,
 			schedule_rule: tenancy.schedule_rule,
 			notes: tenancy.notes,
-			customer_id: tenancy.customer_id,
-			customer_first_name: customer.first_name,
-			customer_last_name: customer.last_name,
-			customer_email: customer.email,
+			organisation_id: tenancy.organisation_id,
+			organisation_name: organisation.name,
+			contact_id: tenancy.contact_id,
+			contact_first_name: contact.first_name,
+			contact_last_name: contact.last_name,
+			contact_email: contact.email,
 			room_id: tenancy.room_id,
 			room_name: room.name,
 			room_is_public: room.is_public,
+			direct_debit_ready_at: tenancy.direct_debit_ready_at,
+			// Latest signed agreement signed_at via subquery - lets the list
+			// page show a "Signed" badge without loading every agreement row.
+			agreement_signed_at: sql`(
+				SELECT MAX(signed_at) FROM tenancy_agreement
+				WHERE tenancy_id = ${tenancy.id}
+					AND status = 'signed'
+					AND deleted_at IS NULL
+			)`.as("agreement_signed_at"),
 		})
 		.from(tenancy)
-		.innerJoin(customer, eq(customer.id, tenancy.customer_id))
+		.leftJoin(organisation, eq(organisation.id, tenancy.organisation_id))
+		.leftJoin(
+			contact,
+			eq(contact.id, sql`COALESCE(${tenancy.contact_id}, ${organisation.primary_contact_id})`),
+		)
 		.innerJoin(room, eq(room.id, tenancy.room_id))
 		.where(and(...conditions))
 		.orderBy(asc(tenancy.status), desc(tenancy.starts_on));
@@ -46,20 +63,161 @@ export async function getTenancyById(id, { venueId } = {}) {
 	const [row] = await db
 		.select({
 			tenancy: tenancy,
-			customer_first_name: customer.first_name,
-			customer_last_name: customer.last_name,
-			customer_email: customer.email,
-			customer_phone: customer.phone,
+			organisation_name: organisation.name,
+			contact_first_name: contact.first_name,
+			contact_last_name: contact.last_name,
+			contact_email: contact.email,
+			contact_phone: contact.phone,
 			room_name: room.name,
 			room_is_public: room.is_public,
 		})
 		.from(tenancy)
-		.innerJoin(customer, eq(customer.id, tenancy.customer_id))
+		.leftJoin(organisation, eq(organisation.id, tenancy.organisation_id))
+		.leftJoin(
+			contact,
+			eq(contact.id, sql`COALESCE(${tenancy.contact_id}, ${organisation.primary_contact_id})`),
+		)
 		.innerJoin(room, eq(room.id, tenancy.room_id))
 		.where(and(...conditions))
 		.limit(1);
 	if (!row) return null;
 	return { ...row.tenancy, ...row, tenancy: undefined };
+}
+
+/**
+ * Fetch a tenancy by its standalone Direct Debit token (no-auth DD setup
+ * flow). Independent of any specific agreement so DD can be re-collected
+ * even when there's no active agreement.
+ */
+export async function getTenancyByDdToken(token) {
+	if (!token) return null;
+	const [row] = await db
+		.select({
+			tenancy: tenancy,
+			organisation_name: organisation.name,
+			contact_first_name: contact.first_name,
+			contact_last_name: contact.last_name,
+			contact_email: contact.email,
+			room_name: room.name,
+		})
+		.from(tenancy)
+		.leftJoin(organisation, eq(organisation.id, tenancy.organisation_id))
+		.leftJoin(
+			contact,
+			eq(contact.id, sql`COALESCE(${tenancy.contact_id}, ${organisation.primary_contact_id})`),
+		)
+		.innerJoin(room, eq(room.id, tenancy.room_id))
+		.where(and(eq(tenancy.dd_token, token), isNull(tenancy.deletedAt)))
+		.limit(1);
+	if (!row) return null;
+	return { ...row.tenancy, ...row, tenancy: undefined };
+}
+
+/* ---------------- agreements ---------------- */
+
+/**
+ * All non-deleted agreements for a tenancy, newest first. The detail
+ * page lists them; the public sign page looks up by token instead.
+ */
+export async function listAgreementsForTenancy(tenancyId) {
+	return db
+		.select()
+		.from(tenancy_agreement)
+		.where(
+			and(
+				eq(tenancy_agreement.tenancy_id, tenancyId),
+				isNull(tenancy_agreement.deletedAt),
+			),
+		)
+		.orderBy(desc(tenancy_agreement.createdAt));
+}
+
+/**
+ * The "active" agreement = latest non-cancelled, non-deleted row. Used
+ * by display + welcome-email eligibility checks.
+ */
+export async function getActiveAgreement(tenancyId) {
+	const [row] = await db
+		.select()
+		.from(tenancy_agreement)
+		.where(
+			and(
+				eq(tenancy_agreement.tenancy_id, tenancyId),
+				ne(tenancy_agreement.status, "cancelled"),
+				isNull(tenancy_agreement.deletedAt),
+			),
+		)
+		.orderBy(desc(tenancy_agreement.createdAt))
+		.limit(1);
+	return row ?? null;
+}
+
+/**
+ * Resolve a public-facing token to the full agreement row + parent
+ * tenancy context the sign page needs (organisation, contact, room).
+ */
+export async function getAgreementByToken(token) {
+	if (!token) return null;
+	const [row] = await db
+		.select({
+			agreement: tenancy_agreement,
+			tenancy: tenancy,
+			organisation_name: organisation.name,
+			contact_first_name: contact.first_name,
+			contact_last_name: contact.last_name,
+			contact_email: contact.email,
+			room_name: room.name,
+		})
+		.from(tenancy_agreement)
+		.innerJoin(tenancy, eq(tenancy.id, tenancy_agreement.tenancy_id))
+		.leftJoin(organisation, eq(organisation.id, tenancy.organisation_id))
+		.leftJoin(
+			contact,
+			eq(contact.id, sql`COALESCE(${tenancy.contact_id}, ${organisation.primary_contact_id})`),
+		)
+		.innerJoin(room, eq(room.id, tenancy.room_id))
+		.where(
+			and(
+				eq(tenancy_agreement.token, token),
+				isNull(tenancy_agreement.deletedAt),
+			),
+		)
+		.limit(1);
+	if (!row) return null;
+	return {
+		agreement: row.agreement,
+		tenancy: {
+			...row.tenancy,
+			organisation_name: row.organisation_name,
+			contact_first_name: row.contact_first_name,
+			contact_last_name: row.contact_last_name,
+			contact_email: row.contact_email,
+			room_name: row.room_name,
+		},
+	};
+}
+
+export async function insertAgreement(values) {
+	const [row] = await db.insert(tenancy_agreement).values(values).returning();
+	return row;
+}
+
+export async function updateAgreement(id, patch) {
+	const [row] = await db
+		.update(tenancy_agreement)
+		.set(patch)
+		.where(eq(tenancy_agreement.id, id))
+		.returning();
+	return row;
+}
+
+export async function getAgreementById(id) {
+	const [row] = await db
+		.select()
+		.from(tenancy_agreement)
+		.where(eq(tenancy_agreement.id, id))
+		.limit(1);
+	return row ?? null;
 }
 
 export async function insertTenancy(values) {
@@ -167,6 +325,92 @@ export async function listSessionsInRange(venueId, fromDate, toDate) {
 }
 
 /* ---------------- invoices ---------------- */
+
+/**
+ * Rental income for a month, sliced two ways:
+ *   - `issued`: sum of subtotal_cents on every non-void, non-deleted
+ *     invoice whose `period_ym` is that month. Accrual view.
+ *   - `paid`:   sum of the same, but constrained to invoices with a
+ *     `paid_at` inside [monthStartDate, monthEndDate). Cash view -
+ *     matches how the rest of the P&L recognises money in (booking
+ *     deposits + balances), so this is what feeds income.total.
+ *
+ * `ymdFirstOfMonth` is the same 'YYYY-MM' that period_ym uses, and
+ * `monthStartDate` / `monthEndDate` are the JS-Date boundaries used
+ * against the paid_at timestamptz.
+ */
+export async function sumTenancyRentalForMonth(
+	venueId,
+	monthStartDate,
+	monthEndDate,
+	periodYm,
+) {
+	const endIso = monthEndDate.toISOString();
+	const [issuedRow] = await db
+		.select({
+			total: sql`coalesce(sum(${tenancy_invoice.subtotal_cents}), 0)::int`,
+		})
+		.from(tenancy_invoice)
+		.where(
+			and(
+				eq(tenancy_invoice.venue_id, venueId),
+				eq(tenancy_invoice.period_ym, periodYm),
+				ne(tenancy_invoice.status, "void"),
+				isNull(tenancy_invoice.deletedAt),
+			),
+		);
+	const [paidRow] = await db
+		.select({
+			total: sql`coalesce(sum(${tenancy_invoice.subtotal_cents}), 0)::int`,
+		})
+		.from(tenancy_invoice)
+		.where(
+			and(
+				eq(tenancy_invoice.venue_id, venueId),
+				eq(tenancy_invoice.status, "paid"),
+				gte(tenancy_invoice.paid_at, monthStartDate),
+				sql`${tenancy_invoice.paid_at} < ${endIso}`,
+				isNull(tenancy_invoice.deletedAt),
+			),
+		);
+	return {
+		issued: Number(issuedRow?.total ?? 0),
+		paid: Number(paidRow?.total ?? 0),
+	};
+}
+
+/**
+ * Outstanding tenancy invoices for a venue - anything still in `draft`
+ * or `issued`, never paid or voided. Used by the dashboard + ledger
+ * "payments owed" widgets. Joined to tenancy/organisation so the UI can
+ * show who owes what without a second round-trip.
+ */
+export async function listOutstandingTenancyInvoices(venueId) {
+	return db
+		.select({
+			id: tenancy_invoice.id,
+			reference: tenancy_invoice.reference,
+			period_ym: tenancy_invoice.period_ym,
+			status: tenancy_invoice.status,
+			total_cents: tenancy_invoice.total_cents,
+			subtotal_cents: tenancy_invoice.subtotal_cents,
+			issued_at: tenancy_invoice.issued_at,
+			tenancy_id: tenancy_invoice.tenancy_id,
+			tenancy_label: tenancy.label,
+			organisation_name: organisation.name,
+		})
+		.from(tenancy_invoice)
+		.innerJoin(tenancy, eq(tenancy.id, tenancy_invoice.tenancy_id))
+		.leftJoin(organisation, eq(organisation.id, tenancy.organisation_id))
+		.where(
+			and(
+				eq(tenancy_invoice.venue_id, venueId),
+				inArray(tenancy_invoice.status, ["draft", "issued"]),
+				isNull(tenancy_invoice.deletedAt),
+			),
+		)
+		.orderBy(asc(tenancy_invoice.period_ym), asc(tenancy_invoice.issued_at));
+}
 
 export async function listInvoicesForTenancy(tenancyId) {
 	return db

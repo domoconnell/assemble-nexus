@@ -59,4 +59,5 @@ export * from "./entities/contact";
 export * from "./entities/organisation_contact";
 export * from "./entities/site_content";
 export * from "./entities/tenancy";
+export * from "./entities/fake_dd_session";
 export * from "./auth_schema";

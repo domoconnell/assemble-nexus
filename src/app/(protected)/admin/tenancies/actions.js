@@ -2,15 +2,29 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
 import { requireServerSession } from "@/utils/auth/server-guard.js";
 import { requireCurrentVenue } from "@/db/queries/venue.js";
+import { getTenancyAgreementTemplate } from "@/db/queries/settings.js";
 import {
 	insertTenancy,
 	updateTenancy,
 	softDeleteTenancy,
 	cancelSession,
 	uncancelSession,
+	getTenancyById,
+	insertAgreement,
+	updateAgreement,
+	getAgreementById,
+	getActiveAgreement,
+	listAgreementsForTenancy,
 } from "@/db/queries/tenancies.js";
+import {
+	sendTenancyAgreementSendEmail,
+	sendTenancyAgreementCancelledEmail,
+	sendTenancyWelcomeEmail,
+	sendTenancyDdSetupEmail,
+} from "@/utils/email/tenancy-emails.js";
 
 const WeekdaySchema = z.enum(["SU", "MO", "TU", "WE", "TH", "FR", "SA"]);
 const TimeSchema = z.string().regex(/^\d{2}:\d{2}$/);
@@ -19,7 +33,8 @@ const YmdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const CreateSchema = z
 	.object({
 		kind: z.enum(["private_rental", "scheduled_recurring"]),
-		customer_id: z.string().uuid(),
+		organisation_id: z.string().uuid(),
+		contact_id: z.string().uuid().optional().nullable(),
 		room_id: z.string().uuid(),
 		label: z.string().max(200).optional().nullable(),
 		starts_on: YmdSchema,
@@ -57,12 +72,19 @@ async function gate() {
 	return requireCurrentVenue();
 }
 
+function newToken() {
+	return randomBytes(24).toString("base64url");
+}
+
 export async function createTenancyAction(input) {
 	const venue = await gate();
 	const parsed = CreateSchema.parse(input);
+	const template = await getTenancyAgreementTemplate(venue.id);
+	const ddToken = newToken();
 	const row = await insertTenancy({
 		venue_id: venue.id,
-		customer_id: parsed.customer_id,
+		organisation_id: parsed.organisation_id,
+		contact_id: parsed.contact_id ?? null,
 		room_id: parsed.room_id,
 		kind: parsed.kind,
 		status: "active",
@@ -76,6 +98,15 @@ export async function createTenancyAction(input) {
 		schedule_rule:
 			parsed.kind === "scheduled_recurring" ? parsed.schedule_rule : null,
 		notes: parsed.notes?.trim() || null,
+		dd_token: ddToken,
+	});
+	// Seed the first draft agreement from the venue template, so the admin
+	// can immediately review/edit/send without an extra "create draft" click.
+	await insertAgreement({
+		tenancy_id: row.id,
+		status: "draft",
+		html: template?.html || "",
+		token: newToken(),
 	});
 	revalidatePath("/admin/tenancies");
 	return { id: row.id };
@@ -132,5 +163,207 @@ export async function uncancelSessionAction(session_id) {
 	await gate();
 	const row = await uncancelSession(session_id);
 	if (row?.tenancy_id) revalidatePath(`/admin/tenancies/${row.tenancy_id}`);
+	return { ok: true };
+}
+
+/* ---------------- agreements ---------------- */
+
+/**
+ * Spin up a new draft agreement for a tenancy. Copies the current venue
+ * template HTML and generates a fresh public token. Refuses if there's
+ * already an open (non-cancelled) agreement — admin must cancel that one
+ * first, so the tenant never has two live links at once.
+ */
+export async function createDraftAgreementAction(tenancyId) {
+	const venue = await gate();
+	const t = await getTenancyById(tenancyId, { venueId: venue.id });
+	if (!t) throw new Error("Tenancy not found.");
+	const existing = await getActiveAgreement(t.id);
+	if (existing && existing.status !== "signed") {
+		throw new Error(
+			"There is already an open agreement. Cancel it before creating a new draft.",
+		);
+	}
+	const template = await getTenancyAgreementTemplate(venue.id);
+	const row = await insertAgreement({
+		tenancy_id: t.id,
+		status: "draft",
+		html: template?.html || "",
+		token: newToken(),
+	});
+	revalidatePath(`/admin/tenancies/${t.id}`);
+	return { id: row.id };
+}
+
+const UpdateDraftSchema = z.object({
+	id: z.string().uuid(),
+	html: z.string().min(1).max(200_000),
+});
+
+export async function updateDraftAgreementAction(input) {
+	const venue = await gate();
+	const parsed = UpdateDraftSchema.parse(input);
+	const ag = await getAgreementById(parsed.id);
+	if (!ag) throw new Error("Agreement not found.");
+	if (ag.status !== "draft") {
+		throw new Error("Only draft agreements can be edited.");
+	}
+	const t = await getTenancyById(ag.tenancy_id, { venueId: venue.id });
+	if (!t) throw new Error("Tenancy not found.");
+	await updateAgreement(parsed.id, { html: parsed.html });
+	revalidatePath(`/admin/tenancies/${ag.tenancy_id}`);
+	return { ok: true };
+}
+
+/**
+ * Move a draft agreement to "sent" and email the tenant a sign link.
+ * Refuses if there's no contact email (we don't silently swallow a send).
+ */
+export async function sendAgreementAction(agreementId) {
+	const venue = await gate();
+	const ag = await getAgreementById(agreementId);
+	if (!ag) throw new Error("Agreement not found.");
+	if (ag.status !== "draft") {
+		throw new Error("Only draft agreements can be sent.");
+	}
+	const t = await getTenancyById(ag.tenancy_id, { venueId: venue.id });
+	if (!t) throw new Error("Tenancy not found.");
+	if (!t.contact_email) {
+		throw new Error(
+			"No contact email on this tenancy. Assign a contact in the CRM, or set the organisation's primary contact.",
+		);
+	}
+	const updated = await updateAgreement(agreementId, {
+		status: "sent",
+		sent_at: new Date(),
+	});
+	await sendTenancyAgreementSendEmail({
+		tenancy: t,
+		agreement: updated,
+		contactEmail: t.contact_email,
+		contactFirstName: t.contact_first_name,
+	});
+	revalidatePath(`/admin/tenancies/${ag.tenancy_id}`);
+	return { ok: true };
+}
+
+const CancelSchema = z.object({
+	id: z.string().uuid(),
+	reason: z.string().max(500).optional().nullable(),
+});
+
+/**
+ * Cancel an agreement at any stage (draft, sent, or signed). For draft we
+ * just bin it; for sent we email the tenant so they don't act on the
+ * stale link; for signed it acts as a supersede - the signing record is
+ * preserved (signed_at + signer remain) but the agreement is flagged
+ * cancelled so a fresh one can be issued. After this, admin can spin up
+ * a new draft.
+ */
+export async function cancelAgreementAction(input) {
+	const venue = await gate();
+	const parsed = CancelSchema.parse(input);
+	const ag = await getAgreementById(parsed.id);
+	if (!ag) throw new Error("Agreement not found.");
+	if (ag.status === "cancelled") return { ok: true };
+	const t = await getTenancyById(ag.tenancy_id, { venueId: venue.id });
+	if (!t) throw new Error("Tenancy not found.");
+	const reason = parsed.reason?.trim() || null;
+	const updated = await updateAgreement(parsed.id, {
+		status: "cancelled",
+		cancelled_at: new Date(),
+		cancelled_reason: reason,
+	});
+	// Notify the tenant when the link/agreement has actually been seen
+	// (sent or signed). A silently-cancelled draft they never received
+	// doesn't warrant an email.
+	if ((ag.status === "sent" || ag.status === "signed") && t.contact_email) {
+		await sendTenancyAgreementCancelledEmail({
+			tenancy: t,
+			agreement: updated,
+			contactEmail: t.contact_email,
+			contactFirstName: t.contact_first_name,
+		});
+	}
+	revalidatePath(`/admin/tenancies/${ag.tenancy_id}`);
+	return { ok: true };
+}
+
+/**
+ * "Send welcome email" - the dual-purpose initial nudge. Only valid when:
+ *   - there is a draft agreement ready to send (we'll mark it "sent")
+ *   - there is no existing signed agreement
+ *   - there is no active direct debit yet
+ *
+ * The link goes to the agreement sign page; signing there chains the
+ * tenant on to DD setup. Backstops the per-agreement send button on the
+ * normal happy path.
+ */
+/**
+ * Stand-alone direct-debit setup nudge. Sends just the DD link to the
+ * tenant. Refuses if there's no contact email or DD is already active,
+ * but is otherwise independent of agreement state — useful for the
+ * "agreement signed in person, just need the DD" path or to re-send the
+ * link after a mandate failure.
+ */
+export async function sendDdSetupEmailAction(tenancyId) {
+	const venue = await gate();
+	const t = await getTenancyById(tenancyId, { venueId: venue.id });
+	if (!t) throw new Error("Tenancy not found.");
+	if (!t.contact_email) {
+		throw new Error(
+			"No contact email on this tenancy. Assign a contact in the CRM, or set the organisation's primary contact.",
+		);
+	}
+	if (t.direct_debit_ready_at) {
+		throw new Error("This tenancy already has an active direct debit.");
+	}
+	// Back-fill dd_token for tenancies created before the column existed so
+	// staff don't have to recreate them just to send the email.
+	let dd_token = t.dd_token;
+	if (!dd_token) {
+		dd_token = newToken();
+		await updateTenancy(t.id, { dd_token });
+	}
+	await sendTenancyDdSetupEmail({
+		tenancy: { ...t, dd_token },
+		contactEmail: t.contact_email,
+		contactFirstName: t.contact_first_name,
+	});
+	revalidatePath(`/admin/tenancies/${t.id}`);
+	return { ok: true };
+}
+
+export async function sendWelcomeEmailAction(tenancyId) {
+	const venue = await gate();
+	const t = await getTenancyById(tenancyId, { venueId: venue.id });
+	if (!t) throw new Error("Tenancy not found.");
+	if (!t.contact_email) {
+		throw new Error(
+			"No contact email on this tenancy. Assign a contact in the CRM, or set the organisation's primary contact.",
+		);
+	}
+	if (t.direct_debit_ready_at) {
+		throw new Error("This tenancy already has an active direct debit.");
+	}
+	const all = await listAgreementsForTenancy(t.id);
+	if (all.some((a) => a.status === "signed")) {
+		throw new Error("This tenancy already has a signed agreement.");
+	}
+	const draft = all.find((a) => a.status === "draft");
+	if (!draft) {
+		throw new Error("No draft agreement to send. Create one first.");
+	}
+	const updated = await updateAgreement(draft.id, {
+		status: "sent",
+		sent_at: new Date(),
+	});
+	await sendTenancyWelcomeEmail({
+		tenancy: t,
+		agreement: updated,
+		contactEmail: t.contact_email,
+		contactFirstName: t.contact_first_name,
+	});
+	revalidatePath(`/admin/tenancies/${t.id}`);
 	return { ok: true };
 }

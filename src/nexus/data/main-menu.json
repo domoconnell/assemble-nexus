@@ -106,7 +106,8 @@
 							{ "title": "Booking agreement", "url": "/admin/settings/booking-agreement" },
 							{ "title": "Deposit policy", "url": "/admin/settings/deposit-policy" },
 							{ "title": "Discounts", "url": "/admin/settings/discounts" },
-							{ "title": "Hours & rate bands", "url": "/admin/settings/hours" }
+							{ "title": "Hours & rate bands", "url": "/admin/settings/hours" },
+							{ "title": "Tenancy agreement", "url": "/admin/settings/tenancy-agreements" }
 						]
 					},
 					{

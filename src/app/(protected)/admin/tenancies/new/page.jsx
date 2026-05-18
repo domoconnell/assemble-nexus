@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/index.js";
-import { customer } from "@/db/schema/entities/customer.js";
+import { organisation } from "@/db/schema/entities/organisation.js";
+import { contact } from "@/db/schema/entities/contact.js";
 import { room } from "@/db/schema/entities/room.js";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import TenancyForm from "../_components/tenancy-form";
@@ -11,17 +12,17 @@ export const dynamic = "force-dynamic";
 export default async function NewTenancyPage() {
 	const venue = await requireCurrentVenue();
 
-	const customers = await db
+	const orgs = await db
 		.select({
-			id: customer.id,
-			first_name: customer.first_name,
-			last_name: customer.last_name,
-			email: customer.email,
-			organisation: customer.organisation,
+			id: organisation.id,
+			name: organisation.name,
+			primary_contact_id: organisation.primary_contact_id,
+			primary_contact_name: contact.first_name,
 		})
-		.from(customer)
-		.where(isNull(customer.deletedAt))
-		.orderBy(asc(customer.first_name), asc(customer.last_name));
+		.from(organisation)
+		.leftJoin(contact, eq(contact.id, organisation.primary_contact_id))
+		.where(and(eq(organisation.venue_id, venue.id), isNull(organisation.deletedAt)))
+		.orderBy(asc(organisation.name));
 
 	const rooms = await db
 		.select({
@@ -44,8 +45,16 @@ export default async function NewTenancyPage() {
 					← Tenancies
 				</Link>
 				<h1 className="mt-2 text-2xl font-semibold">New tenancy</h1>
+				{orgs.length === 0 && (
+					<p className="text-sm text-muted-foreground mt-2">
+						You need at least one organisation in the CRM before creating a tenancy.{" "}
+						<Link href="/admin/crm" className="underline">
+							Open CRM →
+						</Link>
+					</p>
+				)}
 			</div>
-			<TenancyForm customers={customers} rooms={rooms} />
+			<TenancyForm organisations={orgs} rooms={rooms} />
 		</div>
 	);
 }

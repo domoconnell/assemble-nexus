@@ -7,9 +7,15 @@ import {
 } from "@/db/queries/finance";
 import { getTopHirersByBookingRevenue } from "@/db/queries/dashboard";
 import { sumPaymentsOwedSplit } from "@/db/queries/bookings";
+import { listOutstandingTenancyInvoices } from "@/db/queries/tenancies";
 import { getCombinedLatestBalance, listBankBalanceSeries } from "@/db/queries/bank";
 import { getVenueById } from "@/db/queries/venue";
 import { resolveMonth, monthLabel } from "@/lib/finance/months";
+
+const gbpBoard = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
+function gbpForBoardSub(cents) {
+	return gbpBoard.format((cents ?? 0) / 100);
+}
 
 /**
  * Single point of data gathering for the board pack PDF. Both the GET
@@ -35,6 +41,7 @@ export async function gatherBoardPackData({ venueId, ym, venueName }) {
 		bankLatest,
 		topHirers,
 		paymentsOwed,
+		tenancyOutstanding,
 	] = await Promise.all([
 		getMonthlyPnl(venueId, {
 			ymdFirstOfMonth: month.ymdFirstOfMonth,
@@ -54,7 +61,23 @@ export async function gatherBoardPackData({ venueId, ym, venueName }) {
 			toDate: month.monthEndDate,
 		}),
 		sumPaymentsOwedSplit(venueId, month.monthStartDate, month.monthEndDate),
+		listOutstandingTenancyInvoices(venueId),
 	]);
+
+	// Split tenancy invoices into current-period vs prior so the PDF can
+	// show them alongside event-side payments owed.
+	const tenancyOwed = {
+		this_month: { total: 0, count: 0 },
+		previous: { total: 0, count: 0 },
+		grand_total: 0,
+	};
+	for (const inv of tenancyOutstanding) {
+		const amount = inv.total_cents ?? 0;
+		const bucket = inv.period_ym === ym ? "this_month" : "previous";
+		tenancyOwed[bucket].total += amount;
+		tenancyOwed[bucket].count += 1;
+		tenancyOwed.grand_total += amount;
+	}
 
 	const codCategoryBreakdown = byCategory.filter((r) => r.is_cost_of_delivery);
 	const codItems = [
@@ -67,11 +90,21 @@ export async function gatherBoardPackData({ venueId, ym, venueName }) {
 			: null,
 	].filter(Boolean);
 
+	const tenancyIssued = pnl.income.tenancy ?? 0;
+	const tenancyPaid = pnl.income.tenancy_paid ?? 0;
 	const incomeItems = [
 		{ label: "Hire fees", value: pnl.income.bookings },
 		{ label: "Ticket fees (net of Stripe)", value: pnl.income.tickets },
 		{ label: "Cafe POS", value: pnl.income.pos_net },
 		{ label: "Manual income", value: pnl.income.manual },
+		{
+			label: "Rental income (tenancies)",
+			value: tenancyIssued,
+			sub:
+				tenancyIssued !== tenancyPaid
+					? `${gbpForBoardSub(tenancyPaid)} paid`
+					: null,
+		},
 	].filter((it) => it.value !== 0);
 
 	const buildingItems = [
@@ -92,6 +125,7 @@ export async function gatherBoardPackData({ venueId, ym, venueName }) {
 		bankDaily,
 		bankLatest,
 		paymentsOwed,
+		tenancyOwed,
 		topHirers: topHirers.map((h) => ({
 			name: h.name,
 			bookings_count: h.bookings_count,

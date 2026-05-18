@@ -109,7 +109,7 @@ function TenancyGroup({ title, rows, muted }) {
 							<div className="min-w-0 flex-1">
 								<div className="flex items-baseline gap-2 flex-wrap">
 									<span className="text-sm font-medium truncate">
-										{t.label || `${t.customer_first_name} ${t.customer_last_name}`}
+										{t.label || t.organisation_name || "(unnamed)"}
 									</span>
 									<span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground border border-foreground/15 rounded-full px-1.5 py-0.5">
 										{kindLabel(t.kind)}
@@ -119,9 +119,19 @@ function TenancyGroup({ title, rows, muted }) {
 											private room
 										</span>
 									)}
+									{t.agreement_signed_at && (
+										<span className="text-[10px] uppercase tracking-[0.18em] text-primary">
+											signed
+										</span>
+									)}
+									{t.direct_debit_ready_at && (
+										<span className="text-[10px] uppercase tracking-[0.18em] text-primary">
+											DD ready
+										</span>
+									)}
 								</div>
 								<div className="text-xs text-muted-foreground mt-0.5">
-									{t.customer_first_name} {t.customer_last_name} · {t.room_name}
+									{t.organisation_name ?? "—"} · {t.room_name}
 									{scheduleSummary(t) && <> · {scheduleSummary(t)}</>}
 									{" · "}
 									from {dateFmt.format(new Date(t.starts_on))}

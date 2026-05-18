@@ -144,6 +144,82 @@ export const EMAIL_TEMPLATES = {
 		},
 	},
 
+	"tenancy-welcome": {
+		templateId: null,
+		description: "Dual-purpose welcome email. Sent when the admin clicks 'Send welcome email' on a tenancy that has a draft agreement, no signed agreement, and no active DD. Single link covers review + sign + DD setup - the sign page chains the tenant on to DD afterwards.",
+		audience: "delegate",
+		fields: {
+			venue_name: "Public venue name.",
+			first_name: "Tenant contact's first name (may be empty).",
+			organisation_name: "Tenant organisation name.",
+			room_name: "Room being rented.",
+			agreement_url: "Public link to /tenancy/agreement/[token].",
+		},
+	},
+
+	"tenancy-agreement-send": {
+		templateId: null,
+		description: "Sent when an admin sends a specific agreement (e.g. a re-issued draft after cancellation). Contains the link to review + sign; if DD is still needed the sign page chains on to it.",
+		audience: "delegate",
+		fields: {
+			venue_name: "Public venue name.",
+			first_name: "Tenant contact's first name (may be empty).",
+			organisation_name: "Tenant organisation name.",
+			room_name: "Room being rented.",
+			agreement_url: "Public link to /tenancy/agreement/[token].",
+		},
+	},
+
+	"tenancy-agreement-signed": {
+		templateId: null,
+		description: "Sent to a tenant after they sign an agreement digitally. Conditionally points to direct debit setup if the tenancy still needs DD.",
+		audience: "delegate",
+		fields: {
+			venue_name: "Public venue name.",
+			first_name: "Tenant contact's first name.",
+			organisation_name: "Tenant organisation name.",
+			signed_at: "Pre-formatted timestamp of the signature.",
+			direct_debit_url: "Link to /tenancy/[dd_token]/direct-debit when DD setup still needed, empty otherwise.",
+			needs_direct_debit: "Boolean - true when direct_debit_url is present. Use with {{#if needs_direct_debit}} to show the DD CTA.",
+		},
+	},
+
+	"tenancy-agreement-cancelled": {
+		templateId: null,
+		description: "Sent to a tenant when an admin cancels an outstanding agreement (e.g. terms changed, paperwork superseded). Lets them know not to act on the previous link.",
+		audience: "delegate",
+		fields: {
+			venue_name: "Public venue name.",
+			first_name: "Tenant contact's first name.",
+			organisation_name: "Tenant organisation name.",
+			cancelled_reason: "Short reason the admin entered (may be empty).",
+		},
+	},
+
+	"tenancy-dd-setup": {
+		templateId: null,
+		description: "Stand-alone direct-debit setup nudge. Used when an admin wants to send just the DD link (e.g. agreement already signed in person, or DD mandate needs replacing without re-issuing the agreement).",
+		audience: "delegate",
+		fields: {
+			venue_name: "Public venue name.",
+			first_name: "Tenant contact's first name.",
+			organisation_name: "Tenant organisation name.",
+			direct_debit_url: "Link to /tenancy/[dd_token]/direct-debit.",
+		},
+	},
+
+	"tenancy-dd-ready": {
+		templateId: null,
+		description: "Sent to a tenant once their direct debit mandate is in place. Confirms the venue will pull funds on each invoice date.",
+		audience: "delegate",
+		fields: {
+			venue_name: "Public venue name.",
+			first_name: "Tenant contact's first name.",
+			organisation_name: "Tenant organisation name.",
+			invoice_day_of_month: "Day of month each invoice is collected (e.g. '1st').",
+		},
+	},
+
 	"booking-reminder": {
 		templateId: null,
 		description: "Sent by the daily cron at fixed offsets before a booking's first segment (currently 7 days and 1 day out). Skipped if already fired for that offset.",
