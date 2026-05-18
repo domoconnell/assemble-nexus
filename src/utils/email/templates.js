@@ -157,7 +157,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"monthly-board-pack": {
-		templateId: null,
+		templateId: "d-55561b6b1e074f8c9c15d035de38bf4d",
 		description: "Sent on the 1st of every month to the configured board-report recipients. Attaches the previous month's board pack PDF.",
 		audience: "staff",
 		fields: {
