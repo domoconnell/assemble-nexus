@@ -52,30 +52,63 @@
 				"title": "Ledger",
 				"url": "/admin/ledger",
 				"icon": "chart-line",
-				"items": [
-					{ "title": "Overview", "url": "/admin/ledger/overview" },
-					{ "title": "Banking", "url": "/admin/ledger/banking" },
-					{ "title": "Recurring costs", "url": "/admin/ledger/recurring" },
-					{ "title": "Expenses", "url": "/admin/ledger/expenses" },
-					{ "title": "POS takings", "url": "/admin/ledger/pos" },
-					{ "title": "Manual income", "url": "/admin/ledger/income" },
-					{ "title": "VAT return", "url": "/admin/ledger/vat" }
+				"sections": [
+					{
+						"section": "Manage",
+						"items": [
+							{ "title": "Overview", "url": "/admin/ledger/overview" },
+							{ "title": "Banking", "url": "/admin/ledger/banking" },
+							{ "title": "POS takings", "url": "/admin/ledger/pos" },
+							{ "title": "Manual income", "url": "/admin/ledger/income" }
+						]
+					},
+					{
+						"section": "Expenses",
+						"items": [
+							{ "title": "Recurring costs", "url": "/admin/ledger/recurring" },
+							{ "title": "One-off expenses", "url": "/admin/ledger/expenses" }
+						]
+					},
+					{
+						"section": "Export",
+						"items": [
+							{ "title": "VAT return", "url": "/admin/ledger/vat" },
+							{ "title": "Board reports", "url": "/admin/ledger/board-reports" }
+						]
+					}
 				]
 			},
 			{
 				"title": "Settings",
 				"url": "/admin/settings",
 				"icon": "gear",
-				"items": [
-					{ "title": "Booking types", "url": "/admin/settings/booking-types" },
-					{ "title": "Deposit policy", "url": "/admin/settings/deposit-policy" },
-					{ "title": "Booking agreement", "url": "/admin/settings/booking-agreement" },
-					{ "title": "Discounts", "url": "/admin/settings/discounts" },
-					{ "title": "Ticketing", "url": "/admin/settings/ticketing" },
-					{ "title": "Payments", "url": "/admin/settings/payments" },
-					{ "title": "Bank accounts", "url": "/admin/settings/bank-accounts" },
-					{ "title": "POS", "url": "/admin/settings/pos" },
-					{ "title": "Hours & rate bands", "url": "/admin/settings/hours" }
+				"sections": [
+					{
+						"section": "Booking",
+						"items": [
+							{ "title": "Booking types", "url": "/admin/settings/booking-types" },
+							{ "title": "Booking agreement", "url": "/admin/settings/booking-agreement" },
+							{ "title": "Deposit policy", "url": "/admin/settings/deposit-policy" },
+							{ "title": "Discounts", "url": "/admin/settings/discounts" },
+							{ "title": "Hours & rate bands", "url": "/admin/settings/hours" }
+						]
+					},
+					{
+						"section": "Ticketing",
+						"items": [
+							{ "title": "Platform fees", "url": "/admin/settings/ticketing" },
+							{ "title": "Wallets & passes", "url": "/admin/settings/wallets" }
+						]
+					},
+					{
+						"section": "Connections",
+						"items": [
+							{ "title": "Bank accounts", "url": "/admin/settings/bank-accounts" },
+							{ "title": "Payments", "url": "/admin/settings/payments" },
+							{ "title": "POS", "url": "/admin/settings/pos" },
+							{ "title": "Church transfers", "url": "/admin/settings/church-transfer" }
+						]
+					}
 				]
 			}
 		]

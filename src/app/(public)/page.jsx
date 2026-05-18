@@ -43,13 +43,16 @@ export default async function HomePage() {
 				every show.
 			</>
 		);
+	const heroSubtitle = hero.subtitle
+		? <RichText html={hero.subtitle} />
+		: "A 400-capacity concert hall, two flexible rooms, a working café, and a team that knows the room. Hire it. Perform in it. Get married in it.";
 
 	return (
 		<>
 			<Hero
 				kicker={hero.kicker ?? "Live music · Conferences · Weddings"}
 				title={heroTitle}
-				subtitle={hero.subtitle ?? "A 400-capacity concert hall, two flexible rooms, a working café, and a team that knows the room. Hire it. Perform in it. Get married in it."}
+				subtitle={heroSubtitle}
 				backgroundImage={hero.background_file_id_url ?? undefined}
 				backgroundAlt="Assembly Rooms"
 				backgroundGreyscale={false}

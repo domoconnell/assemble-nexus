@@ -105,7 +105,9 @@ export async function getCombinedLatestBalance(venueId, { accountIds } = {}) {
 
 /**
  * In/out totals over a date range, keyed off settled_at. Excludes
- * `is_transfer` rows so the figure reflects external money movement only.
+ * `is_transfer` rows and `is_church_transfer` rows so the figure reflects
+ * external money movement only (and not the church transfer, which is its
+ * own line on the ledger).
  */
 export async function getBankInOutBetween(venueId, fromDate, toDate, { accountIds } = {}) {
 	const filter = accountFilter(accountIds);
@@ -120,6 +122,7 @@ export async function getBankInOutBetween(venueId, fromDate, toDate, { accountId
 				eq(bank_transaction.venue_id, venueId),
 				isNotNull(bank_transaction.settled_at),
 				eq(bank_transaction.is_transfer, false),
+				eq(bank_transaction.is_church_transfer, false),
 				sql`${bank_transaction.settled_at} >= ${fromDate.toISOString()}`,
 				sql`${bank_transaction.settled_at} < ${toDate.toISOString()}`,
 				...(filter ? [filter] : []),
@@ -161,6 +164,46 @@ export async function listBankTransactions(venueId, { limit = 50, offset = 0, ac
 			.where(where),
 	]);
 	return { rows, total: Number(count) || 0 };
+}
+
+/**
+ * Sum of all settled church transfers for the venue, optionally bounded.
+ * Used by the ledger to compute "available to transfer to church".
+ */
+export async function sumChurchTransfers(venueId, { fromDate, toDate } = {}) {
+	const conditions = [
+		eq(bank_transaction.venue_id, venueId),
+		eq(bank_transaction.is_church_transfer, true),
+	];
+	if (fromDate) conditions.push(sql`${bank_transaction.settled_at} >= ${fromDate.toISOString()}`);
+	if (toDate) conditions.push(sql`${bank_transaction.settled_at} < ${toDate.toISOString()}`);
+	const [r] = await db
+		.select({
+			total: sql`COALESCE(SUM(${bank_transaction.amount_minor}), 0)::bigint`.as("total"),
+		})
+		.from(bank_transaction)
+		.where(and(...conditions));
+	return Number(r?.total ?? 0);
+}
+
+/**
+ * Recent church-transfer transactions, newest first. Used by the ledger
+ * overview to show a small list under "Available to transfer to church".
+ */
+export async function listRecentChurchTransfers(venueId, { limit = 6 } = {}) {
+	return db
+		.select()
+		.from(bank_transaction)
+		.where(
+			and(
+				eq(bank_transaction.venue_id, venueId),
+				eq(bank_transaction.is_church_transfer, true),
+			),
+		)
+		.orderBy(
+			desc(sql`COALESCE(${bank_transaction.settled_at}, ${bank_transaction.transaction_time})`),
+		)
+		.limit(limit);
 }
 
 /**

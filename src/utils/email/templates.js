@@ -156,6 +156,19 @@ export const EMAIL_TEMPLATES = {
 		},
 	},
 
+	"monthly-board-pack": {
+		templateId: null,
+		description: "Sent on the 1st of every month to the configured board-report recipients. Attaches the previous month's board pack PDF.",
+		audience: "staff",
+		fields: {
+			venue_name: "Public venue name.",
+			month_label: "Human-readable label (e.g. 'May 2026').",
+			ym: "Machine identifier (e.g. '2026-05').",
+			recipient_name: "Recipient's display name when set, otherwise empty.",
+			download_url: "Public S3 link to the PDF for re-download.",
+		},
+	},
+
 	"ticket-order-confirmation": {
 		templateId: null,
 		description: "Sent to a delegate after they successfully pay for a ticket order. Includes the order reference and a link to view tickets.",

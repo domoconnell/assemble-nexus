@@ -4,6 +4,7 @@ import { bank_account } from "@/db/schema/entities/bank_account.js";
 import { bank_transaction } from "@/db/schema/entities/bank_transaction.js";
 import { bank_balance_snapshot } from "@/db/schema/entities/bank_balance_snapshot.js";
 import { getProvider } from "./providers/index.js";
+import { getChurchTransferSettings } from "@/db/queries/settings.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_BACKFILL_DAYS = 400;
@@ -153,6 +154,9 @@ export async function syncBankAccount(account, { force = false } = {}) {
 	// 6. Transfer-detect against the venue's other accounts (best-effort)
 	await markTransfersForVenue(account.venue_id);
 
+	// 7. Detect outbound transfers to the configured church account.
+	await markChurchTransfersForVenue(account.venue_id);
+
 	return {
 		ok: true,
 		inserted,
@@ -290,6 +294,40 @@ async function markTransfersForVenue(venueId) {
 			AND counterparty_account IS NOT NULL
 			AND counterparty_account IN (${sql.join(uids.map((u) => sql`${u}`), sql`, `)})
 			AND is_transfer = false
+	`);
+}
+
+/**
+ * Flag outbound transactions to the venue's configured church account.
+ * Match is OR-ed across counterparty_name (case-insensitive contains),
+ * sort_code (exact substring in counterparty_account), and account_number
+ * (exact substring). Only the OUT direction qualifies and we never touch
+ * rows already flagged as inter-account transfers - those should stay on
+ * `is_transfer`.
+ *
+ * Idempotent: re-running just re-asserts the same rows.
+ */
+async function markChurchTransfersForVenue(venueId) {
+	const settings = await getChurchTransferSettings(venueId);
+	const name = (settings?.counterparty_name || "").trim();
+	const sortCode = (settings?.sort_code || "").replace(/[-\s]/g, "").trim();
+	const accountNumber = (settings?.account_number || "").trim();
+	if (!name && !sortCode && !accountNumber) return;
+
+	const conditions = [];
+	if (name) conditions.push(sql`LOWER(counterparty_name) LIKE ${`%${name.toLowerCase()}%`}`);
+	if (sortCode) conditions.push(sql`REPLACE(REPLACE(counterparty_account, '-', ''), ' ', '') LIKE ${`%${sortCode}%`}`);
+	if (accountNumber) conditions.push(sql`counterparty_account LIKE ${`%${accountNumber}%`}`);
+	if (conditions.length === 0) return;
+
+	await db.execute(sql`
+		UPDATE bank_transaction
+		SET is_church_transfer = true
+		WHERE venue_id = ${venueId}
+			AND direction = 'OUT'
+			AND is_transfer = false
+			AND is_church_transfer = false
+			AND (${sql.join(conditions, sql` OR `)})
 	`);
 }
 

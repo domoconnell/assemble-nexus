@@ -260,6 +260,20 @@
       "when": 1778869807062,
       "tag": "0036_late_silver_sable",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1778949311670,
+      "tag": "0037_striped_living_tribunal",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1779040379877,
+      "tag": "0038_lumpy_lyja",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,9 @@ export const room = pgTable(
         name: text("name").notNull(),
         tagline: text("tagline"),
         short_description: text("short_description"),
+        // Rich-text "About this room" copy, edited as HTML in the admin
+        // CMS and rendered as-is on the public room page.
+        content_html: text("content_html"),
         hero_file_id: uuid("hero_file_id").references(() => file.id, { onDelete: "set null" }),
         av_highlight: text("av_highlight"),
         accent_hue: text("accent_hue"),

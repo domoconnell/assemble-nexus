@@ -10,6 +10,7 @@ import { Textarea } from "@/shadcn/components/ui/textarea";
 import { Label } from "@/shadcn/components/ui/label";
 import { Checkbox } from "@/shadcn/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/shadcn/components/ui/tabs";
+import RichTextEditor from "@/global/ui/components/rich-text-editor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shadcn/components/ui/select";
 import FileUpload from "@/global/ui/components/file-upload";
 import ConfirmDialog from "@/global/ui/components/confirm-dialog";
@@ -74,6 +75,7 @@ export default function RoomEditor({
 		name: initialRoom?.name ?? "",
 		tagline: initialRoom?.tagline ?? "",
 		short_description: initialRoom?.short_description ?? "",
+		content_html: initialRoom?.content_html ?? "",
 		hero_file_id: initialRoom?.hero_file_id ?? null,
 		av_highlight: initialRoom?.av_highlight ?? "",
 		accent_hue: initialRoom?.accent_hue ?? "",
@@ -384,15 +386,14 @@ export default function RoomEditor({
 								Delete
 							</Button>
 						)}
-						{/* Top Save is for Details-tab fields only - every other tab
-						    has its own save mechanism (pricing's "Save pricing" at
-						    the bottom, packages save per-card, blocks per-block,
-						    gallery on blur). Hiding it elsewhere stops users from
-						    clicking it and wondering why their pricing edits
-						    didn't persist. */}
-						{tab === "details" && (
+						{/* Top Save covers everything that lives on the `room` row
+						    itself - the Details tab fields plus the Content tab's
+						    rich-text body. Pricing, facility packages, blocks and
+						    gallery all have their own save mechanisms, so the
+						    button is hidden on those tabs to avoid confusion. */}
+						{(tab === "details" || tab === "content") && (
 							<Button onClick={handleSave} disabled={saving || !room.name || !room.slug}>
-								{saving ? "Saving…" : "Save details"}
+								{saving ? "Saving…" : tab === "content" ? "Save content" : "Save details"}
 							</Button>
 						)}
 					</div>
@@ -429,10 +430,6 @@ export default function RoomEditor({
 							<div className="space-y-2 sm:col-span-2">
 								<Label htmlFor="tagline">Tagline</Label>
 								<Input id="tagline" value={room.tagline ?? ""} onChange={(e) => update("tagline", e.target.value)} />
-							</div>
-							<div className="space-y-2 sm:col-span-2">
-								<Label htmlFor="short_description">Short description</Label>
-								<Textarea id="short_description" rows={3} value={room.short_description ?? ""} onChange={(e) => update("short_description", e.target.value)} />
 							</div>
 							<div className="space-y-2 sm:col-span-2">
 								<Label htmlFor="av_highlight">AV highlight (one-liner shown on cards)</Label>
@@ -718,38 +715,22 @@ export default function RoomEditor({
 				</TabsContent>
 
 				<TabsContent value="content" className="space-y-8">
-					<section className="rounded-lg border bg-card p-6 space-y-5">
-						<div className="flex items-center justify-between gap-4">
-							<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">About</h2>
-							<Button
-								type="button"
-								size="sm"
-								variant="outline"
-								onClick={() => handleAddBlock({ type: "prose", section: "about", category: null })}
-							>
-								+ Paragraphs
-							</Button>
-						</div>
-						{aboutBlocks.length === 0 && (
-							<p className="text-sm text-muted-foreground">
-								No prose blocks yet. The short description above already shows on the public site.
+					<section className="rounded-lg border bg-card p-6 space-y-4">
+						<div>
+							<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
+								About this room
+							</h2>
+							<p className="text-xs text-muted-foreground mt-1 max-w-prose">
+								The body copy shown on the room&apos;s public page. Use the
+								toolbar for bold, italic, links and lists. Hit{" "}
+								<span className="font-medium">Save details</span> on the
+								Details tab to persist changes.
 							</p>
-						)}
-						<div className="space-y-4">
-							{aboutBlocks.map((b, i) => (
-								<BlockEditor
-									key={b.id}
-									block={b}
-									isFirst={i === 0}
-									isLast={i === aboutBlocks.length - 1}
-									onChange={(payload) => setBlocks((bs) => bs.map((x) => (x.id === b.id ? { ...x, payload } : x)))}
-									onSave={() => handleSaveBlock(blocks.find((x) => x.id === b.id))}
-									onDelete={() => setConfirmBlockDelete(b.id)}
-									onMove={(dir) => handleMoveBlock(b.id, dir)}
-									busy={pending}
-								/>
-							))}
 						</div>
+						<RichTextEditor
+							value={room.content_html ?? ""}
+							onChange={(html) => update("content_html", html)}
+						/>
 					</section>
 				</TabsContent>
 

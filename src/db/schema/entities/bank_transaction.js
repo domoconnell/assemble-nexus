@@ -15,6 +15,14 @@ export const BANK_DIRECTIONS = ["IN", "OUT"];
  * sync by matching counterparty info against other bank_accounts of the
  * same venue.
  *
+ * `is_church_transfer` flags outbound transactions to the church's bank
+ * account, configured per-venue in the `church_transfer` setting. These
+ * are excluded from in/out totals (like inter-account transfers) but are
+ * also surfaced separately so the ledger can show "available to transfer
+ * to church" = cumulative available-for-church minus the sum of these.
+ * Set during sync by matching counterparty against the church_transfer
+ * setting; admins can also flip it manually.
+ *
  * `matched_to_id` + `matched_to_type` are placeholders for the future
  * reconciliation UI (matching an inbound transfer to a booking, etc).
  */
@@ -34,6 +42,7 @@ export const bank_transaction = pgTable(
 		category_uid: text("category_uid"),
 		source: text("source").notNull().default("starling"),
 		is_transfer: boolean("is_transfer").default(false).notNull(),
+		is_church_transfer: boolean("is_church_transfer").default(false).notNull(),
 		settled_at: timestamp("settled_at", { withTimezone: true }),
 		transaction_time: timestamp("transaction_time", { withTimezone: true }),
 		raw_payload: jsonb("raw_payload"),

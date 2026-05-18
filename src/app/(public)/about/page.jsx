@@ -26,14 +26,14 @@ export default async function AboutPage() {
 			<Hero
 				height="medium"
 				kicker={hero.kicker ?? "About"}
-				title={hero.title ?? "A venue inside a church."}
-				subtitle={hero.subtitle ?? "The Assembly Rooms is the venue and hire arm of Assemble Church. Three rooms, a working café, and a team that has run a thousand nights."}
+				title={hero.title ? <RichText html={hero.title} /> : "A venue inside a church."}
+				subtitle={hero.subtitle ? <RichText html={hero.subtitle} /> : "The Assembly Rooms is the venue and hire arm of Assemble Church. Three rooms, a working café, and a team that has run a thousand nights."}
 				hue="from-cyan-500/15 via-cyan-700/10 to-transparent"
 			/>
 			<Section
 				kicker={whoWeAre.kicker ?? "Who we are"}
 				title={whoWeAre.title ?? "Built for working nights."}
-				intro={whoWeAre.intro ?? "Most venues hire out a room. We hire out a building that knows what it's doing. The same hands that run our own shows run yours."}
+				intro={whoWeAre.intro ? <RichText html={whoWeAre.intro} /> : "Most venues hire out a room. We hire out a building that knows what it's doing. The same hands that run our own shows run yours."}
 			>
 				<div className="prose prose-invert max-w-3xl">
 					{whoWeAre.body ? (

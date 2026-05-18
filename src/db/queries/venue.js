@@ -17,3 +17,15 @@ export async function requireCurrentVenue() {
     if (!v) throw new Error("No active venue configured");
     return v;
 }
+
+/**
+ * Every active, non-deleted venue. Used by crons that have no session
+ * context and must iterate the whole tenant set.
+ */
+export async function listActiveVenues() {
+    return db
+        .select()
+        .from(venue)
+        .where(and(eq(venue.is_active, true), isNull(venue.deletedAt)))
+        .orderBy(asc(venue.createdAt));
+}

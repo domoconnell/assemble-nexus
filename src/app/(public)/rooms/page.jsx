@@ -1,6 +1,7 @@
 import { Hero } from "@/site/ui/hero";
 import { Section } from "@/site/ui/section";
 import { RoomCard } from "@/site/ui/room-card";
+import { RichText } from "@/site/ui/rich-text";
 import { listPublishedRooms } from "@/db/queries/rooms";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import { getPageContent } from "@/db/queries/site-content";
@@ -25,8 +26,8 @@ export default async function RoomsPage() {
 			<Hero
 				height="medium"
 				kicker={hero.kicker ?? "Rooms"}
-				title={hero.title ?? "Pick your room."}
-				subtitle={hero.subtitle ?? "From the concert hall to the smaller reception spaces - each one set up to do its thing better than anywhere else in town."}
+				title={hero.title ? <RichText html={hero.title} /> : "Pick your room."}
+				subtitle={hero.subtitle ? <RichText html={hero.subtitle} /> : "From the concert hall to the smaller reception spaces. Each one set up to do its thing better than anywhere else in town."}
 			/>
 			<Section>
 				{rooms.length ? (

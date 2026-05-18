@@ -66,9 +66,9 @@ export function Hero({
 						</h1>
 					)}
 					{subtitle && (
-						<p className="text-lg sm:text-xl text-muted-foreground leading-relaxed max-w-2xl">
+						<div className="text-lg sm:text-xl text-muted-foreground leading-relaxed max-w-2xl">
 							{subtitle}
-						</p>
+						</div>
 					)}
 					{actions && <div className="mt-2 flex flex-wrap gap-3">{actions}</div>}
 					{children}

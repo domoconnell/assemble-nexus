@@ -8,6 +8,7 @@ import { manual_income } from "@/db/schema/entities/manual_income.js";
 import { booking } from "@/db/schema/entities/booking.js";
 import { ticket_order } from "@/db/schema/entities/ticket_order.js";
 import { event } from "@/db/schema/entities/event.js";
+import { sumChurchTransfers } from "@/db/queries/bank.js";
 
 export async function listEventsForExpenseLinking(venueId) {
 	return db
@@ -517,6 +518,97 @@ export async function listMonthlyPnlForRange(venueId, { endYm, monthsBack = 12 }
 	return results;
 }
 
+/**
+ * Earliest month with any P&L footprint - any of: a recurring cost
+ * schedule effective_from, an expense, a manual income, a paid booking,
+ * a paid ticket order, or a POS day. Returns null if nothing yet, in
+ * which case the cumulative roll-up just covers the current month.
+ *
+ * Returned as 'YYYY-MM-01'.
+ */
+async function getEarliestPnlMonth(venueId) {
+	const res = await db.execute(sql`
+		SELECT MIN(d)::date AS earliest FROM (
+			SELECT effective_from AS d FROM recurring_cost_schedule
+				WHERE venue_id = ${venueId}
+			UNION ALL
+			SELECT date AS d FROM expense
+				WHERE venue_id = ${venueId} AND deleted_at IS NULL
+			UNION ALL
+			SELECT date AS d FROM manual_income
+				WHERE venue_id = ${venueId} AND deleted_at IS NULL
+			UNION ALL
+			SELECT date AS d FROM pos_daily_takings
+				WHERE venue_id = ${venueId}
+			UNION ALL
+			SELECT confirmed_at::date AS d FROM booking
+				WHERE venue_id = ${venueId} AND confirmed_at IS NOT NULL
+			UNION ALL
+			SELECT (ticket_order.paid_at)::date AS d
+				FROM ticket_order
+				JOIN event ON event.id = ticket_order.event_id
+				WHERE event.venue_id = ${venueId}
+					AND ticket_order.paid_at IS NOT NULL
+					AND ticket_order.deleted_at IS NULL
+		) AS all_dates
+	`);
+	const list = res.rows ?? res;
+	const earliest = list[0]?.earliest;
+	if (!earliest) return null;
+	const d = new Date(earliest);
+	return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
+
+/**
+ * Cumulative "available for church transfer" since the venue started
+ * tracking, minus the total church transfers settled to date. This is the
+ * headline "Available to transfer to church" number on the ledger
+ * overview - sums every month's (income - cost_of_delivery - staff) and
+ * deducts the bank-side transfers that have actually moved.
+ */
+export async function getAvailableToTransferToChurch(venueId, { upToYm } = {}) {
+	const endYmDefault = (() => {
+		const now = new Date();
+		return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+	})();
+	const endYm = upToYm ?? endYmDefault;
+
+	const earliest = await getEarliestPnlMonth(venueId);
+	if (!earliest) {
+		const transferred = await sumChurchTransfers(venueId);
+		return {
+			cumulative_available: 0,
+			transferred_to_church: transferred,
+			available_to_transfer: -transferred,
+			month_count: 0,
+		};
+	}
+	const [startY, startM] = earliest.slice(0, 7).split("-").map(Number);
+	const [endY, endM] = endYm.split("-").map(Number);
+	const monthCount = (endY - startY) * 12 + (endM - startM) + 1;
+	if (monthCount <= 0) {
+		const transferred = await sumChurchTransfers(venueId);
+		return {
+			cumulative_available: 0,
+			transferred_to_church: transferred,
+			available_to_transfer: -transferred,
+			month_count: 0,
+		};
+	}
+
+	const months = await listMonthlyPnlForRange(venueId, { endYm, monthsBack: monthCount });
+	let cumulative = 0;
+	for (const m of months) cumulative += m.building_net ?? 0;
+
+	const transferred = await sumChurchTransfers(venueId);
+	return {
+		cumulative_available: cumulative,
+		transferred_to_church: transferred,
+		available_to_transfer: cumulative - transferred,
+		month_count: months.length,
+	};
+}
+
 export async function getMonthlyPnl(venueId, {
 	ymdFirstOfMonth,
 	ymdFirstOfNextMonth,
@@ -543,25 +635,27 @@ export async function getMonthlyPnl(venueId, {
 		sumStripeFeesForMonth(venueId, monthStartDate, monthEndDate),
 	]);
 
+	// Stripe takes its processing fee at the source - we net it out of
+	// ticket income here rather than treating it as a separate "cost of
+	// delivery" line, so the displayed income figure reflects what the
+	// venue actually keeps.
+	const tickets_net_of_stripe = ticket_income - stripe_fees;
 	const income = {
-		tickets: ticket_income,
+		tickets: tickets_net_of_stripe,
+		tickets_gross: ticket_income,
+		stripe_fees,
 		bookings: booking_income,
 		pos_net: pos.net,
 		manual,
-		total: ticket_income + booking_income + pos.net + manual,
+		total: tickets_net_of_stripe + booking_income + pos.net + manual,
 	};
 
-	// Cost of delivery now includes organiser payouts + Stripe fees so the
-	// waterfall reads as "money in → minus everything we have to spend to
-	// deliver the service → what's left for fixed costs and ministry gift".
 	const cost_of_delivery_breakdown = {
 		expenses: expenses_delivery,
 		pos_cogs: pos.cogs,
 		organiser_payouts,
-		stripe_fees,
 	};
-	const cost_of_delivery =
-		expenses_delivery + pos.cogs + organiser_payouts + stripe_fees;
+	const cost_of_delivery = expenses_delivery + pos.cogs + organiser_payouts;
 
 	const fixed = {
 		utilities: recurring.utilities ?? 0,
@@ -571,7 +665,22 @@ export async function getMonthlyPnl(venueId, {
 	};
 	const fixed_total = fixed.utilities + fixed.staff + fixed.mortgage + fixed.mortgage_extra;
 
-	const ministry_gift = income.total - cost_of_delivery - fixed_total;
+	// Cost of business: what the business actually pays out of its own
+	// account (cost of delivery + staff).
+	const cost_of_business = cost_of_delivery + fixed.staff;
+	const business_net = income.total - cost_of_business;
+	// Cost of building: recurring property bills the church pays directly
+	// (utilities + mortgage). Extra mortgage is a separate downstream
+	// deduction so it surfaces on the waterfall.
+	const cost_of_building = fixed.utilities + fixed.mortgage;
+	// Building net: what's transferable to the church after the business
+	// has covered its own costs and the building's recurring bills.
+	const building_net = business_net - cost_of_building;
+	// Ministry net: what's left for ministry after the church has set aside
+	// any extra mortgage payments.
+	const ministry_net = building_net - fixed.mortgage_extra;
+	// Alias - same number as ministry_net; kept for older call sites.
+	const ministry_gift = ministry_net;
 
 	return {
 		income,
@@ -583,6 +692,13 @@ export async function getMonthlyPnl(venueId, {
 		stripe_fees,
 		fixed,
 		fixed_total,
+		cost_of_business,
+		business_net,
+		cost_of_building,
+		building_net,
+		ministry_net,
 		ministry_gift,
+		// Bookkeeping totals - useful for tooltips and audit:
+		ticket_income_gross: ticket_income,
 	};
 }

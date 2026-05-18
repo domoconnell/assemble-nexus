@@ -301,6 +301,64 @@ export async function countPendingBookings(venueId) {
  * still owe the venue. Excludes pending (not yet approved) and finished
  * statuses.
  */
+/**
+ * Outstanding payments split by whether the booking's event(s) fall in
+ * the current month vs the past. For each booking we compute:
+ *   - unpaid_deposit  = max(0, deposit_required - deposit_paid)
+ *   - unpaid_balance  = max(0, (total - deposit_required) - balance_paid)
+ * Then classify by segment date: if any segment lands in the [from, to)
+ * window → "this month"; if all segments ended before `from` → "previous".
+ * Future-only bookings are excluded (they're upcoming obligations, not
+ * what the board is reviewing this month).
+ *
+ * Excludes pending/rejected/cancelled bookings - only approved,
+ * confirmed, or completed count, in line with `sumOutstandingBalances`.
+ */
+export async function sumPaymentsOwedSplit(venueId, fromDate, toDate) {
+	const fromIso = fromDate.toISOString();
+	const toIso = toDate.toISOString();
+	const rows = await db.execute(sql`
+		WITH per_booking AS (
+			SELECT
+				b.id,
+				b.total_cents,
+				b.deposit_required_cents,
+				b.deposit_paid_cents,
+				b.balance_paid_cents,
+				BOOL_OR(s.starts_at >= ${fromIso} AND s.starts_at < ${toIso}) AS has_this_month,
+				MAX(s.starts_at) < ${fromIso} AS all_previous
+			FROM booking b
+			INNER JOIN booking_segment s ON s.booking_id = b.id AND s.deleted_at IS NULL
+			WHERE b.venue_id = ${venueId}
+				AND b.deleted_at IS NULL
+				AND b.status IN ('approved', 'confirmed', 'completed')
+			GROUP BY b.id
+		)
+		SELECT
+			CASE
+				WHEN has_this_month THEN 'this_month'
+				WHEN all_previous THEN 'previous'
+				ELSE NULL
+			END AS bucket,
+			COALESCE(SUM(GREATEST(0, deposit_required_cents - deposit_paid_cents)), 0)::int
+				AS unpaid_deposits,
+			COALESCE(SUM(GREATEST(0, (total_cents - deposit_required_cents) - balance_paid_cents)), 0)::int
+				AS unpaid_balances
+		FROM per_booking
+		WHERE has_this_month OR all_previous
+		GROUP BY bucket
+	`);
+	const blank = { unpaid_deposits: 0, unpaid_balances: 0, total: 0 };
+	const out = { this_month: { ...blank }, previous: { ...blank } };
+	for (const r of rows.rows ?? rows) {
+		if (!r.bucket) continue;
+		const d = Number(r.unpaid_deposits) || 0;
+		const b = Number(r.unpaid_balances) || 0;
+		out[r.bucket] = { unpaid_deposits: d, unpaid_balances: b, total: d + b };
+	}
+	return out;
+}
+
 export async function sumOutstandingBalances(venueId) {
 	const [row] = await db
 		.select({

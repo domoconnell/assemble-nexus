@@ -10,6 +10,7 @@ import {
 import { currentMonthLondon, resolveMonth, monthLabel } from "@/lib/finance/months";
 import BalanceChart from "./_components/balance-chart";
 import AccountPills from "./_components/account-pills";
+import ChurchTransferToggle from "./_components/church-transfer-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -212,12 +213,20 @@ function TransactionsTable({ rows, accountsById }) {
 								<td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">{dateStr}</td>
 								<td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{accountLabel}</td>
 								<td className="px-4 py-2.5">
-									{r.counterparty_name || "-"}
-									{r.is_transfer && (
-										<span className="ml-2 text-[10px] uppercase tracking-[0.15em] text-muted-foreground border border-foreground/15 rounded-full px-1.5 py-0.5">
-											Transfer
-										</span>
-									)}
+									<div className="flex items-baseline gap-2 flex-wrap">
+										<span>{r.counterparty_name || "-"}</span>
+										{r.is_transfer && (
+											<span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground border border-foreground/15 rounded-full px-1.5 py-0.5">
+												Transfer
+											</span>
+										)}
+										{!r.is_transfer && !isIn && (
+											<ChurchTransferToggle
+												transactionId={r.id}
+												initial={r.is_church_transfer}
+											/>
+										)}
+									</div>
 								</td>
 								<td className="px-4 py-2.5 text-muted-foreground truncate max-w-xs">
 									{r.reference || ""}

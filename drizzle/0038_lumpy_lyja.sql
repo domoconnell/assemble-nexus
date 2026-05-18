@@ -1,0 +1,1 @@
+ALTER TABLE "bank_transaction" ADD COLUMN "is_church_transfer" boolean DEFAULT false NOT NULL;

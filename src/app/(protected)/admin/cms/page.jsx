@@ -53,7 +53,16 @@ export default async function CmsPage({ searchParams }) {
 					))}
 				</aside>
 
-				<CmsEditor pageKey={pageKey} schema={schema} initialContent={content} />
+				{/* `key` on the editor forces a remount when the user clicks
+				    between pages. Without it, useState keeps the first page's
+				    content in memory and saving on a subsequent page writes
+				    the wrong page's data under the new page_key. */}
+				<CmsEditor
+					key={pageKey}
+					pageKey={pageKey}
+					schema={schema}
+					initialContent={content}
+				/>
 			</div>
 		</div>
 	);

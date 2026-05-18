@@ -701,51 +701,65 @@ function WaterfallSection({ pnl }) {
 		{ label: "Expenses", value: pnl.cost_of_delivery_breakdown.expenses },
 		{ label: "POS COGS", value: pnl.cost_of_delivery_breakdown.pos_cogs },
 		{ label: "Owed to organisers", value: pnl.cost_of_delivery_breakdown.organiser_payouts },
-		{ label: "Stripe fees", value: pnl.cost_of_delivery_breakdown.stripe_fees },
 	].filter((r) => r.value !== 0);
 
-	const staffAndUtilities = pnl.fixed.utilities + pnl.fixed.staff;
 	const afterCod = pnl.income.total - pnl.cost_of_delivery;
-	const afterStaffAndUtilities = afterCod - staffAndUtilities;
-	const afterMortgage = afterStaffAndUtilities - pnl.fixed.mortgage;
-	const ministryGift = afterMortgage - pnl.fixed.mortgage_extra;
+	const businessNet = afterCod - pnl.fixed.staff;
+	const buildingNet = businessNet - pnl.cost_of_building;
+	const ministryNet = buildingNet - pnl.fixed.mortgage_extra;
 
-	const staffUtilBreakdown = [
+	const staffBreakdown = pnl.fixed.staff !== 0
+		? [{ label: "Staff", value: pnl.fixed.staff }]
+		: [];
+	const buildingBreakdown = [
 		{ label: "Utilities", value: pnl.fixed.utilities },
-		{ label: "Staff", value: pnl.fixed.staff },
+		{ label: "Mortgage", value: pnl.fixed.mortgage },
 	].filter((r) => r.value !== 0);
+	const extraBreakdown = pnl.fixed.mortgage_extra !== 0
+		? [{ label: "Extra mortgage", value: pnl.fixed.mortgage_extra }]
+		: [];
+
+	const toneFor = (n) => (n >= 0 ? "primary" : "destructive");
 
 	const steps = [
 		{
 			label: "Income",
 			running: pnl.income.total,
 			breakdown: incomeBreakdown,
-			tone: pnl.income.total > 0 ? "primary" : "muted",
+			tone: toneFor(pnl.income.total),
 		},
 		{
-			label: "A/ Cost of Delivery",
+			label: "Business Net",
+			subLabel: "A/ Cost of delivery",
 			running: afterCod,
 			deduction: pnl.cost_of_delivery,
 			breakdown: codBreakdown,
+			tone: toneFor(afterCod),
 		},
 		{
-			label: "A/ Staff & Utilities",
-			running: afterStaffAndUtilities,
-			deduction: staffAndUtilities,
-			breakdown: staffUtilBreakdown,
+			label: "Business Profit",
+			subLabel: "Transfer to church",
+			running: businessNet,
+			deduction: pnl.fixed.staff,
+			breakdown: staffBreakdown,
+			tone: toneFor(businessNet),
+			highlight: true,
 		},
 		{
-			label: "A/ Mortgage",
-			running: afterMortgage,
-			deduction: pnl.fixed.mortgage,
+			label: "Building Gross",
+			subLabel: "A/ Building costs",
+			running: buildingNet,
+			deduction: pnl.cost_of_building,
+			breakdown: buildingBreakdown,
+			tone: toneFor(buildingNet),
 		},
 		{
-			label: "A/ Extra Mortgage",
-			subLabel: "Ministry gift",
-			running: ministryGift,
+			label: "Ministry Gross",
+			subLabel: "A/ Extra mortgage",
+			running: ministryNet,
 			deduction: pnl.fixed.mortgage_extra,
-			hideDeduction: true,
-			tone: ministryGift >= 0 ? "primary" : "destructive",
+			breakdown: extraBreakdown,
+			tone: toneFor(ministryNet),
 			highlight: true,
 		},
 	];

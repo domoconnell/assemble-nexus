@@ -31,6 +31,11 @@ type NavSubItem = {
 	badge_key?: string
 }
 
+type NavSubSection = {
+	section: string
+	items: NavSubItem[]
+}
+
 type NavItem = {
 	title: string
 	url: string
@@ -39,6 +44,7 @@ type NavItem = {
 	minUserLevel?: number
 	badge_key?: string
 	items?: NavSubItem[]
+	sections?: NavSubSection[]
 }
 
 type NavGroupProps = {
@@ -78,9 +84,20 @@ export function NavGroup({
 					const visibleSubItems = item.items?.filter(
 						(sub) => !sub.minUserLevel || userLevel >= sub.minUserLevel
 					)
+					const visibleSections = item.sections
+						?.map((sec) => ({
+							section: sec.section,
+							items: sec.items.filter(
+								(sub) => !sub.minUserLevel || userLevel >= sub.minUserLevel
+							),
+						}))
+						.filter((sec) => sec.items.length > 0)
+					const hasSubmenu =
+						(visibleSubItems && visibleSubItems.length > 0) ||
+						(visibleSections && visibleSections.length > 0)
 					return (
 						<React.Fragment key={item.title}>
-							{visibleSubItems && visibleSubItems.length > 0 ? (
+							{hasSubmenu ? (
 								<Collapsible
 									key={item.title}
 									asChild
@@ -97,18 +114,38 @@ export function NavGroup({
 										</CollapsibleTrigger>
 										<CollapsibleContent>
 											<SidebarMenuSub>
-												{visibleSubItems.map((subItem) => (
-													<SidebarMenuSubItem key={subItem.title}>
-														<SidebarMenuSubButton asChild>
-															<Link href={subItem.url} prefetch={false} className="ml-4 w-full flex items-center gap-4">
-																<span className="text-nowrap">{subItem.title}</span>
-																{subItem.badge_key && (
-																	<Badge count={counts[subItem.badge_key] ?? 0} />
-																)}
-															</Link>
-														</SidebarMenuSubButton>
-													</SidebarMenuSubItem>
-												))}
+												{visibleSections && visibleSections.length > 0
+													? visibleSections.map((sec, secIdx) => (
+														<React.Fragment key={sec.section}>
+															<li className={`px-2 ${secIdx === 0 ? "pt-1" : "pt-2"} pb-0.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground`}>
+																{sec.section}
+															</li>
+															{sec.items.map((subItem) => (
+																<SidebarMenuSubItem key={subItem.title}>
+																	<SidebarMenuSubButton asChild>
+																		<Link href={subItem.url} prefetch={false} className="ml-4 w-full flex items-center gap-4">
+																			<span className="text-nowrap">{subItem.title}</span>
+																			{subItem.badge_key && (
+																				<Badge count={counts[subItem.badge_key] ?? 0} />
+																			)}
+																		</Link>
+																	</SidebarMenuSubButton>
+																</SidebarMenuSubItem>
+															))}
+														</React.Fragment>
+													))
+													: visibleSubItems?.map((subItem) => (
+														<SidebarMenuSubItem key={subItem.title}>
+															<SidebarMenuSubButton asChild>
+																<Link href={subItem.url} prefetch={false} className="ml-4 w-full flex items-center gap-4">
+																	<span className="text-nowrap">{subItem.title}</span>
+																	{subItem.badge_key && (
+																		<Badge count={counts[subItem.badge_key] ?? 0} />
+																	)}
+																</Link>
+															</SidebarMenuSubButton>
+														</SidebarMenuSubItem>
+													))}
 											</SidebarMenuSub>
 										</CollapsibleContent>
 									</SidebarMenuItem>

@@ -6,9 +6,14 @@
  * Field types:
  *   text        – single-line plain text
  *   longtext    – multi-line plain text (textarea)
- *   richtext    – tiny WYSIWYG (bold, italic, link, br)
+ *   richtext    – Tiptap WYSIWYG (bold, italic, link, lists)
  *   image       – file upload; stored as file_id, resolved to public_url on read
  *   hue         – Tailwind hue gradient string for hero backgrounds
+ *
+ * Convention: hero titles + subtitles and any `body` field are richtext so
+ * the user has formatting freedom. Short labels (kickers, button labels,
+ * email addresses, single-line section titles outside the hero) stay plain
+ * text since they only need one line.
  */
 
 export const PAGE_SCHEMAS = {
@@ -22,7 +27,7 @@ export const PAGE_SCHEMAS = {
 				fields: [
 					{ key: "kicker", label: "Kicker (small text above title)", type: "text" },
 					{ key: "title", label: "Title", type: "richtext" },
-					{ key: "subtitle", label: "Subtitle", type: "longtext" },
+					{ key: "subtitle", label: "Subtitle", type: "richtext" },
 					{ key: "background_file_id", label: "Background image (optional)", type: "image" },
 				],
 			},
@@ -32,7 +37,7 @@ export const PAGE_SCHEMAS = {
 				fields: [
 					{ key: "kicker", label: "Kicker", type: "text" },
 					{ key: "title", label: "Title", type: "text" },
-					{ key: "intro", label: "Intro paragraph", type: "longtext" },
+					{ key: "intro", label: "Intro paragraph", type: "richtext" },
 				],
 			},
 			{
@@ -41,7 +46,7 @@ export const PAGE_SCHEMAS = {
 				fields: [
 					{ key: "kicker", label: "Kicker", type: "text" },
 					{ key: "title", label: "Title", type: "text" },
-					{ key: "intro", label: "Intro paragraph", type: "longtext" },
+					{ key: "intro", label: "Intro paragraph", type: "richtext" },
 				],
 			},
 			{
@@ -50,7 +55,7 @@ export const PAGE_SCHEMAS = {
 				fields: [
 					{ key: "kicker", label: "Kicker", type: "text" },
 					{ key: "title", label: "Title", type: "text" },
-					{ key: "intro", label: "Intro paragraph", type: "longtext" },
+					{ key: "intro", label: "Intro paragraph", type: "richtext" },
 					{ key: "cta_label", label: "Button label", type: "text" },
 				],
 			},
@@ -66,8 +71,8 @@ export const PAGE_SCHEMAS = {
 				label: "Hero",
 				fields: [
 					{ key: "kicker", label: "Kicker", type: "text" },
-					{ key: "title", label: "Title", type: "text" },
-					{ key: "subtitle", label: "Subtitle", type: "longtext" },
+					{ key: "title", label: "Title", type: "richtext" },
+					{ key: "subtitle", label: "Subtitle", type: "richtext" },
 				],
 			},
 			{
@@ -76,7 +81,7 @@ export const PAGE_SCHEMAS = {
 				fields: [
 					{ key: "kicker", label: "Kicker", type: "text" },
 					{ key: "title", label: "Title", type: "text" },
-					{ key: "intro", label: "Intro paragraph", type: "longtext" },
+					{ key: "intro", label: "Intro paragraph", type: "richtext" },
 					{ key: "body", label: "Body copy", type: "richtext" },
 				],
 			},
@@ -119,8 +124,8 @@ export const PAGE_SCHEMAS = {
 				label: "Hero",
 				fields: [
 					{ key: "kicker", label: "Kicker", type: "text" },
-					{ key: "title", label: "Title", type: "text" },
-					{ key: "subtitle", label: "Subtitle", type: "longtext" },
+					{ key: "title", label: "Title", type: "richtext" },
+					{ key: "subtitle", label: "Subtitle", type: "richtext" },
 				],
 			},
 		],
@@ -135,8 +140,8 @@ export const PAGE_SCHEMAS = {
 				label: "Hero",
 				fields: [
 					{ key: "kicker", label: "Kicker", type: "text" },
-					{ key: "title", label: "Title", type: "text" },
-					{ key: "subtitle", label: "Subtitle", type: "longtext" },
+					{ key: "title", label: "Title", type: "richtext" },
+					{ key: "subtitle", label: "Subtitle", type: "richtext" },
 				],
 			},
 			{
@@ -144,7 +149,7 @@ export const PAGE_SCHEMAS = {
 				label: "Empty state (when nothing's on)",
 				fields: [
 					{ key: "title", label: "Title", type: "text" },
-					{ key: "body", label: "Body", type: "longtext" },
+					{ key: "body", label: "Body", type: "richtext" },
 				],
 			},
 		],
@@ -159,8 +164,8 @@ export const PAGE_SCHEMAS = {
 				label: "Hero",
 				fields: [
 					{ key: "kicker", label: "Kicker", type: "text" },
-					{ key: "title", label: "Title", type: "text" },
-					{ key: "subtitle", label: "Subtitle", type: "longtext" },
+					{ key: "title", label: "Title", type: "richtext" },
+					{ key: "subtitle", label: "Subtitle", type: "richtext" },
 				],
 			},
 		],
@@ -175,8 +180,8 @@ export const PAGE_SCHEMAS = {
 				label: "Hero",
 				fields: [
 					{ key: "kicker", label: "Kicker", type: "text" },
-					{ key: "title", label: "Title", type: "text" },
-					{ key: "subtitle", label: "Subtitle", type: "longtext" },
+					{ key: "title", label: "Title", type: "richtext" },
+					{ key: "subtitle", label: "Subtitle", type: "richtext" },
 				],
 			},
 			{
@@ -184,7 +189,7 @@ export const PAGE_SCHEMAS = {
 				label: "Hire enquiries block",
 				fields: [
 					{ key: "title", label: "Heading", type: "text" },
-					{ key: "body", label: "Body", type: "longtext" },
+					{ key: "body", label: "Body", type: "richtext" },
 					{ key: "cta_label", label: "Button label", type: "text" },
 				],
 			},

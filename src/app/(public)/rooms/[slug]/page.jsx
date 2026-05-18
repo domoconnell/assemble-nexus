@@ -8,12 +8,11 @@ import { Section } from "@/site/ui/section";
 import { CtaButton } from "@/site/ui/cta-button";
 import { EventCard } from "@/site/ui/event-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shadcn/components/ui/tabs";
-import { ProseBlock } from "@/site/ui/blocks/prose-block";
+import { RichText } from "@/site/ui/rich-text";
 import { FacilityPackageBlock } from "@/site/ui/blocks/facility-package-block";
 import Link from "next/link";
 import {
 	getPublishedRoomBySlug,
-	listRoomBlocks,
 	listRoomImages,
 	listFacilityPackages,
 	listRoomBookingTypes,
@@ -46,8 +45,7 @@ export default async function RoomPage({ params }) {
 	if (!room) notFound();
 
 	const ticketingSettings = await getTicketingSettings(room.venue_id);
-	const [blocks, gallery, facilityPackages, offeredTypes, bookingTypes, discounts, upcomingEvents, pastEvents] = await Promise.all([
-		listRoomBlocks(room.id),
+	const [gallery, facilityPackages, offeredTypes, bookingTypes, discounts, upcomingEvents, pastEvents] = await Promise.all([
 		listRoomImages(room.id),
 		listFacilityPackages(room.id, { activeOnly: true }),
 		listRoomBookingTypes(room.id),
@@ -76,8 +74,6 @@ export default async function RoomPage({ params }) {
 		facility_packages: facilityPackages,
 		offered_booking_type_ids: offeredTypes.map((t) => t.booking_type_id),
 	};
-
-	const aboutBlocks = blocks.filter((b) => (b.section ?? "about") === "about" && b.type === "prose");
 
 	const facilityByCategory = new Map();
 	const categoryMeta = new Map();
@@ -135,16 +131,12 @@ export default async function RoomPage({ params }) {
 							</TabsList>
 
 							<TabsContent value="about" className="mt-8">
-								<div className="space-y-8">
-									{room.short_description && (
-										<p className="text-lg leading-relaxed text-foreground/85 max-w-3xl">
-											{room.short_description}
-										</p>
-									)}
-									{aboutBlocks.map((b) => (
-										<ProseBlock key={b.id} payload={b.payload} />
-									))}
-								</div>
+								{room.content_html ? (
+									<RichText
+										html={room.content_html}
+										className="prose prose-invert max-w-3xl text-base sm:text-lg leading-relaxed text-foreground/85 [&_p]:mb-4"
+									/>
+								) : null}
 							</TabsContent>
 
 							{showFacilities && (

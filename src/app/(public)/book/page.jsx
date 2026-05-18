@@ -1,5 +1,6 @@
 import { Hero } from "@/site/ui/hero";
 import { Section } from "@/site/ui/section";
+import { RichText } from "@/site/ui/rich-text";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import { loadBookingFormData } from "@/lib/booking/load-booking-form-data";
 import { getPageContent } from "@/db/queries/site-content";
@@ -32,8 +33,8 @@ export default async function BookPage({ searchParams }) {
 				<Hero
 					height="short"
 					kicker={hero.kicker ?? "Book"}
-					title={hero.title ?? "Tell us when, what, and how big."}
-					subtitle={hero.subtitle ?? "Submit an enquiry and we'll come back within a working day with your deposit details. Nothing is charged until you accept the booking agreement."}
+					title={hero.title ? <RichText html={hero.title} /> : "Tell us when, what, and how big."}
+					subtitle={hero.subtitle ? <RichText html={hero.subtitle} /> : "Submit an enquiry and we'll come back within a working day with your deposit details. Nothing is charged until you accept the booking agreement."}
 				/>
 			</div>
 			<Section>

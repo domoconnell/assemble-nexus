@@ -60,6 +60,47 @@ export async function getStripeSettings(venueId) {
 }
 
 /**
+ * Identifier(s) for the church's bank account. Used by the bank sync to
+ * auto-flag outbound transactions as church transfers. Any single
+ * non-empty field is enough to match - the sync ORs them. `account_number`
+ * is the last 4 digits (Starling gives us the full number, Revolut often
+ * just the last 4).
+ */
+export async function getChurchTransferSettings(venueId) {
+	return getSetting(venueId, "church_transfer", {
+		counterparty_name: "",
+		sort_code: "",
+		account_number: "",
+	});
+}
+
+/**
+ * Email recipients for the monthly board-pack PDF cron. Stored as an
+ * array of `{ email, name? }` entries so the admin UI can label trustees
+ * vs directors etc.
+ */
+export async function getBoardReportRecipients(venueId) {
+	return getSetting(venueId, "board_report_recipients", { recipients: [] });
+}
+
+/**
+ * Log of which months have already been emailed out, keyed by `ym`.
+ * The monthly cron reads this for idempotency (don't re-send) and the
+ * Board reports admin page reads it to render "Sent on X" badges.
+ */
+export async function getBoardReportHistory(venueId) {
+	return getSetting(venueId, "board_report_history", { sent: [] });
+}
+
+export async function appendBoardReportSent(venueId, entry) {
+	const current = await getBoardReportHistory(venueId);
+	const filtered = (current.sent ?? []).filter((s) => s.ym !== entry.ym);
+	const next = { sent: [...filtered, entry].sort((a, b) => a.ym.localeCompare(b.ym)) };
+	await saveSetting(venueId, "board_report_history", next);
+	return next;
+}
+
+/**
  * Cheap "is this venue configured to issue wallet passes?" check used by
  * the ticket-detail UI to decide whether to render the Add to Wallet
  * buttons.

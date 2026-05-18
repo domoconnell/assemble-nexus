@@ -1,6 +1,7 @@
 import { Hero } from "@/site/ui/hero";
 import { Section } from "@/site/ui/section";
 import { CtaButton } from "@/site/ui/cta-button";
+import { RichText } from "@/site/ui/rich-text";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import { getPageContent } from "@/db/queries/site-content";
 
@@ -25,8 +26,8 @@ export default async function ContactPage() {
 			<Hero
 				height="short"
 				kicker={hero.kicker ?? "Contact"}
-				title={hero.title ?? "Talk to us."}
-				subtitle={hero.subtitle ?? "Quickest answer is the booking form. For everything else, here's how to reach a human."}
+				title={hero.title ? <RichText html={hero.title} /> : "Talk to us."}
+				subtitle={hero.subtitle ? <RichText html={hero.subtitle} /> : "Quickest answer is the booking form. For everything else, here's how to reach a human."}
 				hue="from-emerald-500/15 via-teal-700/10 to-transparent"
 			/>
 			<Section>
@@ -36,9 +37,13 @@ export default async function ContactPage() {
 							<h2 className="text-xs uppercase tracking-[0.22em] text-foreground/70">
 								{hireBlock.title ?? "Hire enquiries"}
 							</h2>
-							<p className="mt-3 text-base text-muted-foreground leading-relaxed">
-								{hireBlock.body ?? "The booking form is fastest. We respond within a working day."}
-							</p>
+							<div className="mt-3 text-base text-muted-foreground leading-relaxed">
+								{hireBlock.body ? (
+									<RichText html={hireBlock.body} />
+								) : (
+									<p>The booking form is fastest. We respond within a working day.</p>
+								)}
+							</div>
 							<div className="mt-5">
 								<CtaButton href="/book">
 									{hireBlock.cta_label ?? "Start a booking"}

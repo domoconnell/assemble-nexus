@@ -34,6 +34,62 @@ export async function getTopEventsBySales(venueId, { limit = 5, fromDate, toDate
 }
 
 /**
+ * Top hirers by booking revenue recognised in the date window. Mirrors
+ * `sumBookingIncomeForMonth`: deposit_paid_cents counts at confirmed_at,
+ * balance_paid_cents at balance_paid_at. Grouped by the booking's linked
+ * organisation when set, otherwise by the customer's name. Used by the
+ * board pack to show which hirers drove revenue in the month.
+ */
+export async function getTopHirersByBookingRevenue(venueId, { limit = 3, fromDate, toDate } = {}) {
+	const fromIso = fromDate ? fromDate.toISOString() : null;
+	const toIso = toDate ? toDate.toISOString() : null;
+	return await db.execute(sql`
+		WITH paid_in_window AS (
+			SELECT
+				COALESCE(
+					org.name,
+					NULLIF(TRIM(c.first_name || ' ' || c.last_name), ''),
+					'Unknown'
+				) AS hirer_name,
+				org.id AS organisation_id,
+				b.id AS booking_id,
+				(
+					CASE
+						WHEN b.confirmed_at IS NOT NULL
+							${fromIso ? sql`AND b.confirmed_at >= ${fromIso}` : sql``}
+							${toIso ? sql`AND b.confirmed_at < ${toIso}` : sql``}
+						THEN b.deposit_paid_cents
+						ELSE 0
+					END
+					+
+					CASE
+						WHEN b.balance_paid_at IS NOT NULL
+							${fromIso ? sql`AND b.balance_paid_at >= ${fromIso}` : sql``}
+							${toIso ? sql`AND b.balance_paid_at < ${toIso}` : sql``}
+						THEN b.balance_paid_cents
+						ELSE 0
+					END
+				) AS revenue_cents
+			FROM booking b
+			LEFT JOIN organisation org ON org.id = b.organisation_id
+			LEFT JOIN customer c ON c.id = b.customer_id
+			WHERE b.venue_id = ${venueId}
+				AND b.deleted_at IS NULL
+		)
+		SELECT
+			hirer_name AS name,
+			organisation_id,
+			COUNT(DISTINCT booking_id)::int AS bookings_count,
+			COALESCE(SUM(revenue_cents), 0)::int AS revenue_cents
+		FROM paid_in_window
+		GROUP BY hirer_name, organisation_id
+		HAVING COALESCE(SUM(revenue_cents), 0) > 0
+		ORDER BY revenue_cents DESC
+		LIMIT ${limit}
+	`);
+}
+
+/**
  * Revenue rollup grouped by the event's CRM organisation. Events without
  * an `organiser_organisation_id` (typically own-promoted house shows)
  * are excluded - they wouldn't have anything to credit anyway.

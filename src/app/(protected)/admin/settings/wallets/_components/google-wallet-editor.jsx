@@ -81,11 +81,7 @@ export default function GoogleWalletEditor({ initial }) {
 					<h2 className="text-sm font-semibold">Google Wallet</h2>
 					<p className="text-xs text-muted-foreground mt-1 max-w-prose">
 						Issue Google Wallet event tickets. Requires a Google Cloud project with the
-						Wallet API enabled, a service-account JSON key, and an Issuer ID.{" "}
-						<span className="text-amber-600 dark:text-amber-400">
-							Settings are saved but the issuing flow itself isn&apos;t wired yet - Apple
-							Wallet first.
-						</span>
+						Wallet API enabled, a service-account JSON key, and an Issuer ID.
 					</p>
 				</div>
 				<span
