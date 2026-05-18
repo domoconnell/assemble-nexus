@@ -8,6 +8,7 @@ import { manual_income } from "@/db/schema/entities/manual_income.js";
 import { booking } from "@/db/schema/entities/booking.js";
 import { ticket_order } from "@/db/schema/entities/ticket_order.js";
 import { event } from "@/db/schema/entities/event.js";
+import { recurring_cost_item } from "@/db/schema/entities/recurring_cost_item.js";
 import { sumChurchTransfers } from "@/db/queries/bank.js";
 
 export async function listEventsForExpenseLinking(venueId) {
@@ -49,18 +50,30 @@ export async function getMonthlyRecurringAmount(venueId, type, ymdFirstOfMonth) 
 }
 
 export async function getAllMonthlyRecurringAmounts(venueId, ymdFirstOfMonth) {
-	// One query returns the most-recent-effective row per type. DISTINCT ON
-	// picks the first row of each type group, and we order by
-	// effective_from DESC so "first" = most recent.
+	// Each item has its own schedule history. The amount for a given
+	// month = the most-recent effective_from row per item. The number
+	// the rest of the system sees for a type is the SUM across that
+	// type's items.
 	const rows = await db.execute(sql`
-		select distinct on (type) type, monthly_amount_cents
-		from recurring_cost_schedule
-		where venue_id = ${venueId} and effective_from <= ${ymdFirstOfMonth}
-		order by type, effective_from desc
+		WITH per_item AS (
+			SELECT DISTINCT ON (s.item_id)
+				s.item_id,
+				i.type,
+				s.monthly_amount_cents
+			FROM recurring_cost_schedule s
+			JOIN recurring_cost_item i ON i.id = s.item_id
+			WHERE s.venue_id = ${venueId}
+				AND s.effective_from <= ${ymdFirstOfMonth}
+				AND i.deleted_at IS NULL
+			ORDER BY s.item_id, s.effective_from DESC
+		)
+		SELECT type, COALESCE(SUM(monthly_amount_cents), 0)::int AS total
+		FROM per_item
+		GROUP BY type
 	`);
 	const byType = new Map();
 	const list = rows.rows ?? rows;
-	for (const r of list) byType.set(r.type, Number(r.monthly_amount_cents ?? 0));
+	for (const r of list) byType.set(r.type, Number(r.total ?? 0));
 	const out = {};
 	for (const type of RECURRING_COST_TYPES) {
 		out[type] = byType.get(type) ?? 0;
@@ -94,6 +107,58 @@ export async function listAllRecurringCostHistory(venueId) {
 		if (list) list.push(r);
 	}
 	return byType;
+}
+
+/* ------------------------------------------------------------------------ */
+/* recurring cost items (line items within each type)                       */
+/* ------------------------------------------------------------------------ */
+
+export async function listRecurringCostItems(venueId) {
+	return db
+		.select()
+		.from(recurring_cost_item)
+		.where(
+			and(eq(recurring_cost_item.venue_id, venueId), isNull(recurring_cost_item.deletedAt)),
+		)
+		.orderBy(asc(recurring_cost_item.type), asc(recurring_cost_item.sort_order), asc(recurring_cost_item.label));
+}
+
+export async function insertRecurringCostItem(values) {
+	const [row] = await db.insert(recurring_cost_item).values(values).returning();
+	return row;
+}
+
+export async function updateRecurringCostItem(id, patch) {
+	const [row] = await db
+		.update(recurring_cost_item)
+		.set(patch)
+		.where(eq(recurring_cost_item.id, id))
+		.returning();
+	return row;
+}
+
+export async function softDeleteRecurringCostItem(id) {
+	await db
+		.update(recurring_cost_item)
+		.set({ deletedAt: new Date() })
+		.where(eq(recurring_cost_item.id, id));
+}
+
+export async function listScheduleHistoryForItem(itemId) {
+	return db
+		.select()
+		.from(recurring_cost_schedule)
+		.where(eq(recurring_cost_schedule.item_id, itemId))
+		.orderBy(desc(recurring_cost_schedule.effective_from));
+}
+
+export async function insertScheduleEntry(values) {
+	const [row] = await db.insert(recurring_cost_schedule).values(values).returning();
+	return row;
+}
+
+export async function deleteScheduleEntry(id) {
+	await db.delete(recurring_cost_schedule).where(eq(recurring_cost_schedule.id, id));
 }
 
 /* ------------------------------------------------------------------------ */

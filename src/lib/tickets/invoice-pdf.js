@@ -88,7 +88,7 @@ export async function buildInvoicePdfBuffer({ order, lines, customer, venue }) {
 					View,
 					null,
 					React.createElement(Text, { style: styles.kicker }, "Invoice from"),
-					React.createElement(Text, { style: styles.venue }, venue?.name || "The Assembly Rooms"),
+					React.createElement(Text, { style: styles.venue }, venue?.name || ""),
 					...venueAddress.map((line, i) =>
 						React.createElement(Text, { key: i, style: styles.addressLine }, line),
 					),

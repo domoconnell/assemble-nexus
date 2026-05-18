@@ -144,6 +144,24 @@ export const EMAIL_TEMPLATES = {
 		},
 	},
 
+	"booking-reminder": {
+		templateId: null,
+		description: "Sent by the daily cron at fixed offsets before a booking's first segment (currently 7 days and 1 day out). Skipped if already fired for that offset.",
+		audience: "hirer",
+		fields: {
+			venue_name: "Public venue name.",
+			first_name: "Hirer's first name.",
+			reference: "Booking reference.",
+			event_starts_at: "Pre-formatted London-time start of the first segment.",
+			room_name: "Room name (or comma-list for multi-room bookings).",
+			days_until: "Integer days until the booking (e.g. 7 or 1).",
+			balance_due: "GBP-formatted balance still owed, '£0.00' when fully paid.",
+			has_balance: "Boolean - true when balance_due > 0.",
+			view_url: "Public link to the booking status page.",
+			pay_url: "Link to /booking/[reference]/pay-balance when balance owed, empty otherwise.",
+		},
+	},
+
 	"booking-rejected": {
 		templateId: "d-f471def9290c4559974f82c64af03fc1",
 		description: "Sent to the hirer when an admin declines their pending booking.",

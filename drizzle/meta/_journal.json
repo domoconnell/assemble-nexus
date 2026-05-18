@@ -274,6 +274,34 @@
       "when": 1779040379877,
       "tag": "0038_lumpy_lyja",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1779112731450,
+      "tag": "0039_wide_albert_cleary",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1779116276159,
+      "tag": "0040_romantic_susan_delgado",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1779116712211,
+      "tag": "0041_little_baron_zemo",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1779117713487,
+      "tag": "0042_outstanding_celestials",
+      "breakpoints": true
     }
   ]
 }

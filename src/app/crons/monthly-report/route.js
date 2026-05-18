@@ -1,13 +1,6 @@
 import { listActiveVenues } from "@/db/queries/venue.js";
-import {
-	getBoardReportRecipients,
-	getBoardReportHistory,
-	appendBoardReportSent,
-} from "@/db/queries/settings.js";
-import { currentMonthLondon, prevMonth, monthLabel } from "@/lib/finance/months.js";
-import { buildBoardPackPdf } from "@/lib/board-pack/render.js";
-import { uploadBoardPackToS3 } from "@/lib/board-pack/storage.js";
-import { sendBoardPackToRecipients } from "@/lib/board-pack/email.js";
+import { currentMonthLondon, prevMonth } from "@/lib/finance/months.js";
+import { dispatchBoardPack } from "@/lib/board-pack/dispatch.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +15,9 @@ export const dynamic = "force-dynamic";
  *
  * `month=YYYY-MM` lets the caller target a specific month, overriding
  * the "previous month from today" default. Handy for backfilling.
+ *
+ * `to=email,email` overrides the configured recipient list for a
+ * one-off preview - the call is not recorded in history.
  *
  * Auth: `Authorization: Bearer <CRON_SECRET>` or `X-Cron-Secret: <CRON_SECRET>`.
  */
@@ -48,83 +44,27 @@ function resolveTargetYm(rawYm) {
 async function run({ ym, force, overrideTo }) {
 	const targetYm = resolveTargetYm(ym);
 	const venues = await listActiveVenues();
+	const overrideRecipients = overrideTo
+		? overrideTo
+				.split(",")
+				.map((e) => ({ email: e.trim(), name: null }))
+				.filter((r) => r.email)
+		: null;
 	const results = [];
-
 	for (const venue of venues) {
 		try {
-			const history = await getBoardReportHistory(venue.id);
-			const alreadySent = (history.sent ?? []).some((s) => s.ym === targetYm);
-			if (alreadySent && !force) {
-				results.push({
-					venue: venue.slug,
-					ym: targetYm,
-					skipped: "already_sent",
-				});
-				continue;
-			}
-
-			// `?to=email,email` overrides the configured recipient list - used
-			// for one-off manual sends (e.g. previewing for QA) without
-			// touching the venue's persistent recipients setting.
-			const recipients = overrideTo
-				? overrideTo.split(",").map((e) => ({ email: e.trim(), name: null })).filter((r) => r.email)
-				: (await getBoardReportRecipients(venue.id))?.recipients ?? [];
-
-			const { buffer, data } = await buildBoardPackPdf({
-				venueId: venue.id,
+			const result = await dispatchBoardPack({
+				venue,
 				ym: targetYm,
-				venueName: venue.name,
+				force,
+				overrideRecipients,
 			});
-
-			const { url: downloadUrl } = await uploadBoardPackToS3(
-				buffer,
-				venue.slug,
-				targetYm,
-			);
-
-			let emailSummary = { ok: 0, failed: 0, results: [] };
-			if (recipients.length > 0) {
-				emailSummary = await sendBoardPackToRecipients({
-					recipients,
-					pdfBuffer: buffer,
-					venueName: venue.name,
-					ym: targetYm,
-					monthLabel: data.monthLabel,
-					downloadUrl,
-				});
-			}
-
-			// `?to=` is a one-off preview - don't mark the venue's history as
-			// "sent" since this isn't the canonical monthly run.
-			if (!overrideTo) {
-				await appendBoardReportSent(venue.id, {
-					ym: targetYm,
-					at: new Date().toISOString(),
-					download_url: downloadUrl,
-					recipients_count: recipients.length,
-					emails_sent: emailSummary.ok,
-					emails_failed: emailSummary.failed,
-				});
-			}
-
-			results.push({
-				venue: venue.slug,
-				ym: targetYm,
-				download_url: downloadUrl,
-				recipients_count: recipients.length,
-				emails_sent: emailSummary.ok,
-				emails_failed: emailSummary.failed,
-			});
+			results.push(result);
 		} catch (err) {
 			console.error(`[monthly-report] ${venue.slug}:`, err?.message || err);
-			results.push({
-				venue: venue.slug,
-				ym: targetYm,
-				error: err?.message || String(err),
-			});
+			results.push({ venue: venue.slug, ym: targetYm, error: err?.message || String(err) });
 		}
 	}
-
 	return { ran_at: new Date().toISOString(), ym: targetYm, results };
 }
 

@@ -22,6 +22,11 @@ export const room = pgTable(
         buffer_minutes: integer("buffer_minutes").default(60).notNull(),
         sort_order: integer("sort_order").default(0).notNull(),
         is_published: boolean("is_published").default(false).notNull(),
+        // `is_public=false` rooms never appear on the public booking site -
+        // they're for long-standing tenants only (e.g. office rooms 21C,
+        // 22B). They still show up in admin pickers so tenancies + manual
+        // bookings can still reference them.
+        is_public: boolean("is_public").default(true).notNull(),
         createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
         deletedAt: timestamp("deleted_at", { withTimezone: true }),

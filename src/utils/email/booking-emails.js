@@ -250,3 +250,29 @@ export async function sendBookingRejectedEmail({ booking, customer, reason }) {
 		view_url: bookingPublicUrl(booking.reference),
 	});
 }
+
+export async function sendBookingReminderEmail({
+	booking,
+	customer,
+	daysUntil,
+	eventStartsAt,
+	roomName,
+}) {
+	const venue_name = await venueNameFor(booking.venue_id);
+	const balanceDue = Math.max(
+		0,
+		(booking.total_cents ?? 0) - (booking.deposit_paid_cents ?? 0) - (booking.balance_paid_cents ?? 0),
+	);
+	await safeSend("booking-reminder", customer.email, {
+		venue_name,
+		first_name: customer.first_name,
+		reference: booking.reference,
+		event_starts_at: eventStartsAt ?? "",
+		room_name: roomName ?? "",
+		days_until: daysUntil,
+		balance_due: gbp(balanceDue),
+		has_balance: balanceDue > 0,
+		view_url: bookingPublicUrl(booking.reference),
+		pay_url: balanceDue > 0 ? `${baseUrl()}/booking/${booking.reference}/pay-balance` : "",
+	});
+}

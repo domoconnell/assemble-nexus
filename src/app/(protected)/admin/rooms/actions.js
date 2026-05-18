@@ -38,6 +38,7 @@ const RoomSaveSchema = z.object({
 	buffer_minutes: z.coerce.number().int().min(0).max(720).optional().default(60),
 	sort_order: z.coerce.number().int().optional().default(0),
 	is_published: z.coerce.boolean().optional().default(false),
+	is_public: z.coerce.boolean().optional().default(true),
 	capacities: z.array(CapacityEntrySchema).optional().default([]),
 });
 
@@ -79,6 +80,7 @@ export async function saveRoomAction(input) {
 		buffer_minutes: parsed.buffer_minutes ?? 60,
 		sort_order: parsed.sort_order ?? 0,
 		is_published: !!parsed.is_published,
+		is_public: parsed.is_public !== false,
 	};
 
 	let result;

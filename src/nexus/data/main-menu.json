@@ -29,9 +29,19 @@
 				"badge_key": "bookings_pending"
 			},
 			{
+				"title": "Tenancies",
+				"url": "/admin/tenancies",
+				"icon": "key"
+			},
+			{
 				"title": "Blockouts",
 				"url": "/admin/blockouts",
 				"icon": "calendar-xmark"
+			},
+			{
+				"title": "Church events",
+				"url": "/admin/church-events",
+				"icon": "church"
 			},
 			{
 				"title": "Events",

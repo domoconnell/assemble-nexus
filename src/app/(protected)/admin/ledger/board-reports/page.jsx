@@ -6,6 +6,7 @@ import {
 } from "@/db/queries/settings";
 import { currentMonthLondon, monthLabel } from "@/lib/finance/months";
 import RecipientsEditor from "./_components/recipients-editor";
+import SendNowButton from "./_components/send-now-button";
 
 export const dynamic = "force-dynamic";
 
@@ -102,12 +103,15 @@ export default async function BoardReportsPage() {
 										)}
 									</div>
 								</div>
-								<Link
-									href={`/admin/ledger/board-pack?month=${m.ym}`}
-									className="rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5 text-sm text-primary hover:bg-primary/10"
-								>
-									Download PDF →
-								</Link>
+								<div className="flex items-center gap-2 shrink-0">
+									<Link
+										href={`/admin/ledger/board-pack?month=${m.ym}`}
+										className="rounded-md border border-foreground/15 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:border-foreground/30"
+									>
+										Download PDF
+									</Link>
+									<SendNowButton ym={m.ym} isResend={!!sent} />
+								</div>
 							</li>
 						);
 					})}

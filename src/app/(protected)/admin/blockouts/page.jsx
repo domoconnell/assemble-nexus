@@ -28,6 +28,7 @@ export default async function BlockoutsPage() {
 			.where(
 				and(
 					eq(room_blockout.venue_id, venue.id),
+					eq(room_blockout.kind, "venue"),
 					isNull(room_blockout.deletedAt),
 					gte(room_blockout.ends_at, cutoff),
 				),

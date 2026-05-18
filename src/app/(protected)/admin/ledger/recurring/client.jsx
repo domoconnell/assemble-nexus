@@ -1,14 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/shadcn/components/ui/button";
 import { Input } from "@/shadcn/components/ui/input";
 import { Label } from "@/shadcn/components/ui/label";
 import ConfirmDialog from "@/global/ui/components/confirm-dialog";
 import {
-	setRecurringCostScheduleAction,
-	deleteRecurringCostScheduleAction,
+	createRecurringCostItemAction,
+	renameRecurringCostItemAction,
+	deleteRecurringCostItemAction,
+	addScheduleEntryAction,
+	deleteScheduleEntryAction,
 } from "./actions";
 
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
@@ -19,190 +23,407 @@ const monthFmt = new Intl.DateTimeFormat("en-GB", {
 	year: "numeric",
 	timeZone: "UTC",
 });
+
 function formatYmdMonth(ymd) {
 	if (!ymd) return "-";
 	const [y, m] = ymd.split("-").map(Number);
 	return monthFmt.format(new Date(Date.UTC(y, m - 1, 1)));
 }
 
-function pad(n) {
-	return String(n).padStart(2, "0");
-}
-function currentMonthYm() {
+function currentYm() {
 	const now = new Date();
-	return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+	return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function currentAmount(history) {
+	return history[0]?.monthly_amount_cents ?? 0;
 }
 
 export default function RecurringCostsClient({ sections }) {
 	return (
 		<div className="space-y-8">
-			{sections.map((s) => (
-				<Section key={s.type} section={s} />
+			{sections.map((section) => (
+				<TypeSection key={section.type} section={section} />
 			))}
 		</div>
 	);
 }
 
-function Section({ section }) {
-	const [pending, startTransition] = useTransition();
-	const [editing, setEditing] = useState(false);
-	const [amountStr, setAmountStr] = useState("");
-	const [ym, setYm] = useState(currentMonthYm());
-	const [notes, setNotes] = useState("");
-	const [confirmId, setConfirmId] = useState(null);
+function TypeSection({ section }) {
+	const [showAddItem, setShowAddItem] = useState(false);
+	return (
+		<section className="rounded-lg border bg-card p-6 space-y-5">
+			<div className="flex items-baseline justify-between gap-3 flex-wrap">
+				<div>
+					<h2 className="text-sm font-semibold">{section.label}</h2>
+					<p className="text-xs text-muted-foreground mt-1 max-w-prose">
+						{section.description}
+					</p>
+				</div>
+				<div className="text-right">
+					<div className="font-display text-xl tabular-nums">{fmt(section.current_total)}</div>
+					<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+						current monthly total
+					</div>
+				</div>
+			</div>
 
-	function save(e) {
-		e?.preventDefault();
-		const amount = Number(amountStr);
-		if (Number.isNaN(amount) || amount < 0) {
-			toast.error("Enter a valid amount");
-			return;
-		}
+			{section.items.length === 0 ? (
+				<p className="text-sm text-muted-foreground border border-dashed rounded-md p-4">
+					No line items yet. Add one to start tracking this category.
+				</p>
+			) : (
+				<ul className="space-y-2">
+					{section.items.map((item) => (
+						<ItemRow key={item.id} item={item} type={section.type} />
+					))}
+				</ul>
+			)}
+
+			{showAddItem ? (
+				<AddItemForm type={section.type} onDone={() => setShowAddItem(false)} />
+			) : (
+				<Button type="button" variant="outline" size="sm" onClick={() => setShowAddItem(true)}>
+					+ Add line item
+				</Button>
+			)}
+		</section>
+	);
+}
+
+function ItemRow({ item, type }) {
+	const router = useRouter();
+	const [editingLabel, setEditingLabel] = useState(false);
+	const [label, setLabel] = useState(item.label);
+	const [showHistory, setShowHistory] = useState(false);
+	const [showAddSchedule, setShowAddSchedule] = useState(false);
+	const [pending, startTransition] = useTransition();
+	const [confirmDelete, setConfirmDelete] = useState(false);
+
+	const current = currentAmount(item.history);
+
+	function saveLabel() {
 		startTransition(async () => {
 			try {
-				await setRecurringCostScheduleAction({
-					type: section.type,
-					effective_from_ym: ym,
-					amount_pounds: amount,
-					notes: notes || null,
-				});
-				toast.success(`${section.label} updated from ${formatYmdMonth(`${ym}-01`)}`);
-				setEditing(false);
-				setAmountStr("");
-				setNotes("");
-				setYm(currentMonthYm());
+				await renameRecurringCostItemAction({ id: item.id, label });
+				setEditingLabel(false);
+				toast.success("Saved");
+				router.refresh();
 			} catch (err) {
-				toast.error(err?.message || "Couldn't save");
+				toast.error(err?.message || "Couldn't rename.");
 			}
 		});
 	}
 
-	function remove(id) {
+	function deleteItem() {
 		startTransition(async () => {
 			try {
-				await deleteRecurringCostScheduleAction(id);
+				await deleteRecurringCostItemAction(item.id);
 				toast.success("Removed");
+				router.refresh();
 			} catch (err) {
-				toast.error(err?.message || "Couldn't remove");
+				toast.error(err?.message || "Couldn't delete.");
 			}
-			setConfirmId(null);
 		});
 	}
 
 	return (
-		<section className="rounded-lg border bg-card p-6 space-y-5">
-			<div className="flex items-baseline justify-between gap-4 flex-wrap">
-				<div className="min-w-0">
-					<h2 className="font-display text-xl tracking-tight">{section.label}</h2>
-					<p className="text-sm text-muted-foreground mt-1">{section.description}</p>
-				</div>
-				<div className="text-right">
-					<div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-						In effect this month
+		<li className="rounded-md border border-foreground/10 bg-background overflow-hidden">
+			<div className="flex items-baseline justify-between gap-3 px-4 py-3">
+				<div className="min-w-0 flex-1">
+					{editingLabel ? (
+						<div className="flex items-center gap-2">
+							<Input
+								value={label}
+								onChange={(e) => setLabel(e.target.value)}
+								className="h-8 max-w-xs"
+								maxLength={120}
+							/>
+							<Button size="sm" onClick={saveLabel} disabled={pending}>
+								Save
+							</Button>
+							<Button
+								size="sm"
+								variant="ghost"
+								onClick={() => {
+									setLabel(item.label);
+									setEditingLabel(false);
+								}}
+							>
+								Cancel
+							</Button>
+						</div>
+					) : (
+						<button
+							type="button"
+							onClick={() => setEditingLabel(true)}
+							className="text-sm font-medium hover:text-primary"
+							title="Click to rename"
+						>
+							{item.label}
+						</button>
+					)}
+					<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mt-0.5">
+						{item.history.length} entr{item.history.length === 1 ? "y" : "ies"} in history
 					</div>
-					<div className="font-display text-2xl">{fmt(section.current)}</div>
+				</div>
+				<div className="text-right shrink-0">
+					<div className="font-mono tabular-nums">{fmt(current)}</div>
+					<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+						from {formatYmdMonth(item.history[0]?.effective_from)}
+					</div>
 				</div>
 			</div>
 
-			{editing ? (
-				<form onSubmit={save} className="space-y-3 border-t border-foreground/10 pt-5">
-					<div className="grid gap-3 sm:grid-cols-2">
-						<div className="space-y-1.5">
-							<Label htmlFor={`${section.type}-from`}>From month</Label>
-							<Input
-								id={`${section.type}-from`}
-								type="month"
-								value={ym}
-								onChange={(e) => setYm(e.target.value)}
-								required
+			<div className="flex items-center gap-2 px-4 pb-3 text-xs">
+				<button
+					type="button"
+					onClick={() => setShowHistory(!showHistory)}
+					className="text-muted-foreground hover:text-foreground"
+				>
+					{showHistory ? "Hide" : "Show"} history
+				</button>
+				<span className="text-muted-foreground/40">·</span>
+				<button
+					type="button"
+					onClick={() => setShowAddSchedule(!showAddSchedule)}
+					className="text-muted-foreground hover:text-foreground"
+				>
+					New amount from a future date
+				</button>
+				<span className="text-muted-foreground/40">·</span>
+				<button
+					type="button"
+					onClick={() => setConfirmDelete(true)}
+					className="text-destructive/80 hover:text-destructive"
+				>
+					Remove item
+				</button>
+			</div>
+
+			{showHistory && (
+				<div className="border-t border-foreground/10 bg-muted/30 px-4 py-3 space-y-1.5">
+					{item.history.length === 0 ? (
+						<p className="text-xs text-muted-foreground">No history yet.</p>
+					) : (
+						item.history.map((row, idx) => (
+							<HistoryRow
+								key={row.id}
+								row={row}
+								isCurrent={idx === 0}
+								onDelete={() => {
+									startTransition(async () => {
+										try {
+											await deleteScheduleEntryAction(row.id);
+											toast.success("Removed");
+											router.refresh();
+										} catch (err) {
+											toast.error(err?.message || "Couldn't remove.");
+										}
+									});
+								}}
 							/>
-						</div>
-						<div className="space-y-1.5">
-							<Label htmlFor={`${section.type}-amt`}>Monthly amount (£)</Label>
-							<Input
-								id={`${section.type}-amt`}
-								type="number"
-								inputMode="decimal"
-								min="0"
-								step="0.01"
-								value={amountStr}
-								onChange={(e) => setAmountStr(e.target.value)}
-								placeholder="0.00"
-								required
-							/>
-						</div>
-					</div>
-					<div className="space-y-1.5">
-						<Label htmlFor={`${section.type}-notes`}>Notes (optional)</Label>
-						<Input
-							id={`${section.type}-notes`}
-							value={notes}
-							onChange={(e) => setNotes(e.target.value)}
-							placeholder="What changed and why"
-						/>
-					</div>
-					<div className="flex gap-2">
-						<Button type="submit" disabled={pending}>
-							{pending ? "Saving…" : "Save"}
-						</Button>
-						<Button type="button" variant="ghost" onClick={() => setEditing(false)}>
-							Cancel
-						</Button>
-					</div>
-				</form>
-			) : (
-				<Button type="button" variant="outline" onClick={() => setEditing(true)}>
-					Update from a month
-				</Button>
+						))
+					)}
+				</div>
 			)}
 
-			{section.history.length > 0 && (
-				<div className="border-t border-foreground/10 pt-5">
-					<div className="text-xs uppercase tracking-[0.22em] text-muted-foreground mb-2">
-						History
-					</div>
-					<table className="w-full text-sm">
-						<thead>
-							<tr className="text-left text-xs text-muted-foreground">
-								<th className="py-1.5 font-normal">From</th>
-								<th className="py-1.5 font-normal">Amount</th>
-								<th className="py-1.5 font-normal">Notes</th>
-								<th />
-							</tr>
-						</thead>
-						<tbody>
-							{section.history.map((row) => (
-								<tr key={row.id} className="border-t border-foreground/5">
-									<td className="py-2">{formatYmdMonth(row.effective_from)}</td>
-									<td className="py-2 font-mono">{fmt(row.monthly_amount_cents)}</td>
-									<td className="py-2 text-muted-foreground">{row.notes || "-"}</td>
-									<td className="py-2 text-right">
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											onClick={() => setConfirmId(row.id)}
-											disabled={pending}
-										>
-											Remove
-										</Button>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
+			{showAddSchedule && (
+				<div className="border-t border-foreground/10 bg-muted/30 px-4 py-4">
+					<AddScheduleForm itemId={item.id} type={type} onDone={() => setShowAddSchedule(false)} />
 				</div>
 			)}
 
 			<ConfirmDialog
-				open={!!confirmId}
-				onOpenChange={(open) => !open && setConfirmId(null)}
-				title="Remove this schedule entry?"
-				description="The amount for this period will revert to whatever was in effect before. This affects historical reports."
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title={`Remove ${item.label}?`}
+				description="Soft-deletes the line item so it stops counting toward the total. History rows stay on file."
 				confirmLabel="Remove"
 				destructive
-				onConfirm={() => confirmId && remove(confirmId)}
+				onConfirm={deleteItem}
 			/>
-		</section>
+		</li>
+	);
+}
+
+function HistoryRow({ row, isCurrent, onDelete }) {
+	const [pending, startTransition] = useTransition();
+	return (
+		<div className="flex items-baseline justify-between gap-3 text-xs">
+			<div>
+				<span className="font-mono tabular-nums">{fmt(row.monthly_amount_cents)}</span>
+				<span className="text-muted-foreground ml-2">
+					from {formatYmdMonth(row.effective_from)}
+				</span>
+				{isCurrent && (
+					<span className="ml-2 text-[10px] uppercase tracking-[0.18em] text-primary">
+						current
+					</span>
+				)}
+			</div>
+			<button
+				type="button"
+				onClick={() => startTransition(onDelete)}
+				disabled={pending}
+				className="text-muted-foreground hover:text-destructive"
+			>
+				delete
+			</button>
+		</div>
+	);
+}
+
+function AddItemForm({ type, onDone }) {
+	const router = useRouter();
+	const [label, setLabel] = useState("");
+	const [amount, setAmount] = useState("");
+	const [effectiveFromYm, setEffectiveFromYm] = useState(currentYm());
+	const [pending, startTransition] = useTransition();
+
+	function submit(e) {
+		e.preventDefault();
+		startTransition(async () => {
+			try {
+				await createRecurringCostItemAction({
+					type,
+					label,
+					initial_amount_pounds: Number(amount || 0),
+					initial_effective_from_ym: effectiveFromYm,
+				});
+				toast.success("Added");
+				router.refresh();
+				onDone();
+			} catch (err) {
+				toast.error(err?.message || "Couldn't add.");
+			}
+		});
+	}
+
+	return (
+		<form onSubmit={submit} className="rounded-md border bg-background p-4 space-y-3">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<div className="space-y-2 sm:col-span-2">
+					<Label htmlFor={`label-${type}`}>Name</Label>
+					<Input
+						id={`label-${type}`}
+						value={label}
+						onChange={(e) => setLabel(e.target.value)}
+						placeholder="e.g. Electric"
+						required
+						maxLength={120}
+					/>
+				</div>
+				<div className="space-y-2">
+					<Label htmlFor={`amount-${type}`}>Amount (£)</Label>
+					<Input
+						id={`amount-${type}`}
+						type="number"
+						min={0}
+						step="0.01"
+						value={amount}
+						onChange={(e) => setAmount(e.target.value)}
+						required
+					/>
+				</div>
+			</div>
+			<div className="grid gap-3 sm:grid-cols-3 items-end">
+				<div className="space-y-2 sm:col-span-2">
+					<Label htmlFor={`from-${type}`}>Effective from (month)</Label>
+					<Input
+						id={`from-${type}`}
+						type="month"
+						value={effectiveFromYm}
+						onChange={(e) => setEffectiveFromYm(e.target.value)}
+						required
+					/>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button type="button" variant="ghost" size="sm" onClick={onDone}>
+						Cancel
+					</Button>
+					<Button type="submit" size="sm" disabled={pending || !label.trim()}>
+						{pending ? "Saving…" : "Add"}
+					</Button>
+				</div>
+			</div>
+		</form>
+	);
+}
+
+function AddScheduleForm({ itemId, type, onDone }) {
+	const router = useRouter();
+	const [amount, setAmount] = useState("");
+	const [effectiveFromYm, setEffectiveFromYm] = useState(currentYm());
+	const [notes, setNotes] = useState("");
+	const [pending, startTransition] = useTransition();
+
+	function submit(e) {
+		e.preventDefault();
+		startTransition(async () => {
+			try {
+				await addScheduleEntryAction({
+					item_id: itemId,
+					type,
+					effective_from_ym: effectiveFromYm,
+					amount_pounds: Number(amount || 0),
+					notes: notes || null,
+				});
+				toast.success("Saved");
+				router.refresh();
+				onDone();
+			} catch (err) {
+				toast.error(err?.message || "Couldn't save.");
+			}
+		});
+	}
+
+	return (
+		<form onSubmit={submit} className="space-y-3">
+			<div className="grid gap-3 sm:grid-cols-3 items-end">
+				<div className="space-y-2">
+					<Label htmlFor={`new-amount-${itemId}`}>New amount (£)</Label>
+					<Input
+						id={`new-amount-${itemId}`}
+						type="number"
+						min={0}
+						step="0.01"
+						value={amount}
+						onChange={(e) => setAmount(e.target.value)}
+						required
+					/>
+				</div>
+				<div className="space-y-2">
+					<Label htmlFor={`new-from-${itemId}`}>Effective from</Label>
+					<Input
+						id={`new-from-${itemId}`}
+						type="month"
+						value={effectiveFromYm}
+						onChange={(e) => setEffectiveFromYm(e.target.value)}
+						required
+					/>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button type="button" variant="ghost" size="sm" onClick={onDone}>
+						Cancel
+					</Button>
+					<Button type="submit" size="sm" disabled={pending}>
+						{pending ? "Saving…" : "Apply"}
+					</Button>
+				</div>
+			</div>
+			<div className="space-y-2">
+				<Label htmlFor={`new-notes-${itemId}`} className="text-xs text-muted-foreground">
+					Notes (optional)
+				</Label>
+				<Input
+					id={`new-notes-${itemId}`}
+					value={notes}
+					onChange={(e) => setNotes(e.target.value)}
+					placeholder="e.g. price rise after winter contract"
+					maxLength={500}
+				/>
+			</div>
+		</form>
 	);
 }

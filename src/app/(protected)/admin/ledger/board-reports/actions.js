@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getBoardReportRecipients, saveSetting } from "@/db/queries/settings.js";
 import { requireServerSession } from "@/utils/auth/server-guard.js";
 import { requireCurrentVenue } from "@/db/queries/venue.js";
+import { dispatchBoardPack } from "@/lib/board-pack/dispatch.js";
 
 const AddSchema = z.object({
 	email: z.string().email().max(200),
@@ -45,4 +46,20 @@ export async function removeBoardReportRecipientAction(email) {
 	await saveSetting(venue.id, "board_report_recipients", next);
 	revalidatePath("/admin/ledger/board-reports");
 	return next;
+}
+
+/**
+ * Trigger a board-pack send for a specific month to the venue's
+ * configured recipients. Used by the "Send now" / "Resend" button. Passes
+ * `force: true` so months already in history can be re-sent (the cron's
+ * idempotency guard would otherwise short-circuit).
+ */
+const SendNowSchema = z.object({ ym: z.string().regex(/^\d{4}-\d{2}$/) });
+
+export async function sendBoardPackNowAction(input) {
+	const venue = await gate();
+	const { ym } = SendNowSchema.parse(input);
+	const result = await dispatchBoardPack({ venue, ym, force: true });
+	revalidatePath("/admin/ledger/board-reports");
+	return result;
 }

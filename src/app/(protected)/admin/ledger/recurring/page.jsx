@@ -1,7 +1,8 @@
 import { requireCurrentVenue } from "@/db/queries/venue";
 import {
 	getAllMonthlyRecurringAmounts,
-	listAllRecurringCostHistory,
+	listRecurringCostItems,
+	listScheduleHistoryForItem,
 } from "@/db/queries/finance";
 import { RECURRING_COST_TYPES } from "@/db/schema/entities/recurring_cost_schedule";
 import { currentMonthLondon, ymdFirstOfMonth } from "@/lib/finance/months";
@@ -16,7 +17,7 @@ const TYPE_META = {
 	},
 	staff: {
 		label: "Staff",
-		description: "Headline monthly cost of the core team (just the total - payroll detail isn't tracked here).",
+		description: "Headline monthly cost of the core team. Add a line per role if you want to track them individually.",
 	},
 	mortgage: {
 		label: "Mortgage",
@@ -33,17 +34,29 @@ export default async function RecurringCostsPage() {
 	const { year, month1 } = currentMonthLondon();
 	const monthYmd = ymdFirstOfMonth(year, month1);
 
-	const [currentAmounts, historiesByType] = await Promise.all([
+	const [currentAmounts, items] = await Promise.all([
 		getAllMonthlyRecurringAmounts(venue.id, monthYmd),
-		listAllRecurringCostHistory(venue.id),
+		listRecurringCostItems(venue.id),
 	]);
+
+	const histories = await Promise.all(
+		items.map((it) => listScheduleHistoryForItem(it.id).then((rows) => [it.id, rows])),
+	);
+	const historyByItem = new Map(histories);
+
+	const itemsByType = new Map();
+	for (const type of RECURRING_COST_TYPES) itemsByType.set(type, []);
+	for (const it of items) {
+		const list = itemsByType.get(it.type);
+		if (list) list.push({ ...it, history: historyByItem.get(it.id) ?? [] });
+	}
 
 	const sections = RECURRING_COST_TYPES.map((type) => ({
 		type,
 		label: TYPE_META[type].label,
 		description: TYPE_META[type].description,
-		current: currentAmounts[type] ?? 0,
-		history: historiesByType.get(type) ?? [],
+		current_total: currentAmounts[type] ?? 0,
+		items: itemsByType.get(type) ?? [],
 	}));
 
 	return (
@@ -51,9 +64,10 @@ export default async function RecurringCostsPage() {
 			<div>
 				<h1 className="text-2xl font-semibold">Recurring costs</h1>
 				<p className="mt-1 text-sm text-muted-foreground max-w-2xl">
-					Fixed monthly costs that feed into the ministry-gift formula. Edits apply
-					from the month you choose forwards - the old amount stays on file for
-					previous months.
+					Fixed monthly costs that feed into the ministry-gift formula. Each
+					category can hold multiple line items (e.g. Utilities → Electric +
+					Water). The ledger and board pack show only the per-category total;
+					this page exposes the breakdown.
 				</p>
 			</div>
 			<RecurringCostsClient sections={sections} />

@@ -12,7 +12,10 @@
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "node --env-file=.env scripts/seed.mjs"
+    "db:seed": "node --env-file=.env scripts/seed.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:smoke": "node --env-file=.env tests/smoke/run.mjs"
   },
   "dependencies": {
     "@awesome.me/kit-71c392801a": "^1.0.3",
@@ -84,6 +87,7 @@
     "eslint-config-next": "16.1.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.6"
   }
 }

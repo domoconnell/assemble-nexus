@@ -1,0 +1,168 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { db } from "@/db/index.js";
+import { customer } from "@/db/schema/entities/customer.js";
+import { room } from "@/db/schema/entities/room.js";
+import { requireCurrentVenue } from "@/db/queries/venue";
+import {
+	getTenancyById,
+	listSessionsForTenancy,
+	listInvoicesForTenancy,
+} from "@/db/queries/tenancies";
+import TenancyForm from "../_components/tenancy-form";
+import SessionRow from "../_components/session-row";
+
+export const dynamic = "force-dynamic";
+
+const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
+const fmtGbp = (c) => gbp.format((c ?? 0) / 100);
+
+const dateFmt = new Intl.DateTimeFormat("en-GB", {
+	weekday: "short", day: "numeric", month: "short", year: "numeric",
+	hour: "2-digit", minute: "2-digit", timeZone: "Europe/London",
+});
+
+const monthFmt = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" });
+
+export default async function TenancyDetailPage({ params }) {
+	const { id } = await params;
+	const venue = await requireCurrentVenue();
+	const t = await getTenancyById(id, { venueId: venue.id });
+	if (!t) notFound();
+
+	const [sessions, invoices, customers, rooms] = await Promise.all([
+		listSessionsForTenancy(id),
+		listInvoicesForTenancy(id),
+		db
+			.select({
+				id: customer.id,
+				first_name: customer.first_name,
+				last_name: customer.last_name,
+				email: customer.email,
+				organisation: customer.organisation,
+			})
+			.from(customer)
+			.where(isNull(customer.deletedAt))
+			.orderBy(asc(customer.first_name), asc(customer.last_name)),
+		db
+			.select({
+				id: room.id,
+				name: room.name,
+				is_public: room.is_public,
+				is_published: room.is_published,
+			})
+			.from(room)
+			.where(and(eq(room.venue_id, venue.id), isNull(room.deletedAt)))
+			.orderBy(asc(room.sort_order), asc(room.name)),
+	]);
+
+	const now = new Date();
+	const futureSessions = sessions.filter((s) => new Date(s.starts_at) >= now);
+	const pastSessions = sessions.filter((s) => new Date(s.starts_at) < now).slice(-12).reverse();
+
+	return (
+		<div className="mx-auto p-6 lg:p-10 max-w-5xl space-y-8">
+			<div>
+				<Link href="/admin/tenancies" className="text-sm text-muted-foreground hover:text-foreground">
+					← Tenancies
+				</Link>
+				<div className="mt-2 flex items-baseline justify-between gap-3 flex-wrap">
+					<div>
+						<h1 className="text-2xl font-semibold">
+							{t.label || `${t.customer_first_name} ${t.customer_last_name}`}
+						</h1>
+						<p className="text-sm text-muted-foreground mt-1">
+							{t.kind === "private_rental" ? "Private rental" : "Scheduled recurring"} ·{" "}
+							{t.customer_first_name} {t.customer_last_name} · {t.room_name}
+						</p>
+					</div>
+					<span
+						className={`text-[10px] uppercase tracking-[0.18em] rounded-full border px-2 py-0.5 ${
+							t.status === "active"
+								? "border-primary/30 bg-primary/10 text-primary"
+								: t.status === "paused"
+									? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+									: "border-foreground/15 text-muted-foreground"
+						}`}
+					>
+						{t.status}
+					</span>
+				</div>
+			</div>
+
+			{t.kind === "scheduled_recurring" && (
+				<section className="space-y-3">
+					<div className="flex items-baseline justify-between gap-3">
+						<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+							Upcoming sessions · {futureSessions.length}
+						</h2>
+					</div>
+					{futureSessions.length === 0 ? (
+						<div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+							No future sessions materialised yet. The daily cron tops these up — give it
+							a beat after creating the tenancy.
+						</div>
+					) : (
+						<ul className="rounded-lg border bg-card divide-y divide-foreground/10 overflow-hidden">
+							{futureSessions.map((s) => (
+								<SessionRow key={s.id} session={s} dateFmt={dateFmt} />
+							))}
+						</ul>
+					)}
+
+					{pastSessions.length > 0 && (
+						<details className="rounded-lg border bg-card overflow-hidden">
+							<summary className="px-4 py-3 text-sm cursor-pointer hover:bg-accent/30">
+								Recent past sessions ({pastSessions.length})
+							</summary>
+							<ul className="divide-y divide-foreground/10">
+								{pastSessions.map((s) => (
+									<SessionRow key={s.id} session={s} dateFmt={dateFmt} muted />
+								))}
+							</ul>
+						</details>
+					)}
+				</section>
+			)}
+
+			<section className="space-y-3">
+				<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+					Invoices · {invoices.length}
+				</h2>
+				{invoices.length === 0 ? (
+					<div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+						No invoices yet. The daily cron will generate one on the{" "}
+						{t.invoice_day_of_month}{t.invoice_day_of_month === 1 ? "st" : t.invoice_day_of_month === 2 ? "nd" : t.invoice_day_of_month === 3 ? "rd" : "th"} of each month.
+					</div>
+				) : (
+					<ul className="rounded-lg border bg-card divide-y divide-foreground/10 overflow-hidden">
+						{invoices.map((inv) => (
+							<li
+								key={inv.id}
+								className="flex items-baseline justify-between gap-3 px-4 py-3"
+							>
+								<div>
+									<div className="text-sm font-medium">
+										{monthFmt.format(new Date(`${inv.period_ym}-01T00:00:00Z`))}
+									</div>
+									<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+										{inv.reference} · {inv.status}
+									</div>
+								</div>
+								<div className="text-right text-sm font-mono">{fmtGbp(inv.total_cents)}</div>
+							</li>
+						))}
+					</ul>
+				)}
+			</section>
+
+			<section className="space-y-3">
+				<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+					Edit
+				</h2>
+				<TenancyForm customers={customers} rooms={rooms} initial={t} />
+			</section>
+		</div>
+	);
+}

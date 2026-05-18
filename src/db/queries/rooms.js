@@ -30,6 +30,7 @@ const baseRoomColumns = {
     buffer_minutes: room.buffer_minutes,
     sort_order: room.sort_order,
     is_published: room.is_published,
+    is_public: room.is_public,
     updatedAt: room.updatedAt,
     hero_file_id: room.hero_file_id,
     hero_url: file.public_url,
@@ -89,7 +90,14 @@ export async function listPublishedRooms(venueId) {
         .select(baseRoomColumns)
         .from(room)
         .leftJoin(file, eq(room.hero_file_id, file.id))
-        .where(and(eq(room.venue_id, venueId), eq(room.is_published, true), notDeleted(room)))
+        .where(
+            and(
+                eq(room.venue_id, venueId),
+                eq(room.is_published, true),
+                eq(room.is_public, true),
+                notDeleted(room),
+            ),
+        )
         .orderBy(asc(room.sort_order), asc(room.name));
     return attachCapacities(rooms);
 }
@@ -115,6 +123,7 @@ export async function getPublishedRoomBySlug(venueId, slug) {
                 eq(room.venue_id, venueId),
                 eq(room.slug, slug),
                 eq(room.is_published, true),
+                eq(room.is_public, true),
                 notDeleted(room),
             ),
         )

@@ -56,6 +56,11 @@ const styles = StyleSheet.create({
 		color: COLOURS.muted,
 		marginBottom: 2,
 	},
+	titleAddress: {
+		fontSize: 9,
+		color: COLOURS.muted,
+		marginTop: 2,
+	},
 	title: {
 		fontSize: 22,
 		fontFamily: "Helvetica-Bold",
@@ -372,6 +377,7 @@ function SubtotalRow({ label, sub, value, negative }) {
 export function BoardPackDocument({ data }) {
 	const {
 		venueName,
+		venueAddress = [],
 		ym,
 		monthLabel,
 		generatedAt,
@@ -411,6 +417,9 @@ export function BoardPackDocument({ data }) {
 					<Text style={styles.kicker}>Director board pack</Text>
 					<Text style={styles.titleVenue}>{venueName}</Text>
 					<Text style={styles.title}>{monthLabel}</Text>
+					{venueAddress.length > 0 && (
+						<Text style={styles.titleAddress}>{venueAddress.join(", ")}</Text>
+					)}
 					<Text style={styles.subtitle}>Generated {generatedStr}</Text>
 				</View>
 

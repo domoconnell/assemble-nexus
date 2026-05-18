@@ -60,23 +60,15 @@ export default function PaymentsEditor({ initial }) {
 							<button
 								key={opt.key}
 								type="button"
-								onClick={() => !opt.disabled && setProvider(opt.key)}
-								disabled={opt.disabled}
+								onClick={() => setProvider(opt.key)}
 								className={`text-left rounded-lg border px-4 py-4 transition flex items-start justify-between gap-4 ${
 									selected
 										? "border-primary bg-primary/5"
 										: "border-foreground/10 hover:border-foreground/30 bg-background"
-								} ${opt.disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+								}`}
 							>
 								<div className="min-w-0">
-									<div className="flex items-center gap-2">
-										<span className="font-medium">{opt.title}</span>
-										{opt.comingSoon && (
-											<span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground border border-foreground/15 rounded-full px-1.5 py-0.5">
-												coming soon
-											</span>
-										)}
-									</div>
+									<span className="font-medium">{opt.title}</span>
 									<p className="text-sm text-muted-foreground mt-1">{opt.blurb}</p>
 								</div>
 							</button>

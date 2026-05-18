@@ -1,0 +1,1 @@
+ALTER TABLE "booking" ADD COLUMN "reminders_sent" jsonb DEFAULT '{}'::jsonb NOT NULL;

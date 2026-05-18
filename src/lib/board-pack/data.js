@@ -8,6 +8,7 @@ import {
 import { getTopHirersByBookingRevenue } from "@/db/queries/dashboard";
 import { sumPaymentsOwedSplit } from "@/db/queries/bookings";
 import { getCombinedLatestBalance, listBankBalanceSeries } from "@/db/queries/bank";
+import { getVenueById } from "@/db/queries/venue";
 import { resolveMonth, monthLabel } from "@/lib/finance/months";
 
 /**
@@ -18,6 +19,11 @@ import { resolveMonth, monthLabel } from "@/lib/finance/months";
  */
 export async function gatherBoardPackData({ venueId, ym, venueName }) {
 	const month = resolveMonth(ym);
+	const venueRecord = await getVenueById(venueId);
+	const resolvedVenueName = venueName ?? venueRecord?.name ?? "";
+	const venueAddress = Array.isArray(venueRecord?.address_lines)
+		? venueRecord.address_lines.filter(Boolean)
+		: [];
 
 	const [
 		pnl,
@@ -74,7 +80,8 @@ export async function gatherBoardPackData({ venueId, ym, venueName }) {
 	];
 
 	return {
-		venueName,
+		venueName: resolvedVenueName,
+		venueAddress,
 		ym,
 		monthLabel: monthLabel(month.year, month.month1),
 		generatedAt: new Date().toISOString(),

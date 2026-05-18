@@ -84,6 +84,7 @@ export default function RoomEditor({
 		buffer_minutes: initialRoom?.buffer_minutes ?? 60,
 		sort_order: initialRoom?.sort_order ?? 0,
 		is_published: initialRoom?.is_published ?? false,
+		is_public: initialRoom?.is_public ?? true,
 	}));
 
 	const [capacities, setCapacities] = useState(() => {
@@ -450,6 +451,19 @@ export default function RoomEditor({
 									onCheckedChange={(v) => update("is_published", !!v)}
 								/>
 								<Label htmlFor="is_published">Published</Label>
+							</div>
+							<div className="flex items-end gap-2 pb-1">
+								<Checkbox
+									id="is_public"
+									checked={room.is_public !== false}
+									onCheckedChange={(v) => update("is_public", !!v)}
+								/>
+								<Label htmlFor="is_public">
+									Public
+									<span className="block text-[10px] text-muted-foreground font-normal">
+										Untick for private rooms (e.g. tenant offices) — they never appear on the public booking site.
+									</span>
+								</Label>
 							</div>
 						</div>
 					</section>

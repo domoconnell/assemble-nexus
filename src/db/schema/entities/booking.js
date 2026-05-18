@@ -71,6 +71,10 @@ export const booking = pgTable(
         cancelled_at: timestamp("cancelled_at", { withTimezone: true }),
         completed_at: timestamp("completed_at", { withTimezone: true }),
 
+        // Tracks which reminder offsets (in days) have already been emailed
+        // so the daily cron doesn't double-send. Shape: { "7": iso, "1": iso }.
+        reminders_sent: jsonb("reminders_sent").default({}).notNull(),
+
         createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
         deletedAt: timestamp("deleted_at", { withTimezone: true }),
