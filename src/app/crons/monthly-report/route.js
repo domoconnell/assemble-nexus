@@ -45,7 +45,7 @@ function resolveTargetYm(rawYm) {
 	return `${prev.year}-${pad(prev.month1)}`;
 }
 
-async function run({ ym, force }) {
+async function run({ ym, force, overrideTo }) {
 	const targetYm = resolveTargetYm(ym);
 	const venues = await listActiveVenues();
 	const results = [];
@@ -63,8 +63,12 @@ async function run({ ym, force }) {
 				continue;
 			}
 
-			const recipientsSetting = await getBoardReportRecipients(venue.id);
-			const recipients = recipientsSetting?.recipients ?? [];
+			// `?to=email,email` overrides the configured recipient list - used
+			// for one-off manual sends (e.g. previewing for QA) without
+			// touching the venue's persistent recipients setting.
+			const recipients = overrideTo
+				? overrideTo.split(",").map((e) => ({ email: e.trim(), name: null })).filter((r) => r.email)
+				: (await getBoardReportRecipients(venue.id))?.recipients ?? [];
 
 			const { buffer, data } = await buildBoardPackPdf({
 				venueId: venue.id,
@@ -90,14 +94,18 @@ async function run({ ym, force }) {
 				});
 			}
 
-			await appendBoardReportSent(venue.id, {
-				ym: targetYm,
-				at: new Date().toISOString(),
-				download_url: downloadUrl,
-				recipients_count: recipients.length,
-				emails_sent: emailSummary.ok,
-				emails_failed: emailSummary.failed,
-			});
+			// `?to=` is a one-off preview - don't mark the venue's history as
+			// "sent" since this isn't the canonical monthly run.
+			if (!overrideTo) {
+				await appendBoardReportSent(venue.id, {
+					ym: targetYm,
+					at: new Date().toISOString(),
+					download_url: downloadUrl,
+					recipients_count: recipients.length,
+					emails_sent: emailSummary.ok,
+					emails_failed: emailSummary.failed,
+				});
+			}
 
 			results.push({
 				venue: venue.slug,
@@ -125,6 +133,7 @@ function readFlags(req) {
 	return {
 		ym: url.searchParams.get("month"),
 		force: url.searchParams.get("force") === "1",
+		overrideTo: url.searchParams.get("to"),
 	};
 }
 
