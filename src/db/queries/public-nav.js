@@ -23,6 +23,7 @@ export async function getPublicNavData(venueId) {
 				and(
 					eq(room.venue_id, venueId),
 					eq(room.is_published, true),
+					eq(room.is_public, true),
 					isNull(room.deletedAt),
 				),
 			)

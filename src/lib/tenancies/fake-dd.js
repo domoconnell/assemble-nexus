@@ -129,7 +129,7 @@ export async function cancelSandboxSession(sessionId) {
 	const row = await getFakeSession(sessionId);
 	if (!row) throw new Error("Unknown setup session.");
 	if (row.status === "complete") {
-		throw new Error("Session already completed — cannot cancel.");
+		throw new Error("Session already completed - cannot cancel.");
 	}
 	if (row.status === "open") {
 		await db

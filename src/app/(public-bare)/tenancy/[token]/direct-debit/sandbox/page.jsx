@@ -69,7 +69,7 @@ export default async function SandboxPage({ params, searchParams }) {
 						</div>
 						<h1 className="text-2xl font-semibold">Set up your direct debit</h1>
 						<p className="text-sm text-muted-foreground mt-1">
-							{venue?.name} — {t.organisation_name ?? "Tenancy"}
+							{venue?.name} - {t.organisation_name ?? "Tenancy"}
 						</p>
 					</div>
 				</div>

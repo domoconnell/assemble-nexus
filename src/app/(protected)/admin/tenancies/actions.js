@@ -171,7 +171,7 @@ export async function uncancelSessionAction(session_id) {
 /**
  * Spin up a new draft agreement for a tenancy. Copies the current venue
  * template HTML and generates a fresh public token. Refuses if there's
- * already an open (non-cancelled) agreement — admin must cancel that one
+ * already an open (non-cancelled) agreement - admin must cancel that one
  * first, so the tenant never has two live links at once.
  */
 export async function createDraftAgreementAction(tenancyId) {
@@ -302,7 +302,7 @@ export async function cancelAgreementAction(input) {
 /**
  * Stand-alone direct-debit setup nudge. Sends just the DD link to the
  * tenant. Refuses if there's no contact email or DD is already active,
- * but is otherwise independent of agreement state — useful for the
+ * but is otherwise independent of agreement state - useful for the
  * "agreement signed in person, just need the DD" path or to re-send the
  * link after a mandate failure.
  */

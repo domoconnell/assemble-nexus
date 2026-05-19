@@ -73,7 +73,7 @@ export const EMAIL_TEMPLATES = {
 			room_name: "Comma-separated room name(s) across the booking's segments.",
 			starts_at: "First segment start - formatted London time (e.g. 'Sat 14 Jun 2026, 09:00').",
 			ends_at: "Last segment end - formatted London time.",
-			date_range: "Pre-formatted span. Same-day collapses to 'Sat 14 Jun 2026, 09:00 – 17:00'; multi-day shows both dates.",
+			date_range: "Pre-formatted span. Same-day collapses to 'Sat 14 Jun 2026, 09:00 - 17:00'; multi-day shows both dates.",
 			is_ticketed: "Boolean - true if the booking enabled ticketing. Use with {{#if is_ticketed}} … {{/if}}.",
 			ticketing_label: "Human string: 'Yes' or 'No'. Use when you just want a plain label cell.",
 			segment_count: "Number of segments in the booking (>=1; >1 for recurring/multi-day).",

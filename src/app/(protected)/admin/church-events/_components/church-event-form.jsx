@@ -318,7 +318,7 @@ export default function ChurchEventForm({ rooms }) {
 					<span className="text-sm">
 						Show on public availability calendar
 						<span className="block text-[10px] text-muted-foreground">
-							Off by default — admin-only.
+							Off by default - admin-only.
 						</span>
 					</span>
 				</label>

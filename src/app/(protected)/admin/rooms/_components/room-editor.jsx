@@ -461,7 +461,7 @@ export default function RoomEditor({
 								<Label htmlFor="is_public">
 									Public
 									<span className="block text-[10px] text-muted-foreground font-normal">
-										Untick for private rooms (e.g. tenant offices) — they never appear on the public booking site.
+										Untick for private rooms (e.g. tenant offices) - they never appear on the public booking site.
 									</span>
 								</Label>
 							</div>

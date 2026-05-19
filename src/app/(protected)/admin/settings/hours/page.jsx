@@ -17,7 +17,7 @@ export default async function HoursSettingsPage() {
 				</Link>
 				<h1 className="mt-2 text-2xl font-semibold">Hours &amp; rate bands</h1>
 				<p className="text-sm text-muted-foreground mt-1">
-					Operating hours run 07:00–24:00. Within that window you can set rate bands that modify the
+					Operating hours run 07:00-24:00. Within that window you can set rate bands that modify the
 					room&apos;s standard hourly rate (e.g. evening +20%, late night +30%).
 				</p>
 			</div>

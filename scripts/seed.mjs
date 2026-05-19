@@ -44,10 +44,10 @@ const vatRates = [
 const roles = [
     { key: "admin", name: "Administrator", description: "Full access to everything." },
     { key: "staff", name: "Staff", description: "Day-to-day operational access." },
-    { key: "volunteer", name: "Volunteer", description: "Limited access — own assignments and check-in." },
+    { key: "volunteer", name: "Volunteer", description: "Limited access - own assignments and check-in." },
     { key: "finance", name: "Finance", description: "Finance reports and reconciliation." },
-    { key: "hirer", name: "Hirer", description: "Booker portal access — manage own bookings and ticketed events." },
-    { key: "delegate", name: "Delegate", description: "Ticket holder portal access — view own ticket orders." },
+    { key: "hirer", name: "Hirer", description: "Booker portal access - manage own bookings and ticketed events." },
+    { key: "delegate", name: "Delegate", description: "Ticket holder portal access - view own ticket orders." },
 ];
 
 const permissions = [
@@ -100,7 +100,7 @@ async function upsertByKey(table, rows) {
 }
 
 const bookingTypes = [
-    { key: "event", label: "Event day", description: "The main hire — performance, conference, ceremony, etc.", default_rate_modifier_x100: 10000, sort_order: 0 },
+    { key: "event", label: "Event day", description: "The main hire - performance, conference, ceremony, etc.", default_rate_modifier_x100: 10000, sort_order: 0 },
     { key: "setup", label: "Setup day", description: "Day before / pre-event for load-in, rigging, rehearsals.", default_rate_modifier_x100: 5000, sort_order: 1 },
     { key: "teardown", label: "Teardown", description: "Day after for load-out and clean-up.", default_rate_modifier_x100: 5000, sort_order: 2 },
     { key: "rehearsal", label: "Rehearsal", description: "Pre-show rehearsal block.", default_rate_modifier_x100: 6000, sort_order: 3 },
@@ -120,7 +120,7 @@ const facilityCategories = [
     { key: "staffing", label: "Staffing", icon: "user-tie", sort_order: 2 },
 ];
 
-// Pricing examples — keyed by room slug + booking type key
+// Pricing examples - keyed by room slug + booking type key
 // Other booking types (setup, teardown, rehearsal) inherit from event_day via the type's modifier.
 const examplePricingRules = [
     // Concert Hall
@@ -574,7 +574,7 @@ async function seedRooms(venueId) {
             );
             console.log(`  ${seed.slug}: ${blocks.length} blocks`);
         } else {
-            console.log(`  ${seed.slug}: already has ${existingBlocks} blocks — skipping insert`);
+            console.log(`  ${seed.slug}: already has ${existingBlocks} blocks - skipping insert`);
         }
     }
 
@@ -747,7 +747,7 @@ async function main() {
             });
         }
     } else {
-        console.warn("No venue found — skipping room seed.");
+        console.warn("No venue found - skipping room seed.");
     }
 
     if (SEED_ADMIN_EMAIL) {
@@ -764,7 +764,7 @@ async function main() {
             console.warn(`  user not found: ${SEED_ADMIN_EMAIL}`);
         }
     } else {
-        console.log("SEED_ADMIN_EMAIL not set — skipping admin grant.");
+        console.log("SEED_ADMIN_EMAIL not set - skipping admin grant.");
     }
 
     if (seedVenue) {
@@ -776,7 +776,7 @@ async function main() {
                 name: "The Assembly Rooms",
                 email_domain: "theassemblyrooms.co.uk",
                 contact_email: null,
-                notes: "House organiser — used for venue-run events.",
+                notes: "House organiser - used for venue-run events.",
             },
             {
                 venue_id: seedVenue.id,
@@ -784,7 +784,7 @@ async function main() {
                 name: "Assemble Church",
                 email_domain: "assemblechurch.com",
                 contact_email: null,
-                notes: "Sister organisation — church-run events.",
+                notes: "Sister organisation - church-run events.",
             },
         ];
         for (const o of organisers) {

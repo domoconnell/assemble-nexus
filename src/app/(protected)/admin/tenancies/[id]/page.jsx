@@ -81,7 +81,7 @@ export default async function TenancyDetailPage({ params }) {
 						</h1>
 						<p className="text-sm text-muted-foreground mt-1">
 							{t.kind === "private_rental" ? "Private rental" : "Scheduled recurring"} ·{" "}
-							{t.organisation_name ?? "—"} · {t.room_name}
+							{t.organisation_name ?? "-"} · {t.room_name}
 						</p>
 					</div>
 					<span
@@ -113,7 +113,7 @@ export default async function TenancyDetailPage({ params }) {
 					</div>
 					{futureSessions.length === 0 ? (
 						<div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-							No future sessions materialised yet. The daily cron tops these up — give it
+							No future sessions materialised yet. The daily cron tops these up - give it
 							a beat after creating the tenancy.
 						</div>
 					) : (

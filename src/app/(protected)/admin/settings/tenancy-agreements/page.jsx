@@ -32,15 +32,15 @@ export default async function TenancyAgreementsSettingsPage() {
 					the tenant views their copy:
 				</p>
 				<ul className="grid gap-1 sm:grid-cols-2 text-xs font-mono pt-1">
-					<li><code>{"{{venue_name}}"}</code> — venue&apos;s public name</li>
-					<li><code>{"{{venue_address}}"}</code> — venue address (one line)</li>
-					<li><code>{"{{organisation_name}}"}</code> — tenant organisation</li>
-					<li><code>{"{{room_name}}"}</code> — leased room</li>
-					<li><code>{"{{starts_on}}"}</code> — start date</li>
-					<li><code>{"{{ends_on}}"}</code> — end date or &quot;ongoing&quot;</li>
-					<li><code>{"{{monthly_rate}}"}</code> — GBP-formatted, private rentals</li>
-					<li><code>{"{{per_session_rate}}"}</code> — GBP-formatted, recurring</li>
-					<li><code>{"{{invoice_day_of_month}}"}</code> — billing day</li>
+					<li><code>{"{{venue_name}}"}</code> - venue&apos;s public name</li>
+					<li><code>{"{{venue_address}}"}</code> - venue address (one line)</li>
+					<li><code>{"{{organisation_name}}"}</code> - tenant organisation</li>
+					<li><code>{"{{room_name}}"}</code> - leased room</li>
+					<li><code>{"{{starts_on}}"}</code> - start date</li>
+					<li><code>{"{{ends_on}}"}</code> - end date or &quot;ongoing&quot;</li>
+					<li><code>{"{{monthly_rate}}"}</code> - GBP-formatted, private rentals</li>
+					<li><code>{"{{per_session_rate}}"}</code> - GBP-formatted, recurring</li>
+					<li><code>{"{{invoice_day_of_month}}"}</code> - billing day</li>
 				</ul>
 			</section>
 

@@ -10,7 +10,7 @@ const groups = [
 	{
 		section: "Booking",
 		cards: [
-			{ title: "Booking types", description: "Event day, setup day, rehearsal — and their default rate modifiers.", href: "/admin/settings/booking-types" },
+			{ title: "Booking types", description: "Event day, setup day, rehearsal - and their default rate modifiers.", href: "/admin/settings/booking-types" },
 			{ title: "Booking agreement", description: "H&S, T&Cs, and other policies the customer agrees to before paying.", href: "/admin/settings/booking-agreement" },
 			{ title: "Deposit policy", description: "Deposit %, non-refundable %, and the cancellation window.", href: "/admin/settings/deposit-policy" },
 			{ title: "Discounts", description: "Local-business, youth-activity, and other discounts customers can apply.", href: "/admin/settings/discounts" },

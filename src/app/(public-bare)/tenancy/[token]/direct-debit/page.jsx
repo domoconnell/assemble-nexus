@@ -22,7 +22,7 @@ export default async function DirectDebitSetupPage({ params }) {
 					<h1 className="text-2xl font-semibold">All set.</h1>
 					<p className="text-sm text-muted-foreground">
 						Your direct debit is in place. We&apos;ll automatically debit on each
-						month&apos;s invoice date — you don&apos;t need to do anything else.
+						month&apos;s invoice date - you don&apos;t need to do anything else.
 					</p>
 				</div>
 			</div>
@@ -53,7 +53,7 @@ export default async function DirectDebitSetupPage({ params }) {
 						Direct debit setup isn&apos;t available yet
 					</div>
 					<p className="text-muted-foreground mt-2">
-						{err.message}. Please contact {venue?.name ?? "the venue"} — we&apos;ll
+						{err.message}. Please contact {venue?.name ?? "the venue"} - we&apos;ll
 						sort the payment setup manually.
 					</p>
 					<Link

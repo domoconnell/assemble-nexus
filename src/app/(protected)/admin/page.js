@@ -1003,7 +1003,7 @@ function ScheduleItem({ item }) {
 						</span>
 						<span className="font-mono text-xs text-muted-foreground">
 							{timeFmt.format(item.starts_at)}
-							{item.ends_at ? `–${timeFmt.format(item.ends_at)}` : ""}
+							{item.ends_at ? `-${timeFmt.format(item.ends_at)}` : ""}
 						</span>
 						<span className="font-medium truncate">{item.label}</span>
 					</div>

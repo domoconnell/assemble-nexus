@@ -159,7 +159,7 @@ export default function TenancyForm({ organisations, rooms, initial = null }) {
 							<SelectContent>
 								{organisations.length === 0 ? (
 									<div className="px-2 py-1.5 text-sm text-muted-foreground">
-										No organisations yet — add one in CRM.
+										No organisations yet - add one in CRM.
 									</div>
 								) : (
 									organisations.map((o) => (
@@ -278,7 +278,7 @@ export default function TenancyForm({ organisations, rooms, initial = null }) {
 							value={invoiceDay}
 							onChange={(e) => setInvoiceDay(e.target.value)}
 						/>
-						<p className="text-[10px] text-muted-foreground">1–28; capped at 28 so it lands every month.</p>
+						<p className="text-[10px] text-muted-foreground">1-28; capped at 28 so it lands every month.</p>
 					</div>
 				</div>
 			</section>
@@ -374,7 +374,7 @@ export default function TenancyForm({ organisations, rooms, initial = null }) {
 						rows={3}
 						value={notes}
 						onChange={(e) => setNotes(e.target.value)}
-						placeholder="Anything the team should know — discounts, access notes, etc."
+						placeholder="Anything the team should know - discounts, access notes, etc."
 					/>
 				</div>
 			</section>

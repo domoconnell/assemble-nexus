@@ -48,8 +48,8 @@ function fmtRange(start, end) {
 	if (!end) return dateTimeFmt.format(s);
 	const e = new Date(end);
 	return dayKeyFmt.format(s) === dayKeyFmt.format(e)
-		? `${dateTimeFmt.format(s)} – ${timeFmt.format(e)}`
-		: `${dateTimeFmt.format(s)} – ${dateTimeFmt.format(e)}`;
+		? `${dateTimeFmt.format(s)} - ${timeFmt.format(e)}`
+		: `${dateTimeFmt.format(s)} - ${dateTimeFmt.format(e)}`;
 }
 
 const STAFF_ROLE_KEYS = ["admin", "staff"];

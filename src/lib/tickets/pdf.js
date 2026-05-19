@@ -126,7 +126,7 @@ function buildTicketPage(ticket, qrDataUrl) {
 
 	const dateLabel = startDate ? dateFmt.format(startDate) : "Date TBA";
 	const timeLabel = startDate && endDate
-		? `${timeFmt.format(startDate)} – ${timeFmt.format(endDate)}`
+		? `${timeFmt.format(startDate)} - ${timeFmt.format(endDate)}`
 		: startDate
 			? timeFmt.format(startDate)
 			: "";

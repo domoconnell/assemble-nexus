@@ -13,7 +13,7 @@ async function safeSend(templateKey, to, data) {
 	// touches them. Real send failures still log.
 	const entry = getEmailTemplate(templateKey);
 	if (!entry.templateId) {
-		console.info(`[email:${templateKey}] not wired in SendGrid yet — skipping send.`);
+		console.info(`[email:${templateKey}] not wired in SendGrid yet - skipping send.`);
 		return;
 	}
 	try {

@@ -84,7 +84,7 @@ export default function DirectDebitSection({ tenancy }) {
 							</span>
 						</div>
 						<p className="text-xs text-muted-foreground">
-							The tenant can set up their mandate using the link below — it works
+							The tenant can set up their mandate using the link below - it works
 							independently of any agreement, so it stays valid for the life of
 							the tenancy. Use <em>Send direct debit email</em> above to email
 							them the link directly.
@@ -106,7 +106,7 @@ export default function DirectDebitSection({ tenancy }) {
 						) : (
 							<p className="text-[11px] text-muted-foreground italic">
 								The direct debit link is generated the first time you send the
-								email — click the button above.
+								email - click the button above.
 							</p>
 						)}
 					</>

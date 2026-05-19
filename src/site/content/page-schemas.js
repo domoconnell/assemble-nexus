@@ -4,11 +4,11 @@
  * when a field isn't set.
  *
  * Field types:
- *   text        – single-line plain text
- *   longtext    – multi-line plain text (textarea)
- *   richtext    – Tiptap WYSIWYG (bold, italic, link, lists)
- *   image       – file upload; stored as file_id, resolved to public_url on read
- *   hue         – Tailwind hue gradient string for hero backgrounds
+ *   text        - single-line plain text
+ *   longtext    - multi-line plain text (textarea)
+ *   richtext    - Tiptap WYSIWYG (bold, italic, link, lists)
+ *   image       - file upload; stored as file_id, resolved to public_url on read
+ *   hue         - Tailwind hue gradient string for hero backgrounds
  *
  * Convention: hero titles + subtitles and any `body` field are richtext so
  * the user has formatting freedom. Short labels (kickers, button labels,

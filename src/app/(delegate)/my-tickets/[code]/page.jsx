@@ -87,7 +87,7 @@ export default async function MyTicketDetailPage({ params }) {
 						</div>
 						{start && (
 							<div className="text-sm text-muted-foreground">
-								{end ? `${timeFmt.format(start)} – ${timeFmt.format(end)}` : timeFmt.format(start)}
+								{end ? `${timeFmt.format(start)} - ${timeFmt.format(end)}` : timeFmt.format(start)}
 								{doors && ` · Doors ${timeFmt.format(doors)}`}
 							</div>
 						)}

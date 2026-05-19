@@ -205,19 +205,19 @@ export default function AgreementsSection({ tenancy, agreements }) {
 
 								{ag.status === "sent" && (
 									<div className="text-xs text-muted-foreground">
-										Sent {ag.sent_at ? dateTimeFmt.format(new Date(ag.sent_at)) : "—"}
+										Sent {ag.sent_at ? dateTimeFmt.format(new Date(ag.sent_at)) : "-"}
 									</div>
 								)}
 								{ag.status === "signed" && (
 									<div className="text-xs text-muted-foreground">
 										Signed by {ag.signed_by_name} on{" "}
-										{ag.signed_at ? dateTimeFmt.format(new Date(ag.signed_at)) : "—"}
+										{ag.signed_at ? dateTimeFmt.format(new Date(ag.signed_at)) : "-"}
 									</div>
 								)}
 								{ag.status === "cancelled" && (
 									<div className="text-xs text-muted-foreground">
 										Cancelled{" "}
-										{ag.cancelled_at ? dateTimeFmt.format(new Date(ag.cancelled_at)) : "—"}
+										{ag.cancelled_at ? dateTimeFmt.format(new Date(ag.cancelled_at)) : "-"}
 										{ag.cancelled_reason ? ` · ${ag.cancelled_reason}` : ""}
 									</div>
 								)}
@@ -246,8 +246,8 @@ export default function AgreementsSection({ tenancy, agreements }) {
 											onChange={(e) => setCancelReason(e.target.value)}
 											placeholder={
 												ag.status === "signed"
-													? "e.g. New terms agreed — fresh version on the way"
-													: "e.g. Terms have changed — new version on the way"
+													? "e.g. New terms agreed - fresh version on the way"
+													: "e.g. Terms have changed - new version on the way"
 											}
 										/>
 										<div className="flex items-center gap-2">

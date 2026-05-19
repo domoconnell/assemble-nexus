@@ -118,7 +118,7 @@ export default async function BookingStatusPage({ params }) {
 											{dateFormatter.format(new Date(s.starts_at))}
 											{" · "}
 											{timeFormatter.format(new Date(s.starts_at))}
-											{" – "}
+											{" - "}
 											{timeFormatter.format(new Date(s.ends_at))}
 										</div>
 									</div>

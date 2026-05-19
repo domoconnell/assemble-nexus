@@ -136,7 +136,7 @@ export default async function MyOrderDetailPage({ params }) {
 				title={order.event_title}
 				subtitle={
 					eventDate
-						? `${dateFmt.format(eventDate)}${eventEnd ? ` · ${timeFmt.format(eventDate)} – ${timeFmt.format(eventEnd)}` : ""}`
+						? `${dateFmt.format(eventDate)}${eventEnd ? ` · ${timeFmt.format(eventDate)} - ${timeFmt.format(eventEnd)}` : ""}`
 						: undefined
 				}
 			/>

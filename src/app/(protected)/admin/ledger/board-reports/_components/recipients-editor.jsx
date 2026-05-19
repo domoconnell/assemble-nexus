@@ -107,7 +107,7 @@ export default function RecipientsEditor({ initial }) {
 						<Input
 							id="recipient-name"
 							type="text"
-							placeholder="J. Smith — Trustee"
+							placeholder="J. Smith - Trustee"
 							value={name}
 							onChange={(e) => setName(e.target.value)}
 						/>

@@ -64,7 +64,7 @@ export default async function DirectDebitDonePage({ params, searchParams }) {
 						<h1 className="text-2xl font-semibold">All set.</h1>
 						<p className="text-sm text-muted-foreground">
 							Your direct debit mandate is in place. We&apos;ll automatically
-							collect each month&apos;s invoice — no further action needed from you.
+							collect each month&apos;s invoice - no further action needed from you.
 						</p>
 					</>
 				) : outcome === "pending" ? (
@@ -74,7 +74,7 @@ export default async function DirectDebitDonePage({ params, searchParams }) {
 						</div>
 						<h1 className="text-2xl font-semibold">Hang tight.</h1>
 						<p className="text-sm text-muted-foreground">
-							Your mandate is being processed. Refresh in a few minutes — if it
+							Your mandate is being processed. Refresh in a few minutes - if it
 							still isn&apos;t ready, contact the venue and we&apos;ll sort it.
 						</p>
 					</>

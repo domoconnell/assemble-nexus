@@ -90,10 +90,10 @@ export default async function ChurchEventsPage() {
 		if (!rule) return "";
 		if (rule.kind === "weekly") {
 			const days = (rule.by_weekday || []).map((d) => WEEKDAY_LABEL[d] ?? d).join(", ");
-			return `${days} · ${rule.time_start}–${rule.time_end}${rule.ends_on ? ` (ends ${rule.ends_on})` : " (ongoing)"}`;
+			return `${days} · ${rule.time_start}-${rule.time_end}${rule.ends_on ? ` (ends ${rule.ends_on})` : " (ongoing)"}`;
 		}
 		if (rule.kind === "run") {
-			return `${rule.weeks}× ${WEEKDAY_LABEL[rule.weekday] ?? rule.weekday} · ${rule.time_start}–${rule.time_end} from ${rule.starts_on}`;
+			return `${rule.weeks}× ${WEEKDAY_LABEL[rule.weekday] ?? rule.weekday} · ${rule.time_start}-${rule.time_end} from ${rule.starts_on}`;
 		}
 		return "";
 	}

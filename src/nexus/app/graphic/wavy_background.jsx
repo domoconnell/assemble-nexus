@@ -7,7 +7,7 @@ export function LayeredWavesBackground({
   style,
   speed = 0.18,          // overall animation speed (lower = slower)
   layers = 7,            // number of wave layers
-  grain = 0.08,          // 0 disables, 0.06–0.12 nice
+  grain = 0.08,          // 0 disables, 0.06-0.12 nice
   contrast = 1.05,       // subtle punch
 }) {
   const canvasRef = useRef(null);

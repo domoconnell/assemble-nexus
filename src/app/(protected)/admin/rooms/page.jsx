@@ -20,7 +20,7 @@ export default async function AdminRoomsPage() {
 					<h1 className="text-2xl font-semibold">Rooms</h1>
 					<p className="text-sm text-muted-foreground mt-1">
 						Public rooms appear on the booking site. Non-public rooms are
-						admin-only — used for tenant offices and other private spaces.
+						admin-only - used for tenant offices and other private spaces.
 					</p>
 				</div>
 				<Button asChild>

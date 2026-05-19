@@ -22,16 +22,16 @@ function scheduleSummary(t) {
 	const rule = t.schedule_rule;
 	if (!rule?.by_weekday?.length) return null;
 	const days = rule.by_weekday.map((d) => WEEKDAY_LABEL[d] ?? d).join(", ");
-	return `${days} · ${rule.time_start}–${rule.time_end}`;
+	return `${days} · ${rule.time_start}-${rule.time_end}`;
 }
 
 function rateLabel(t) {
 	if (t.kind === "private_rental") {
-		return t.monthly_rate_cents != null ? `${fmtGbp(t.monthly_rate_cents)} / month` : "—";
+		return t.monthly_rate_cents != null ? `${fmtGbp(t.monthly_rate_cents)} / month` : "-";
 	}
 	return t.per_session_rate_cents != null
 		? `${fmtGbp(t.per_session_rate_cents)} / session`
-		: "—";
+		: "-";
 }
 
 export default async function TenanciesPage({ searchParams }) {
@@ -131,7 +131,7 @@ function TenancyGroup({ title, rows, muted }) {
 									)}
 								</div>
 								<div className="text-xs text-muted-foreground mt-0.5">
-									{t.organisation_name ?? "—"} · {t.room_name}
+									{t.organisation_name ?? "-"} · {t.room_name}
 									{scheduleSummary(t) && <> · {scheduleSummary(t)}</>}
 									{" · "}
 									from {dateFmt.format(new Date(t.starts_on))}

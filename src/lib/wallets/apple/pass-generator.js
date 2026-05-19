@@ -68,7 +68,7 @@ export async function generateTicketPkPass({ ticket, settings }) {
 	const dateLabel = startsAt ? dateFmt.format(startsAt) : "Date TBA";
 	const timeLabel =
 		startsAt && endsAt
-			? `${timeFmt.format(startsAt)} – ${timeFmt.format(endsAt)}`
+			? `${timeFmt.format(startsAt)} - ${timeFmt.format(endsAt)}`
 			: startsAt
 				? timeFmt.format(startsAt)
 				: "";

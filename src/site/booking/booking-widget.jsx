@@ -971,7 +971,7 @@ function ConflictWarning({ conflicts, bufferMinutes }) {
 		<div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
 			<div className="font-medium">{heading}</div>
 			<div className="mt-0.5">
-				Room in use {dateStr} · {startStr}–{endStr}
+				Room in use {dateStr} · {startStr}-{endStr}
 				{conflicts.length > 1 && (
 					<span className="text-destructive/80"> · +{conflicts.length - 1} more</span>
 				)}
@@ -1921,7 +1921,7 @@ function ReviewStep({ rooms, room, bookingTypes, eventRows, setupRows, rehearsal
 						<ul className="mt-2 space-y-1 text-sm">
 							{g.rows.map((r, i) => (
 								<li key={i}>
-									{formatDateShort(r.date)} · {r.start_time}–{r.end_time}
+									{formatDateShort(r.date)} · {r.start_time}-{r.end_time}
 								</li>
 							))}
 						</ul>
@@ -2113,7 +2113,7 @@ function QuoteSummary({
 										<span className="truncate">
 											{formatDateShort(r.date) || "Date pending"}
 											{r.start_time && r.end_time
-												? ` · ${r.start_time}–${r.end_time}`
+												? ` · ${r.start_time}-${r.end_time}`
 												: ""}
 										</span>
 									</li>
@@ -2244,7 +2244,7 @@ function SegmentBreakdown({ segment }) {
 		);
 	}
 	const dateLabel = formatVenueDate(segment.starts_at);
-	const timeLabel = `${formatVenueTime(segment.starts_at)}–${formatVenueTime(segment.ends_at)}`;
+	const timeLabel = `${formatVenueTime(segment.starts_at)}-${formatVenueTime(segment.ends_at)}`;
 	const breakdown = segment.band_breakdown ?? [];
 	const cappedTotal =
 		segment.daily_cap_applied && segment.daily_cap_cents != null

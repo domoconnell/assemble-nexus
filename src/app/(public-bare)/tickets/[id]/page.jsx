@@ -64,7 +64,7 @@ export default async function PublicTicketGalleryPage({ params }) {
 	const doors = order.event_doors_open_at ? new Date(order.event_doors_open_at) : null;
 
 	const timeRange =
-		start && end ? `${timeFmt.format(start)}–${timeFmt.format(end)}` : start ? timeFmt.format(start) : "";
+		start && end ? `${timeFmt.format(start)}-${timeFmt.format(end)}` : start ? timeFmt.format(start) : "";
 	const dateLine = start ? dateFmt.format(start) : "";
 	const doorsLine = doors ? `Doors ${timeFmt.format(doors)}` : "";
 

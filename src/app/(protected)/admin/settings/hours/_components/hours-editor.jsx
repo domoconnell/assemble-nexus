@@ -88,7 +88,7 @@ export default function HoursEditor({ initialBands }) {
 				<div>
 					<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Hourly bands</h2>
 					<p className="text-xs text-muted-foreground mt-2">
-						Hires are only available 07:00–24:00. Each band carries a percentage modifier on the room&apos;s
+						Hires are only available 07:00-24:00. Each band carries a percentage modifier on the room&apos;s
 						standard hourly rate. Bands must not overlap and should cover the full operating window.
 					</p>
 				</div>

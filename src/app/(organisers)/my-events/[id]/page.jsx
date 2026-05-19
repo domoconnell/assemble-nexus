@@ -141,7 +141,7 @@ export default async function MyEventDetailPage({ params }) {
 				title={ev.title}
 				subtitle={
 					start
-						? `${dateFmt.format(start)}${end ? ` · ${timeFmt.format(start)}–${timeFmt.format(end)}` : ""}`
+						? `${dateFmt.format(start)}${end ? ` · ${timeFmt.format(start)}-${timeFmt.format(end)}` : ""}`
 						: undefined
 				}
 			/>

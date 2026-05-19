@@ -177,7 +177,7 @@ export default async function AdminBookingDetailPage({ params }) {
 												<div className="min-w-0">
 													<div>
 														{dateFmt.format(new Date(s.starts_at))} ·{" "}
-														{timeFmt.format(new Date(s.starts_at))}–
+														{timeFmt.format(new Date(s.starts_at))}-
 														{timeFmt.format(new Date(s.ends_at))}
 													</div>
 													<div className="text-xs text-muted-foreground">
