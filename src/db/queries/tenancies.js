@@ -445,6 +445,26 @@ export async function insertInvoice(values) {
 	return row;
 }
 
+export async function getInvoiceById(id, { venueId } = {}) {
+	const conds = [eq(tenancy_invoice.id, id), isNull(tenancy_invoice.deletedAt)];
+	if (venueId) conds.push(eq(tenancy_invoice.venue_id, venueId));
+	const [row] = await db
+		.select()
+		.from(tenancy_invoice)
+		.where(and(...conds))
+		.limit(1);
+	return row ?? null;
+}
+
+export async function updateInvoice(id, patch) {
+	const [row] = await db
+		.update(tenancy_invoice)
+		.set(patch)
+		.where(eq(tenancy_invoice.id, id))
+		.returning();
+	return row;
+}
+
 export async function attachSessionsToInvoice(sessionIds, invoiceId) {
 	if (!sessionIds?.length) return;
 	await db

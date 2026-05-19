@@ -18,18 +18,15 @@ import JourneyHeader from "../_components/journey-header";
 import AgreementsSection from "../_components/agreements-section";
 import DirectDebitSection from "../_components/direct-debit-section";
 import DangerZone from "../_components/danger-zone";
+import InvoicesSection from "../_components/invoices-section";
 
 export const dynamic = "force-dynamic";
 
-const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
-const fmtGbp = (c) => gbp.format((c ?? 0) / 100);
 
 const dateFmt = new Intl.DateTimeFormat("en-GB", {
 	weekday: "short", day: "numeric", month: "short", year: "numeric",
 	hour: "2-digit", minute: "2-digit", timeZone: "Europe/London",
 });
-
-const monthFmt = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" });
 
 export default async function TenancyDetailPage({ params }) {
 	const { id } = await params;
@@ -139,36 +136,10 @@ export default async function TenancyDetailPage({ params }) {
 				</section>
 			)}
 
-			<section className="space-y-3">
-				<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-					Invoices · {invoices.length}
-				</h2>
-				{invoices.length === 0 ? (
-					<div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-						No invoices yet. The daily cron will generate one on the{" "}
-						{t.invoice_day_of_month}{t.invoice_day_of_month === 1 ? "st" : t.invoice_day_of_month === 2 ? "nd" : t.invoice_day_of_month === 3 ? "rd" : "th"} of each month.
-					</div>
-				) : (
-					<ul className="rounded-lg border bg-card divide-y divide-foreground/10 overflow-hidden">
-						{invoices.map((inv) => (
-							<li
-								key={inv.id}
-								className="flex items-baseline justify-between gap-3 px-4 py-3"
-							>
-								<div>
-									<div className="text-sm font-medium">
-										{monthFmt.format(new Date(`${inv.period_ym}-01T00:00:00Z`))}
-									</div>
-									<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-										{inv.reference} · {inv.status}
-									</div>
-								</div>
-								<div className="text-right text-sm font-mono">{fmtGbp(inv.total_cents)}</div>
-							</li>
-						))}
-					</ul>
-				)}
-			</section>
+			<InvoicesSection
+				invoices={invoices}
+				invoiceDayOfMonth={t.invoice_day_of_month}
+			/>
 
 			<section className="space-y-3">
 				<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
