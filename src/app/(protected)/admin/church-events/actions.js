@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { db } from "@/db/index.js";
@@ -171,6 +171,180 @@ export async function createChurchEventAction(input) {
 	}
 
 	throw new Error("Unknown church-event kind");
+}
+
+const UpdateAdhocSchema = AdhocSchema.extend({ id: z.string().uuid() });
+const UpdateWeeklySchema = WeeklySchema.extend({ id: z.string().uuid() });
+const UpdateRunSchema = RunSchema.extend({ id: z.string().uuid() });
+
+/**
+ * Edit an existing church event. For adhoc rows it's a plain field
+ * update. For weekly / run series we:
+ *   - update the definition row's metadata + recurrence_rule
+ *   - replace the linked rooms
+ *   - hard-delete any future occurrences that were materialised from
+ *     the old rule, then re-materialise from the new one
+ *
+ * Past occurrences are left alone so the historical record is preserved.
+ */
+export async function updateChurchEventAction(input) {
+	const { venue } = await gate();
+
+	if (input.kind === "adhoc") {
+		const p = UpdateAdhocSchema.parse(input);
+		const existing = await db
+			.select()
+			.from(room_blockout)
+			.where(
+				and(
+					eq(room_blockout.id, p.id),
+					eq(room_blockout.venue_id, venue.id),
+					eq(room_blockout.kind, "church"),
+					isNull(room_blockout.deletedAt),
+				),
+			)
+			.limit(1);
+		if (existing.length === 0) throw new Error("Church event not found.");
+		await db
+			.update(room_blockout)
+			.set({
+				starts_at: new Date(p.starts_at),
+				ends_at: new Date(p.ends_at),
+				reason: p.reason.trim(),
+				notes: p.notes?.trim() || null,
+				is_public: !!p.is_public,
+			})
+			.where(eq(room_blockout.id, p.id));
+		await db.delete(room_blockout_room).where(eq(room_blockout_room.blockout_id, p.id));
+		await linkRooms(p.id, p.room_ids);
+		revalidatePath("/admin/church-events");
+		return { id: p.id };
+	}
+
+	const isWeekly = input.kind === "weekly";
+	const p = isWeekly ? UpdateWeeklySchema.parse(input) : UpdateRunSchema.parse(input);
+
+	const [definition] = await db
+		.select()
+		.from(room_blockout)
+		.where(
+			and(
+				eq(room_blockout.id, p.id),
+				eq(room_blockout.venue_id, venue.id),
+				eq(room_blockout.kind, "church"),
+				isNotNull(room_blockout.recurrence_rule),
+				isNotNull(room_blockout.series_id),
+				isNull(room_blockout.deletedAt),
+			),
+		)
+		.limit(1);
+	if (!definition) throw new Error("Series definition not found.");
+
+	// Build the new recurrence_rule payload first - if it matches the
+	// stored rule + the room set hasn't changed, we can skip the
+	// re-materialise step entirely.
+	const newRule = isWeekly
+		? {
+				kind: "weekly",
+				by_weekday: p.by_weekday,
+				time_start: p.time_start,
+				time_end: p.time_end,
+				starts_on: p.starts_on,
+				ends_on: p.ends_on?.trim() || null,
+			}
+		: {
+				kind: "run",
+				weekday: p.weekday,
+				time_start: p.time_start,
+				time_end: p.time_end,
+				starts_on: p.starts_on,
+				weeks: p.weeks,
+			};
+	const ruleChanged =
+		JSON.stringify(definition.recurrence_rule) !== JSON.stringify(newRule);
+
+	await db
+		.update(room_blockout)
+		.set({
+			reason: p.reason.trim(),
+			notes: p.notes?.trim() || null,
+			is_public: !!p.is_public,
+			recurrence_rule: newRule,
+		})
+		.where(eq(room_blockout.id, definition.id));
+
+	// Refresh room links on the definition row.
+	await db.delete(room_blockout_room).where(eq(room_blockout_room.blockout_id, definition.id));
+	await linkRooms(definition.id, p.room_ids);
+
+	if (ruleChanged) {
+		// Hard-delete future occurrences from the OLD rule. We keep past
+		// rows (their starts_at < now) as a record.
+		const now = new Date();
+		const futureRows = await db
+			.select({ id: room_blockout.id })
+			.from(room_blockout)
+			.where(
+				and(
+					eq(room_blockout.series_id, definition.series_id),
+					ne(room_blockout.id, definition.id),
+					gt(room_blockout.starts_at, now),
+					isNull(room_blockout.deletedAt),
+				),
+			);
+		for (const r of futureRows) {
+			await db
+				.delete(room_blockout_room)
+				.where(eq(room_blockout_room.blockout_id, r.id));
+			await db.delete(room_blockout).where(eq(room_blockout.id, r.id));
+		}
+	}
+
+	// Propagate the (possibly unchanged) reason / notes / public flag
+	// onto remaining future occurrences for consistency, and refresh
+	// their room links to mirror the definition's set.
+	const remainingFuture = await db
+		.select({ id: room_blockout.id })
+		.from(room_blockout)
+		.where(
+			and(
+				eq(room_blockout.series_id, definition.series_id),
+				ne(room_blockout.id, definition.id),
+				gt(room_blockout.starts_at, new Date()),
+				isNull(room_blockout.deletedAt),
+			),
+		);
+	if (remainingFuture.length > 0) {
+		await db
+			.update(room_blockout)
+			.set({
+				reason: p.reason.trim(),
+				notes: p.notes?.trim() || null,
+				is_public: !!p.is_public,
+			})
+			.where(
+				and(
+					eq(room_blockout.series_id, definition.series_id),
+					gt(room_blockout.starts_at, new Date()),
+					ne(room_blockout.id, definition.id),
+				),
+			);
+		for (const r of remainingFuture) {
+			await db
+				.delete(room_blockout_room)
+				.where(eq(room_blockout_room.blockout_id, r.id));
+			if (p.room_ids?.length > 0) {
+				await db
+					.insert(room_blockout_room)
+					.values(p.room_ids.map((id) => ({ blockout_id: r.id, room_id: id })));
+			}
+		}
+	}
+
+	// Top up to the full window with the new rule.
+	revalidatePath("/admin/church-events");
+	revalidatePath(`/admin/church-events/${definition.id}`);
+	return { id: definition.id, series_id: definition.series_id };
 }
 
 export async function deleteChurchEventAction(id) {

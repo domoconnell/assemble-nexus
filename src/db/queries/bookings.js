@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, gt, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, notInArray, sql } from "drizzle-orm";
+import { expandRecurrence } from "@/lib/church-events/recurrence.js";
 import { db } from "@/db/index.js";
 import { booking } from "@/db/schema/entities/booking.js";
 import { booking_segment } from "@/db/schema/entities/booking_segment.js";
@@ -420,28 +421,72 @@ export async function listSegmentsInRange(venueId, start, end) {
  * room_name.
  */
 export async function listBlockoutsInRange(venueId, start, end) {
-	return db
-		.select({
-			id: room_blockout.id,
-			starts_at: room_blockout.starts_at,
-			ends_at: room_blockout.ends_at,
-			reason: room_blockout.reason,
-			is_public: room_blockout.is_public,
-			room_id: room.id,
-			room_name: room.name,
-		})
-		.from(room_blockout)
-		.leftJoin(room_blockout_room, eq(room_blockout_room.blockout_id, room_blockout.id))
-		.leftJoin(room, eq(room.id, room_blockout_room.room_id))
-		.where(
-			and(
-				eq(room_blockout.venue_id, venueId),
-				isNull(room_blockout.deletedAt),
-				lt(room_blockout.starts_at, end),
-				gt(room_blockout.ends_at, start),
+	const [nonRecurring, definitions] = await Promise.all([
+		db
+			.select({
+				id: room_blockout.id,
+				starts_at: room_blockout.starts_at,
+				ends_at: room_blockout.ends_at,
+				reason: room_blockout.reason,
+				is_public: room_blockout.is_public,
+				room_id: room.id,
+				room_name: room.name,
+			})
+			.from(room_blockout)
+			.leftJoin(room_blockout_room, eq(room_blockout_room.blockout_id, room_blockout.id))
+			.leftJoin(room, eq(room.id, room_blockout_room.room_id))
+			.where(
+				and(
+					eq(room_blockout.venue_id, venueId),
+					isNull(room_blockout.recurrence_rule),
+					isNull(room_blockout.deletedAt),
+					lt(room_blockout.starts_at, end),
+					gt(room_blockout.ends_at, start),
+				),
+			)
+			.orderBy(asc(room_blockout.starts_at)),
+		db
+			.select({
+				id: room_blockout.id,
+				reason: room_blockout.reason,
+				is_public: room_blockout.is_public,
+				recurrence_rule: room_blockout.recurrence_rule,
+				room_id: room.id,
+				room_name: room.name,
+			})
+			.from(room_blockout)
+			.leftJoin(room_blockout_room, eq(room_blockout_room.blockout_id, room_blockout.id))
+			.leftJoin(room, eq(room.id, room_blockout_room.room_id))
+			.where(
+				and(
+					eq(room_blockout.venue_id, venueId),
+					isNotNull(room_blockout.recurrence_rule),
+					isNull(room_blockout.deletedAt),
+				),
 			),
-		)
-		.orderBy(asc(room_blockout.starts_at));
+	]);
+
+	const expanded = [];
+	for (const def of definitions) {
+		const hits = expandRecurrence(def.recurrence_rule, { from: start, until: end });
+		for (const h of hits) {
+			if (h.starts_at < end && h.ends_at > start) {
+				expanded.push({
+					id: def.id,
+					starts_at: h.starts_at,
+					ends_at: h.ends_at,
+					reason: def.reason,
+					is_public: def.is_public,
+					room_id: def.room_id,
+					room_name: def.room_name,
+				});
+			}
+		}
+	}
+
+	return [...nonRecurring, ...expanded].sort(
+		(a, b) => new Date(a.starts_at) - new Date(b.starts_at),
+	);
 }
 
 /**
@@ -452,25 +497,12 @@ export async function listBlockoutsInRange(venueId, start, end) {
 export async function listDayActivityForMonth(venueId, monthStartDate, monthEndDate) {
 	const start = monthStartDate;
 	const end = monthEndDate;
-	const [segments, events, blockouts] = await Promise.all([
+	const [segments, events, blockoutRows] = await Promise.all([
 		listSegmentsInRange(venueId, start, end),
 		listEventsInRange(venueId, start, end),
-		db
-			.select({
-				id: room_blockout.id,
-				starts_at: room_blockout.starts_at,
-				ends_at: room_blockout.ends_at,
-			})
-			.from(room_blockout)
-			.where(
-				and(
-					eq(room_blockout.venue_id, venueId),
-					isNull(room_blockout.deletedAt),
-					lt(room_blockout.starts_at, end),
-					gt(room_blockout.ends_at, start),
-				),
-			),
+		listBlockoutsInRange(venueId, start, end),
 	]);
+	const blockouts = blockoutRows;
 
 	const map = new Map();
 	const touch = (key, type) => {
@@ -611,35 +643,84 @@ export async function findConflictingBlockouts({ roomId, startsAt, endsAt }) {
 	if (!roomRow.length) return [];
 	const venueId = roomRow[0].venue_id;
 
-	return db
-		.select({
-			id: room_blockout.id,
-			starts_at: room_blockout.starts_at,
-			ends_at: room_blockout.ends_at,
-			reason: room_blockout.reason,
-			is_public: room_blockout.is_public,
-		})
-		.from(room_blockout)
-		.where(
-			and(
-				eq(room_blockout.venue_id, venueId),
-				isNull(room_blockout.deletedAt),
-				lt(room_blockout.starts_at, endsAt),
-				gt(room_blockout.ends_at, startsAt),
-				sql`(
-					exists (
-						select 1 from ${room_blockout_room} rbr
-						where rbr.blockout_id = ${room_blockout.id}
-						  and rbr.room_id = ${roomId}
-					)
-					or not exists (
-						select 1 from ${room_blockout_room} rbr
-						where rbr.blockout_id = ${room_blockout.id}
-					)
-				)`,
-			),
+	const roomFilter = sql`(
+		exists (
+			select 1 from ${room_blockout_room} rbr
+			where rbr.blockout_id = ${room_blockout.id}
+			  and rbr.room_id = ${roomId}
 		)
-		.orderBy(asc(room_blockout.starts_at));
+		or not exists (
+			select 1 from ${room_blockout_room} rbr
+			where rbr.blockout_id = ${room_blockout.id}
+		)
+	)`;
+
+	const [nonRecurring, definitions] = await Promise.all([
+		// One-off blockouts + venue closures + adhoc church events: their
+		// own starts_at/ends_at IS the occurrence, no expansion needed.
+		db
+			.select({
+				id: room_blockout.id,
+				starts_at: room_blockout.starts_at,
+				ends_at: room_blockout.ends_at,
+				reason: room_blockout.reason,
+				is_public: room_blockout.is_public,
+			})
+			.from(room_blockout)
+			.where(
+				and(
+					eq(room_blockout.venue_id, venueId),
+					isNull(room_blockout.recurrence_rule),
+					isNull(room_blockout.deletedAt),
+					lt(room_blockout.starts_at, endsAt),
+					gt(room_blockout.ends_at, startsAt),
+					roomFilter,
+				),
+			)
+			.orderBy(asc(room_blockout.starts_at)),
+
+		// Recurring church-event definitions: load once, expand into
+		// occurrences against the requested [startsAt, endsAt) window.
+		db
+			.select({
+				id: room_blockout.id,
+				reason: room_blockout.reason,
+				is_public: room_blockout.is_public,
+				recurrence_rule: room_blockout.recurrence_rule,
+			})
+			.from(room_blockout)
+			.where(
+				and(
+					eq(room_blockout.venue_id, venueId),
+					isNotNull(room_blockout.recurrence_rule),
+					isNull(room_blockout.deletedAt),
+					roomFilter,
+				),
+			),
+	]);
+
+	const expanded = [];
+	for (const def of definitions) {
+		const hits = expandRecurrence(def.recurrence_rule, { from: startsAt, until: endsAt });
+		for (const h of hits) {
+			// Drop occurrences that don't actually overlap the requested
+			// window (expand returns starts inside [from, until] but ends
+			// may extend beyond - check the overlap explicitly).
+			if (h.starts_at < endsAt && h.ends_at > startsAt) {
+				expanded.push({
+					id: def.id,
+					starts_at: h.starts_at,
+					ends_at: h.ends_at,
+					reason: def.reason,
+					is_public: def.is_public,
+				});
+			}
+		}
+	}
+
+	return [...nonRecurring, ...expanded].sort(
+		(a, b) => new Date(a.starts_at) - new Date(b.starts_at),
+	);
 }
 
 export async function findConflictingSegments({

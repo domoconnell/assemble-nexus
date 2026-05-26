@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import ConfirmDialog from "@/global/ui/components/confirm-dialog";
@@ -42,14 +43,22 @@ export default function ChurchEventRow({ id, seriesId, title, subtitle, notes, i
 					<div className="text-xs text-muted-foreground mt-1 truncate">{notes}</div>
 				)}
 			</div>
-			<button
-				type="button"
-				onClick={() => setConfirming(true)}
-				disabled={pending}
-				className="rounded-md border border-foreground/15 px-2.5 py-1 text-xs text-muted-foreground hover:text-destructive hover:border-destructive/30"
-			>
-				{isSeries ? "Cancel series" : "Cancel"}
-			</button>
+			<div className="flex items-center gap-2">
+				<Link
+					href={`/admin/church-events/${id}`}
+					className="rounded-md border border-foreground/15 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30"
+				>
+					Edit
+				</Link>
+				<button
+					type="button"
+					onClick={() => setConfirming(true)}
+					disabled={pending}
+					className="rounded-md border border-foreground/15 px-2.5 py-1 text-xs text-muted-foreground hover:text-destructive hover:border-destructive/30"
+				>
+					{isSeries ? "Cancel series" : "Cancel"}
+				</button>
+			</div>
 			<ConfirmDialog
 				open={confirming}
 				onOpenChange={setConfirming}

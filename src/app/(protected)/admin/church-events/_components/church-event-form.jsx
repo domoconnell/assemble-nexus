@@ -17,7 +17,8 @@ import {
 } from "@/shadcn/components/ui/select";
 import { DatePicker } from "@/site/booking/date-picker";
 import { DateTimePicker } from "@/global/ui/components/date-time-picker";
-import { createChurchEventAction } from "../actions";
+import { TimePicker } from "@/site/booking/time-picker";
+import { createChurchEventAction, updateChurchEventAction } from "../actions";
 
 const WEEKDAYS = [
 	{ key: "MO", label: "Mon" },
@@ -29,28 +30,80 @@ const WEEKDAYS = [
 	{ key: "SU", label: "Sun" },
 ];
 
-export default function ChurchEventForm({ rooms }) {
+function toIsoLocal(d) {
+	if (!d) return "";
+	const date = new Date(d);
+	if (Number.isNaN(date.getTime())) return "";
+	// Format as YYYY-MM-DDTHH:MM in local time so DateTimePicker pre-fills.
+	const y = date.getFullYear();
+	const m = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	const h = String(date.getHours()).padStart(2, "0");
+	const mi = String(date.getMinutes()).padStart(2, "0");
+	return `${y}-${m}-${day}T${h}:${mi}`;
+}
+
+/**
+ * When editing, `initial` carries the existing event/series so the form
+ * pre-fills. Adhoc events get the simple form; weekly/run series share
+ * the same UI as the create flow, with the "kind" cards locked because
+ * a series can't switch types in place.
+ */
+export default function ChurchEventForm({ rooms, initial = null }) {
 	const router = useRouter();
-	const [kind, setKind] = useState("weekly");
-	const [reason, setReason] = useState("");
-	const [notes, setNotes] = useState("");
-	const [isPublic, setIsPublic] = useState(false);
-	const [roomIds, setRoomIds] = useState([]);
+	const isEdit = !!initial;
+
+	const initialKind =
+		initial?.recurrence_rule?.kind === "weekly"
+			? "weekly"
+			: initial?.recurrence_rule?.kind === "run"
+				? "run"
+				: initial
+					? "adhoc"
+					: "weekly";
+
+	const [kind, setKind] = useState(initialKind);
+	const [reason, setReason] = useState(initial?.reason ?? "");
+	const [notes, setNotes] = useState(initial?.notes ?? "");
+	const [isPublic, setIsPublic] = useState(initial?.is_public ?? false);
+	const [roomIds, setRoomIds] = useState(initial?.room_ids ?? []);
 
 	// adhoc
-	const [adhocStart, setAdhocStart] = useState("");
-	const [adhocEnd, setAdhocEnd] = useState("");
+	const [adhocStart, setAdhocStart] = useState(
+		initial && initialKind === "adhoc" ? toIsoLocal(initial.starts_at) : "",
+	);
+	const [adhocEnd, setAdhocEnd] = useState(
+		initial && initialKind === "adhoc" ? toIsoLocal(initial.ends_at) : "",
+	);
 
 	// weekly
-	const [byWeekday, setByWeekday] = useState([]);
-	const [timeStart, setTimeStart] = useState("");
-	const [timeEnd, setTimeEnd] = useState("");
-	const [startsOn, setStartsOn] = useState("");
-	const [endsOn, setEndsOn] = useState("");
+	const [byWeekday, setByWeekday] = useState(
+		initial?.recurrence_rule?.kind === "weekly"
+			? initial.recurrence_rule.by_weekday ?? []
+			: [],
+	);
+	const [timeStart, setTimeStart] = useState(
+		initial?.recurrence_rule?.time_start ?? "",
+	);
+	const [timeEnd, setTimeEnd] = useState(
+		initial?.recurrence_rule?.time_end ?? "",
+	);
+	const [startsOn, setStartsOn] = useState(
+		initial?.recurrence_rule?.starts_on ?? "",
+	);
+	const [endsOn, setEndsOn] = useState(
+		initial?.recurrence_rule?.ends_on ?? "",
+	);
 
 	// run
-	const [runWeekday, setRunWeekday] = useState("TU");
-	const [weeks, setWeeks] = useState(6);
+	const [runWeekday, setRunWeekday] = useState(
+		initial?.recurrence_rule?.kind === "run"
+			? initial.recurrence_rule.weekday ?? "TU"
+			: "TU",
+	);
+	const [weeks, setWeeks] = useState(
+		initial?.recurrence_rule?.weeks ?? 6,
+	);
 
 	const [saving, setSaving] = useState(false);
 
@@ -112,11 +165,16 @@ export default function ChurchEventForm({ rooms }) {
 					weeks: Number(weeks),
 				};
 			}
-			await createChurchEventAction(payload);
-			toast.success("Created");
+			if (isEdit) {
+				await updateChurchEventAction({ ...payload, id: initial.id });
+				toast.success("Updated");
+			} else {
+				await createChurchEventAction(payload);
+				toast.success("Created");
+			}
 			router.push("/admin/church-events");
 		} catch (err) {
-			toast.error(err?.message || "Couldn't create.");
+			toast.error(err?.message || "Couldn't save.");
 		} finally {
 			setSaving(false);
 		}
@@ -130,23 +188,32 @@ export default function ChurchEventForm({ rooms }) {
 					<div className="grid gap-3 sm:grid-cols-3">
 						<KindCard
 							active={kind === "weekly"}
-							onClick={() => setKind("weekly")}
+							disabled={isEdit && initialKind !== "weekly"}
+							onClick={() => !isEdit && setKind("weekly")}
 							title="Weekly"
 							blurb="Open-ended weekly pattern (e.g. Sunday morning service)."
 						/>
 						<KindCard
 							active={kind === "run"}
-							onClick={() => setKind("run")}
+							disabled={isEdit && initialKind !== "run"}
+							onClick={() => !isEdit && setKind("run")}
 							title="Run"
 							blurb="A finite weekly series (e.g. 6-week course)."
 						/>
 						<KindCard
 							active={kind === "adhoc"}
-							onClick={() => setKind("adhoc")}
+							disabled={isEdit && initialKind !== "adhoc"}
+							onClick={() => !isEdit && setKind("adhoc")}
 							title="Adhoc"
 							blurb="A one-off event on a specific day."
 						/>
 					</div>
+					{isEdit && (
+						<p className="text-[10px] text-muted-foreground">
+							Type is fixed once a church event has been created. To change it,
+							cancel this one and create a new event.
+						</p>
+					)}
 				</div>
 
 				<div className="space-y-2">
@@ -235,12 +302,12 @@ export default function ChurchEventForm({ rooms }) {
 					</div>
 					<div className="grid gap-4 sm:grid-cols-2">
 						<div className="space-y-2">
-							<Label htmlFor="time-start">Start time</Label>
-							<Input id="time-start" type="time" value={timeStart} onChange={(e) => setTimeStart(e.target.value)} required />
+							<Label>Start time</Label>
+							<TimePicker value={timeStart} onChange={setTimeStart} />
 						</div>
 						<div className="space-y-2">
-							<Label htmlFor="time-end">End time</Label>
-							<Input id="time-end" type="time" value={timeEnd} onChange={(e) => setTimeEnd(e.target.value)} required />
+							<Label>End time</Label>
+							<TimePicker value={timeEnd} onChange={setTimeEnd} />
 						</div>
 					</div>
 					<div className="grid gap-4 sm:grid-cols-2">
@@ -279,12 +346,12 @@ export default function ChurchEventForm({ rooms }) {
 							</Select>
 						</div>
 						<div className="space-y-2">
-							<Label htmlFor="time-start">Start time</Label>
-							<Input id="time-start" type="time" value={timeStart} onChange={(e) => setTimeStart(e.target.value)} required />
+							<Label>Start time</Label>
+							<TimePicker value={timeStart} onChange={setTimeStart} />
 						</div>
 						<div className="space-y-2">
-							<Label htmlFor="time-end">End time</Label>
-							<Input id="time-end" type="time" value={timeEnd} onChange={(e) => setTimeEnd(e.target.value)} required />
+							<Label>End time</Label>
+							<TimePicker value={timeEnd} onChange={setTimeEnd} />
 						</div>
 					</div>
 					<div className="grid gap-4 sm:grid-cols-2">
@@ -326,23 +393,26 @@ export default function ChurchEventForm({ rooms }) {
 
 			<div className="flex items-center justify-end gap-3">
 				<Button type="submit" disabled={saving}>
-					{saving ? "Saving…" : "Create"}
+					{saving ? "Saving…" : isEdit ? "Save changes" : "Create"}
 				</Button>
 			</div>
 		</form>
 	);
 }
 
-function KindCard({ active, onClick, title, blurb }) {
+function KindCard({ active, disabled, onClick, title, blurb }) {
+	const base = "text-left rounded-lg border px-4 py-4 transition";
+	const state = active
+		? "border-primary bg-primary/5"
+		: disabled
+			? "border-foreground/10 bg-background opacity-40 cursor-not-allowed"
+			: "border-foreground/10 hover:border-foreground/30 bg-background";
 	return (
 		<button
 			type="button"
 			onClick={onClick}
-			className={`text-left rounded-lg border px-4 py-4 transition ${
-				active
-					? "border-primary bg-primary/5"
-					: "border-foreground/10 hover:border-foreground/30 bg-background"
-			}`}
+			disabled={disabled}
+			className={`${base} ${state}`}
 		>
 			<div className="font-medium">{title}</div>
 			<p className="text-xs text-muted-foreground mt-1">{blurb}</p>

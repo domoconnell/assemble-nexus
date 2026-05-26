@@ -11,7 +11,6 @@ import {
 } from "@/utils/email/booking-emails.js";
 import { materialiseSessionsThrough } from "@/lib/tenancies/materialiser.js";
 import { issueTenancyInvoicesForToday } from "@/lib/tenancies/invoicer.js";
-import { materialiseChurchEventsThrough } from "@/lib/church-events/materialiser.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -234,9 +233,8 @@ async function run() {
 
 	for (const venue of venues) {
 		try {
-			const [materialise, churchEvents, tenancyInvoices, balanceInvoices, reminders] = await Promise.all([
+			const [materialise, tenancyInvoices, balanceInvoices, reminders] = await Promise.all([
 				materialiseSessionsThrough(venue.id, materialiseUntil),
-				materialiseChurchEventsThrough(venue.id, materialiseUntil),
 				issueTenancyInvoicesForToday(venue.id, today),
 				autoBalanceInvoices(venue.id),
 				sendReminders(venue.id),
@@ -244,7 +242,6 @@ async function run() {
 			summary.push({
 				venue: venue.slug,
 				materialise,
-				church_events: churchEvents,
 				tenancy_invoices: tenancyInvoices,
 				balance_invoices: balanceInvoices,
 				reminders,
