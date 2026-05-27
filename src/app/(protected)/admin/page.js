@@ -911,8 +911,13 @@ function combineScheduleItems(segments, blockouts, todayKey, todayOnly) {
 		const startsAt = new Date(b.starts_at);
 		const key = londonDayKey(startsAt);
 		if (todayOnly && key !== todayKey) continue;
+		// listBlockoutsInRange returns one row per (blockout × room ×
+		// expanded occurrence), so the underlying blockout id alone isn't
+		// unique enough for a React key - include the occurrence start +
+		// room.
+		const rowKey = `blk-${b.id}-${startsAt.getTime()}-${b.room_id ?? "all"}`;
 		items.push({
-			id: `blk-${b.id}`,
+			id: rowKey,
 			kind: "blockout",
 			day_key: key,
 			starts_at: startsAt,

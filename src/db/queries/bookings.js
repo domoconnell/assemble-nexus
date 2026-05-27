@@ -525,7 +525,14 @@ export async function listDayActivityForMonth(venueId, monthStartDate, monthEndD
 	for (const ev of events) {
 		if (ev.starts_at) touch(dayKey(new Date(ev.starts_at)), "events");
 	}
+	// listBlockoutsInRange fans out one row per (blockout × room ×
+	// expanded occurrence). For the heatmap we count distinct
+	// occurrences, so dedupe by (blockout id + starts_at) before tallying.
+	const seenBlockoutOccurrences = new Set();
 	for (const b of blockouts) {
+		const occKey = `${b.id}-${new Date(b.starts_at).getTime()}`;
+		if (seenBlockoutOccurrences.has(occKey)) continue;
+		seenBlockoutOccurrences.add(occKey);
 		touch(dayKey(new Date(b.starts_at)), "blockouts");
 	}
 	return Object.fromEntries(map);

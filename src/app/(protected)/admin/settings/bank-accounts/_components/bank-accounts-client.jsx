@@ -14,6 +14,7 @@ import {
 import ConfirmDialog from "@/global/ui/components/confirm-dialog";
 import StarlingForm from "./starling-form";
 import RevolutForm from "./revolut-form";
+import MonzoForm from "./monzo-form";
 import {
 	deleteBankAccountAction,
 	setBankAccountActiveAction,
@@ -25,7 +26,14 @@ const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" 
 const PROVIDER_OPTIONS = [
 	{ key: "starling", label: "Starling Bank", blurb: "Personal Access Token. Single-account hire, simplest setup." },
 	{ key: "revolut", label: "Revolut Business", blurb: "Certificate-based OAuth. Supports multi-currency sub-accounts." },
+	{ key: "monzo", label: "Monzo", blurb: "OAuth client. Personal + Business accounts. Needs in-app approval after setup." },
 ];
+
+const PROVIDER_LABELS = {
+	starling: "Starling",
+	revolut: "Revolut",
+	monzo: "Monzo",
+};
 
 export default function BankAccountsClient({ accounts }) {
 	const router = useRouter();
@@ -169,6 +177,13 @@ export default function BankAccountsClient({ accounts }) {
 					initial={editing}
 				/>
 			)}
+			{chosenProvider === "monzo" && (
+				<MonzoForm
+					open
+					onOpenChange={(o) => !o && closeForm()}
+					initial={editing}
+				/>
+			)}
 
 			<ConfirmDialog
 				open={!!confirmDeleteId}
@@ -184,7 +199,7 @@ export default function BankAccountsClient({ accounts }) {
 }
 
 function AccountRow({ account, onEdit, onSync, onBackfill, onToggleActive, onDelete, syncing }) {
-	const providerLabel = account.provider === "starling" ? "Starling" : account.provider === "revolut" ? "Revolut" : account.provider;
+	const providerLabel = PROVIDER_LABELS[account.provider] ?? account.provider;
 	const lastSynced = account.last_synced_at ? new Date(account.last_synced_at) : null;
 	return (
 		<li className="rounded-lg border border-foreground/10 bg-card p-4 space-y-3">

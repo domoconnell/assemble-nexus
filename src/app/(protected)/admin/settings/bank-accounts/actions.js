@@ -13,6 +13,11 @@ import {
 	exchangeAuthCode,
 	listRevolutAccounts,
 } from "@/lib/banking/providers/revolut.js";
+import {
+	monzoProvider,
+	exchangeAuthCode as exchangeMonzoAuthCode,
+	listMonzoAccounts,
+} from "@/lib/banking/providers/monzo.js";
 import { syncBankAccount } from "@/lib/banking/sync.js";
 
 async function gate() {
@@ -275,6 +280,142 @@ export async function probeRevolutAction(input) {
 		}
 	}
 	return revolutProvider.probe(account);
+}
+
+// ── Monzo ──────────────────────────────────────────────────────────────
+
+const MonzoSaveCredsSchema = z.object({
+	id: z.string().uuid().optional().nullable(),
+	label: z.string().min(1).max(120),
+	client_id: z.string().min(1),
+	client_secret: z.string().min(1).optional().nullable(),
+	redirect_uri: z.string().url(),
+});
+
+/**
+ * Step 1 of Monzo setup. Saves the OAuth client credentials. Tokens are
+ * filled in by step 2 after the admin completes the in-app approval.
+ */
+export async function saveMonzoCredentialsAction(input) {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const parsed = MonzoSaveCredsSchema.parse(input);
+
+	let existing = null;
+	if (parsed.id) existing = await loadAccount(parsed.id, venue.id);
+	const existingCreds = existing?.credentials ?? {};
+
+	const client_secret = parsed.client_secret?.trim() || existingCreds.client_secret;
+	if (!client_secret) {
+		throw new Error("Paste the Client Secret the first time you save.");
+	}
+
+	const credentials = {
+		client_id: parsed.client_id,
+		client_secret,
+		redirect_uri: parsed.redirect_uri,
+		access_token: existingCreds.access_token ?? null,
+		refresh_token: existingCreds.refresh_token ?? null,
+		access_token_expires_at: existingCreds.access_token_expires_at ?? null,
+	};
+
+	if (existing) {
+		await db
+			.update(bank_account)
+			.set({ label: parsed.label, credentials })
+			.where(eq(bank_account.id, existing.id));
+		revalidate();
+		return { ok: true, id: existing.id };
+	}
+
+	const [inserted] = await db
+		.insert(bank_account)
+		.values({
+			venue_id: venue.id,
+			provider: "monzo",
+			label: parsed.label,
+			credentials,
+			currency: "GBP",
+			sort_order: Date.now() % 1000,
+		})
+		.returning();
+	revalidate();
+	return { ok: true, id: inserted.id };
+}
+
+const MonzoAuthoriseSchema = z.object({
+	id: z.string().uuid(),
+	code: z.string().min(1),
+});
+
+/**
+ * Step 2 of Monzo setup. Exchanges the one-time `code` Monzo redirected
+ * back with for access + refresh tokens, then surfaces the list of
+ * accounts on the user's Monzo so they can pick one to sync.
+ */
+export async function authoriseMonzoAccountAction(input) {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const parsed = MonzoAuthoriseSchema.parse(input);
+	const account = await loadAccount(parsed.id, venue.id);
+
+	const res = await exchangeMonzoAuthCode(account.credentials, parsed.code.trim());
+	if (!res.ok) throw new Error(res.error || "Token exchange failed.");
+	await db
+		.update(bank_account)
+		.set({ credentials: res.credentials })
+		.where(eq(bank_account.id, account.id));
+
+	const refreshed = { ...account, credentials: res.credentials };
+	const accountsRes = await listMonzoAccounts(refreshed);
+	revalidate();
+	return {
+		ok: true,
+		accounts: accountsRes.ok ? accountsRes.accounts : [],
+		needs_sca: accountsRes.ok ? false : /verification_required/i.test(accountsRes.error || ""),
+	};
+}
+
+const MonzoPickAccountSchema = z.object({
+	id: z.string().uuid(),
+	external_account_uid: z.string().min(1),
+});
+
+export async function pickMonzoAccountAction(input) {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const parsed = MonzoPickAccountSchema.parse(input);
+	const account = await loadAccount(parsed.id, venue.id);
+	const accountsRes = await listMonzoAccounts(account);
+	if (!accountsRes.ok) throw new Error(accountsRes.error || "Couldn't list accounts.");
+	const match = accountsRes.accounts.find((a) => a.id === parsed.external_account_uid);
+	if (!match) throw new Error("Account not found on this Monzo login.");
+	await db
+		.update(bank_account)
+		.set({
+			external_account_uid: match.id,
+			currency: match.currency ?? "GBP",
+		})
+		.where(eq(bank_account.id, account.id));
+	revalidate();
+	return { ok: true };
+}
+
+export async function probeMonzoAction(input) {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const account = await loadAccount(input.id, venue.id);
+	if (monzoProvider.refreshCredentials) {
+		const refreshed = await monzoProvider.refreshCredentials(account);
+		if (refreshed && refreshed !== account) {
+			await db
+				.update(bank_account)
+				.set({ credentials: refreshed.credentials })
+				.where(eq(bank_account.id, account.id));
+			return monzoProvider.probe(refreshed);
+		}
+	}
+	return monzoProvider.probe(account);
 }
 
 // ── Generic ────────────────────────────────────────────────────────────

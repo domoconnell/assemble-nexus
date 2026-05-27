@@ -1,9 +1,11 @@
 import { starlingProvider } from "./starling.js";
 import { revolutProvider } from "./revolut.js";
+import { monzoProvider } from "./monzo.js";
 
 export const PROVIDERS = {
 	starling: starlingProvider,
 	revolut: revolutProvider,
+	monzo: monzoProvider,
 };
 
 export const PROVIDER_LIST = Object.values(PROVIDERS).map((p) => ({
