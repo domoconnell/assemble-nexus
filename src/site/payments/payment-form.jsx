@@ -227,15 +227,26 @@ function StripeNotReady() {
 }
 
 /**
- * Stripe Payment Element + confirmPayment. Mounts inside a single
- * iframe so we never see the card details. We use `redirect: "if_required"`
- * so most payments stay on this page; only 3DS challenges hop to the
- * issuer's page and back.
+ * Stripe form, custom-built to match the site:
  *
- * After confirmPayment resolves successfully, we hand the intent to
- * onSuccess. The actual ticket/booking finalisation happens via the
- * /api/webhooks/stripe handler firing on `payment_intent.succeeded` -
- * the browser doesn't need to do anything else.
+ *   ┌──────────────────────────────────┐
+ *   │  [  Apple Pay  ] [  Google Pay ] │  ← our buttons, only shown
+ *   │                                  │     when the device supports
+ *   │  ────────── Or ──────────         │     that wallet
+ *   │  Card number                     │
+ *   │  Expiry          CVC             │  ← individual Stripe iframes
+ *   │  Name            Postcode        │     themed to the site
+ *   │  [ Pay £X ]                      │
+ *   └──────────────────────────────────┘
+ *
+ * Wallets use the legacy `stripe.paymentRequest()` API - it lets us own
+ * the button visuals and only opens the native wallet sheet on tap. No
+ * Stripe-branded button needed. We surface whichever wallets the
+ * device reports via canMakePayment(): typically just one per device.
+ *
+ * Both wallet + card paths confirm the same PaymentIntent client-side.
+ * Actual ticket / booking finalisation happens via the webhook firing
+ * `payment_intent.succeeded`.
  */
 function StripePaymentForm({
 	publishableKey,
@@ -246,67 +257,173 @@ function StripePaymentForm({
 	onSuccess,
 	onError,
 }) {
-	const containerRef = useRef(null);
+	const cardNumberRef = useRef(null);
+	const cardExpiryRef = useRef(null);
+	const cardCvcRef = useRef(null);
 	const stripeRef = useRef(null);
 	const elementsRef = useRef(null);
-	const [ready, setReady] = useState(false);
+	const paymentRequestRef = useRef(null);
+	const [walletKinds, setWalletKinds] = useState({ applePay: false, googlePay: false });
+	const [cardReady, setCardReady] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState(null);
+	const [name, setName] = useState("");
+	const [postcode, setPostcode] = useState("");
 
 	useEffect(() => {
 		let cancelled = false;
+
 		async function mount() {
 			try {
 				const stripe = await loadStripe(publishableKey);
 				if (cancelled || !stripe) return;
 				stripeRef.current = stripe;
-				const elements = stripe.elements({ clientSecret });
-				elementsRef.current = elements;
-				const paymentElement = elements.create("payment", {
-					layout: { type: "tabs", defaultCollapsed: false },
+
+				const appearance = computeStripeAppearance();
+
+				// PaymentRequest powers the wallet buttons. It lets the
+				// browser pre-flight Apple Pay / Google Pay availability,
+				// shows the native sheet on demand, then hands back a
+				// payment_method we attach to the existing PaymentIntent.
+				const pr = stripe.paymentRequest({
+					country: "GB",
+					currency: currency.toLowerCase(),
+					total: { label: "Total", amount: amountCents },
+					requestPayerName: true,
+					requestPayerEmail: false,
+					disableWallets: ["link", "browserCard"],
 				});
-				paymentElement.on("ready", () => {
-					if (!cancelled) setReady(true);
+				const supported = await pr.canMakePayment();
+				if (!cancelled && supported) {
+					setWalletKinds({
+						applePay: !!supported.applePay,
+						googlePay: !!supported.googlePay,
+					});
+					paymentRequestRef.current = pr;
+				}
+				pr.on("paymentmethod", async (ev) => {
+					setSubmitting(true);
+					setError(null);
+					const { error: confirmError, paymentIntent } =
+						await stripe.confirmCardPayment(
+							clientSecret,
+							{ payment_method: ev.paymentMethod.id },
+							{ handleActions: false },
+						);
+					if (confirmError) {
+						ev.complete("fail");
+						setError(confirmError.message || "Payment failed");
+						onError?.(new Error(confirmError.message || "Payment failed"));
+						setSubmitting(false);
+						return;
+					}
+					ev.complete("success");
+					// If 3DS challenge is required, finalise that here.
+					if (paymentIntent?.status === "requires_action") {
+						const next = await stripe.confirmCardPayment(clientSecret);
+						if (next.error) {
+							setError(next.error.message || "Payment failed");
+							onError?.(new Error(next.error.message || "Payment failed"));
+							setSubmitting(false);
+							return;
+						}
+						handleSettledIntent(next.paymentIntent);
+						return;
+					}
+					handleSettledIntent(paymentIntent);
 				});
-				paymentElement.mount(containerRef.current);
+
+				// Card collection - one Elements instance bound to the
+				// real intent so confirmCardPayment finds it.
+				const cardElements = stripe.elements({ clientSecret, appearance });
+				elementsRef.current = cardElements;
+				const cardNumber = cardElements.create("cardNumber", { showIcon: true });
+				const cardExpiry = cardElements.create("cardExpiry");
+				const cardCvc = cardElements.create("cardCvc");
+				let mounted = 0;
+				const onReady = () => {
+					mounted += 1;
+					if (mounted === 3 && !cancelled) setCardReady(true);
+				};
+				cardNumber.on("ready", onReady);
+				cardExpiry.on("ready", onReady);
+				cardCvc.on("ready", onReady);
+				cardNumber.mount(cardNumberRef.current);
+				cardExpiry.mount(cardExpiryRef.current);
+				cardCvc.mount(cardCvcRef.current);
 			} catch (err) {
 				console.error("[stripe-element-mount]", err);
 				setError("Couldn't load Stripe. Please refresh and try again.");
 			}
 		}
+
+		function handleSettledIntent(pi) {
+			if (!pi) return;
+			if (pi.status === "succeeded" || pi.status === "processing") {
+				onSuccess?.({
+					id: pi.id ?? intentId,
+					status: pi.status === "succeeded" ? "succeeded" : "requires_action",
+					amount_cents: pi.amount ?? amountCents,
+					currency: pi.currency ?? currency,
+				});
+			} else {
+				setError(`Payment status: ${pi.status}. Please try again.`);
+				onError?.(new Error(`Payment status: ${pi.status}`));
+			}
+			setSubmitting(false);
+		}
+
 		mount();
 		return () => {
 			cancelled = true;
 			try {
-				elementsRef.current?.getElement?.("payment")?.unmount();
-			} catch { /* ignore unmount errors */ }
+				elementsRef.current?.getElement?.("cardNumber")?.unmount();
+				elementsRef.current?.getElement?.("cardExpiry")?.unmount();
+				elementsRef.current?.getElement?.("cardCvc")?.unmount();
+			} catch { /* ignore */ }
 		};
-	}, [publishableKey, clientSecret]);
+	}, [publishableKey, clientSecret, amountCents, currency, intentId, onSuccess, onError]);
 
-	async function submit(e) {
+	async function openWallet() {
+		const pr = paymentRequestRef.current;
+		if (!pr) return;
+		try {
+			pr.show();
+		} catch (err) {
+			setError(err?.message || "Couldn't open wallet");
+		}
+	}
+
+	async function payByCard(e) {
 		e.preventDefault();
 		const stripe = stripeRef.current;
 		const elements = elementsRef.current;
-		if (!stripe || !elements) return;
+		const cardNumber = elements?.getElement?.("cardNumber");
+		if (!stripe || !cardNumber) return;
 		setSubmitting(true);
 		setError(null);
 
-		const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
-			elements,
-			redirect: "if_required",
-		});
+		const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+			clientSecret,
+			{
+				payment_method: {
+					card: cardNumber,
+					billing_details: {
+						name: name || undefined,
+						address: postcode ? { postal_code: postcode } : undefined,
+					},
+				},
+			},
+		);
 
 		if (confirmError) {
-			const message = confirmError.message || "Payment failed";
-			setError(message);
-			onError?.(new Error(message));
+			setError(confirmError.message || "Payment failed");
+			onError?.(new Error(confirmError.message || "Payment failed"));
 			setSubmitting(false);
 			return;
 		}
 
 		if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "processing") {
-			// `processing` is fine - means Stripe accepted the payment
-			// and webhook will confirm. Hand control back to the caller.
 			onSuccess?.({
 				id: paymentIntent.id ?? intentId,
 				status: paymentIntent.status === "succeeded" ? "succeeded" : "requires_action",
@@ -314,13 +431,8 @@ function StripePaymentForm({
 				currency: paymentIntent.currency ?? currency,
 			});
 		} else if (paymentIntent) {
-			// requires_action / requires_payment_method / etc - usually
-			// means the user needs to do something else. Stripe normally
-			// handles the redirect for us when `redirect: "if_required"`
-			// is set, so if we got here something needs fixing.
-			const message = `Payment status: ${paymentIntent.status}. Please try again.`;
-			setError(message);
-			onError?.(new Error(message));
+			setError(`Payment status: ${paymentIntent.status}. Please try again.`);
+			onError?.(new Error(`Payment status: ${paymentIntent.status}`));
 		}
 		setSubmitting(false);
 	}
@@ -330,12 +442,14 @@ function StripePaymentForm({
 			? gbp.format(amountCents / 100)
 			: `${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()}`;
 
+	const hasAnyWallet = walletKinds.applePay || walletKinds.googlePay;
+
 	return (
-		<form onSubmit={submit} className="rounded-xl border border-foreground/10 bg-card p-6 space-y-5">
+		<form onSubmit={payByCard} className="rounded-xl border border-foreground/10 bg-card p-6 space-y-5">
 			<div>
-				<h2 className="text-xs uppercase tracking-[0.22em] text-foreground/70">Card details</h2>
+				<h2 className="text-xs uppercase tracking-[0.22em] text-foreground/70">Pay securely</h2>
 				<p className="mt-2 text-xs text-muted-foreground">
-					Card details are collected by Stripe and never touch our servers.
+					Card details are tokenised in your browser and never reach our servers.
 				</p>
 			</div>
 
@@ -345,18 +459,174 @@ function StripePaymentForm({
 				</div>
 			)}
 
-			<div
-				ref={containerRef}
-				className="min-h-40"
-				aria-label="Stripe payment element"
-			/>
-			{!ready && (
+			{hasAnyWallet && (
+				<>
+					<div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+						{walletKinds.applePay && (
+							<button
+								type="button"
+								onClick={openWallet}
+								disabled={submitting}
+								aria-label="Pay with Apple Pay"
+								className="h-12 rounded-md bg-black text-white flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition"
+							>
+								<AppleLogo className="h-5 w-5" />
+								<span className="text-sm font-medium tracking-tight">Pay</span>
+							</button>
+						)}
+						{walletKinds.googlePay && (
+							<button
+								type="button"
+								onClick={openWallet}
+								disabled={submitting}
+								aria-label="Pay with Google Pay"
+								className="h-12 rounded-md bg-black text-white flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition"
+							>
+								<GoogleGlyph className="h-5 w-5" />
+								<span className="text-sm font-medium tracking-tight">Pay</span>
+							</button>
+						)}
+					</div>
+					<div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+						<span className="h-px flex-1 bg-foreground/10" />
+						or
+						<span className="h-px flex-1 bg-foreground/10" />
+					</div>
+				</>
+			)}
+
+			{/* Card fields - rendered as themed Stripe iframes */}
+			<div className="space-y-3">
+				<div className="space-y-1.5">
+					<Label>Card number</Label>
+					<div
+						ref={cardNumberRef}
+						className="rounded-md border border-input bg-background px-3 py-2.5 min-h-10"
+					/>
+				</div>
+				<div className="grid grid-cols-2 gap-3">
+					<div className="space-y-1.5">
+						<Label>Expiry</Label>
+						<div
+							ref={cardExpiryRef}
+							className="rounded-md border border-input bg-background px-3 py-2.5 min-h-10"
+						/>
+					</div>
+					<div className="space-y-1.5">
+						<Label>CVC</Label>
+						<div
+							ref={cardCvcRef}
+							className="rounded-md border border-input bg-background px-3 py-2.5 min-h-10"
+						/>
+					</div>
+				</div>
+				<div className="grid gap-3 sm:grid-cols-2">
+					<div className="space-y-1.5">
+						<Label>Name on card</Label>
+						<Input
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+							autoComplete="cc-name"
+						/>
+					</div>
+					<div className="space-y-1.5">
+						<Label>Postcode</Label>
+						<Input
+							value={postcode}
+							onChange={(e) => setPostcode(e.target.value)}
+							autoComplete="postal-code"
+						/>
+					</div>
+				</div>
+			</div>
+
+			{!cardReady && (
 				<div className="text-xs text-muted-foreground">Loading secure card form…</div>
 			)}
 
-			<Button type="submit" disabled={submitting || !ready} className="w-full" size="lg">
+			<Button type="submit" disabled={submitting || !cardReady} className="w-full" size="lg">
 				{submitting ? "Processing…" : `Pay ${total}`}
 			</Button>
 		</form>
 	);
+}
+
+function AppleLogo({ className }) {
+	return (
+		<svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+			<path d="M17.564 12.853c-.026-2.638 2.155-3.91 2.253-3.972-1.226-1.791-3.135-2.037-3.815-2.065-1.625-.164-3.171.957-3.998.957-.825 0-2.097-.933-3.45-.907-1.776.027-3.412 1.032-4.327 2.622-1.844 3.193-.471 7.916 1.328 10.509.88 1.27 1.929 2.696 3.305 2.645 1.327-.054 1.827-.86 3.43-.86 1.601 0 2.053.86 3.456.833 1.426-.027 2.331-1.293 3.205-2.572 1.01-1.476 1.426-2.905 1.45-2.978-.031-.013-2.779-1.067-2.807-4.212zM14.918 5.187c.728-.881 1.218-2.106 1.083-3.327-1.047.043-2.318.697-3.07 1.578-.673.78-1.263 2.027-1.105 3.225 1.169.09 2.363-.595 3.092-1.476z" />
+		</svg>
+	);
+}
+
+function GoogleGlyph({ className }) {
+	return (
+		<svg className={className} viewBox="0 0 24 24" aria-hidden>
+			<path fill="#4285F4" d="M22.501 12.233c0-.815-.073-1.6-.21-2.355H12v4.451h5.882a5.033 5.033 0 0 1-2.181 3.303v2.747h3.527c2.064-1.9 3.273-4.704 3.273-8.146z" />
+			<path fill="#34A853" d="M12 22.5c2.946 0 5.418-.973 7.224-2.621l-3.527-2.747c-.98.66-2.235 1.05-3.697 1.05-2.842 0-5.249-1.918-6.108-4.498H2.252v2.83A10.498 10.498 0 0 0 12 22.5z" />
+			<path fill="#FBBC04" d="M5.892 13.684A6.31 6.31 0 0 1 5.566 12c0-.585.1-1.152.276-1.684V7.486H2.252A10.498 10.498 0 0 0 1.5 12c0 1.685.404 3.279 1.116 4.685l3.276-3.001z" />
+			<path fill="#EA4335" d="M12 5.502c1.603 0 3.04.552 4.173 1.633l3.125-3.125C17.41 2.182 14.94 1.5 12 1.5A10.498 10.498 0 0 0 2.252 7.486l3.64 2.83C6.748 7.62 9.156 5.502 12 5.502z" />
+		</svg>
+	);
+}
+
+/**
+ * Build a Stripe Elements `appearance` config from the site's CSS
+ * variables. Stripe iframes can't read our stylesheet and can't parse
+ * `oklch()` directly, so we resolve each CSS var to a concrete `rgb(...)`
+ * string via a hidden div before passing it in.
+ */
+function computeStripeAppearance() {
+	if (typeof window === "undefined") return undefined;
+	const root = document.documentElement;
+	const styles = getComputedStyle(root);
+	const probe = document.createElement("span");
+	probe.style.display = "none";
+	document.body.appendChild(probe);
+	const resolve = (cssVarName, fallback) => {
+		const raw = styles.getPropertyValue(cssVarName).trim();
+		if (!raw) return fallback;
+		// Set the colour on the probe, then read the BROWSER-computed
+		// rgb(...) form which Stripe accepts.
+		probe.style.color = "";
+		probe.style.color = raw;
+		const computed = getComputedStyle(probe).color;
+		return computed || fallback;
+	};
+	const foreground = resolve("--foreground", "rgb(15, 23, 42)");
+	const mutedForeground = resolve("--muted-foreground", "rgb(100, 116, 139)");
+	const primary = resolve("--primary", "rgb(15, 118, 110)");
+	const destructive = resolve("--destructive", "rgb(220, 38, 38)");
+	probe.remove();
+	return {
+		theme: "none",
+		variables: {
+			fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
+			fontSizeBase: "14px",
+			colorText: foreground,
+			colorTextPlaceholder: mutedForeground,
+			colorPrimary: primary,
+			colorDanger: destructive,
+			borderRadius: "6px",
+		},
+		rules: {
+			".Input": {
+				border: "none",
+				boxShadow: "none",
+				padding: "0",
+				color: foreground,
+				backgroundColor: "transparent",
+			},
+			".Input:focus": {
+				boxShadow: "none",
+				outline: "none",
+			},
+			".Input--invalid": {
+				color: destructive,
+			},
+			".Label": {
+				display: "none", // we render our own <Label> elements
+			},
+		},
+	};
 }

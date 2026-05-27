@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/index.js";
-import { tenancy_invoice } from "@/db/schema/entities/tenancy.js";
+import { tenancy, tenancy_invoice } from "@/db/schema/entities/tenancy.js";
 import { psp_intent } from "@/db/schema/entities/psp_intent.js";
 import { listActiveVenues } from "@/db/queries/venue.js";
 import { getStripeSettings } from "@/db/queries/settings.js";
@@ -64,6 +64,12 @@ export async function POST(request) {
 				break;
 			case "payment_intent.payment_failed":
 				await handlePaymentIntentFailed(event);
+				break;
+			case "checkout.session.completed":
+				await handleCheckoutSessionCompleted(event);
+				break;
+			case "mandate.updated":
+				await handleMandateUpdated(event);
 				break;
 			// Other event types are accepted (200) but ignored - that way
 			// we don't have to enumerate the full set in Stripe's UI to
@@ -223,4 +229,104 @@ async function handlePaymentIntentFailed(event) {
 		.update(tenancy_invoice)
 		.set({ notes: merged })
 		.where(eq(tenancy_invoice.id, inv.id));
+}
+
+/**
+ * Tenant-completed Stripe Checkout (`mode: setup`) for a Direct Debit
+ * mandate. The synchronous /done page already handles this when the
+ * browser redirects through it, but a closed tab leaves the mandate
+ * unsaved on our side - this webhook is the belt to that braces.
+ *
+ * Idempotent: if the tenancy already has a mandate saved we skip.
+ * We look up the venue's Stripe key (per-venue) and expand the setup_intent
+ * server-side to read the resulting payment_method + customer.
+ */
+async function handleCheckoutSessionCompleted(event) {
+	const session = event?.data?.object;
+	if (!session) return;
+	if (session.mode !== "setup") return; // only DD-mandate setup sessions
+	const tenancyId = session.metadata?.tenancy_id;
+	if (!tenancyId) return;
+
+	const [t] = await db
+		.select()
+		.from(tenancy)
+		.where(eq(tenancy.id, tenancyId))
+		.limit(1);
+	if (!t) return;
+	if (t.direct_debit_ready_at && t.direct_debit_mandate_id) return; // already saved
+
+	// Pull the setup_intent to get the resulting PaymentMethod id and the
+	// customer id, both of which we need to charge later.
+	const stripeSettings = await getStripeSettings(t.venue_id);
+	const secretKey = stripeSettings?.secret_key;
+	if (!secretKey) {
+		console.error("[stripe-webhook] checkout.session.completed: no secret key for venue", t.venue_id);
+		return;
+	}
+
+	const setupIntentId =
+		typeof session.setup_intent === "string"
+			? session.setup_intent
+			: session.setup_intent?.id;
+	if (!setupIntentId) return;
+
+	const siRes = await fetch(
+		`https://api.stripe.com/v1/setup_intents/${encodeURIComponent(setupIntentId)}`,
+		{
+			headers: { Authorization: `Bearer ${secretKey}`, Accept: "application/json" },
+			cache: "no-store",
+		},
+	);
+	if (!siRes.ok) return;
+	const setupIntent = await siRes.json().catch(() => null);
+	if (!setupIntent || setupIntent.status !== "succeeded") return;
+
+	const paymentMethodId = setupIntent.payment_method;
+	const customerId = session.customer || setupIntent.customer;
+	if (!paymentMethodId || !customerId) return;
+
+	await db
+		.update(tenancy)
+		.set({
+			stripe_customer_id: customerId,
+			direct_debit_mandate_id: paymentMethodId,
+			direct_debit_ready_at: new Date(),
+		})
+		.where(eq(tenancy.id, t.id));
+}
+
+/**
+ * Stripe surfaces mandate state changes (e.g. tenant cancels the
+ * Direct Debit at their bank, account closed, etc.) as `mandate.updated`
+ * events. When the mandate moves to `inactive`, clear the tenancy's
+ * saved mandate so the invoicer won't try to charge a dead mandate -
+ * the admin can re-prompt for setup from the UI.
+ *
+ * Stripe's Mandate object links back to a PaymentMethod, which is what
+ * we store in `tenancy.direct_debit_mandate_id`. So we match by that.
+ */
+async function handleMandateUpdated(event) {
+	const mandate = event?.data?.object;
+	if (!mandate) return;
+	if (mandate.status !== "inactive") return; // active / pending - nothing to do
+
+	const paymentMethodId = mandate.payment_method;
+	if (!paymentMethodId) return;
+
+	const [t] = await db
+		.select()
+		.from(tenancy)
+		.where(eq(tenancy.direct_debit_mandate_id, paymentMethodId))
+		.limit(1);
+	if (!t) return;
+
+	await db
+		.update(tenancy)
+		.set({
+			direct_debit_mandate_id: null,
+			stripe_customer_id: null,
+			direct_debit_ready_at: null,
+		})
+		.where(eq(tenancy.id, t.id));
 }

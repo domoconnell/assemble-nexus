@@ -123,7 +123,11 @@ export function createStripeDriver(settings) {
 			const body = stripeForm({
 				amount: Math.round(Number(amount_cents) || 0),
 				currency,
-				automatic_payment_methods: { enabled: true },
+				// Card-only - keeps Apple Pay / Google Pay (both work via
+				// `card` tokens through the paymentRequest API) while
+				// disabling Stripe Link autofill prompts + Klarna /
+				// Afterpay tabs that automatic_payment_methods enables.
+				payment_method_types: ["card"],
 				description: description || null,
 				metadata,
 			});
