@@ -461,7 +461,13 @@ function StripePaymentForm({
 
 			{hasAnyWallet && (
 				<>
-					<div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+					<div
+						className={`grid gap-2 ${
+							walletKinds.applePay && walletKinds.googlePay
+								? "grid-cols-1 sm:grid-cols-2"
+								: "grid-cols-1"
+						}`}
+					>
 						{walletKinds.applePay && (
 							<button
 								type="button"
