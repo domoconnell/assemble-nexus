@@ -213,6 +213,7 @@ export const monzoProvider = {
 			currency: match?.currency ?? account.currency ?? "GBP",
 			account_label: match?.description || match?.account_number || null,
 			account_count: accounts.length,
+			accounts,
 		};
 	},
 
@@ -240,65 +241,87 @@ export const monzoProvider = {
 			return { ok: false, error: "Missing access token or account UID." };
 		}
 
-		// Monzo paginates with `since` (cursor or timestamp) + `before` +
-		// `limit`. We walk forward from `from` until we run out of pages.
+		// Monzo refuses any /transactions request whose window is wider
+		// than ~89 days (confidential client cap, see Monzo community
+		// post). We chunk the requested [from, to] range into 80-day
+		// slices and paginate inside each, then dedupe by tx id.
+		const CHUNK_MS = 80 * 24 * 60 * 60 * 1000;
 		const items = [];
-		let cursorSince = from.toISOString();
-		let safety = 0;
-		while (safety++ < 50) {
-			const params = new URLSearchParams({
-				account_id: account.external_account_uid,
-				since: cursorSince,
-				before: to.toISOString(),
-				limit: "100",
-				"expand[]": "merchant",
-			});
-			const res = await authedFetch(account, `/transactions?${params}`);
-			if (!res.ok) return res;
-			const batch = res.body?.transactions ?? [];
-			if (batch.length === 0) break;
-
-			for (const tx of batch) {
-				// Monzo includes pending tx + reservations; we only persist
-				// settled or active ones. Declined/pending tx come back with
-				// settled === "" - skip them.
-				if (tx.decline_reason) continue;
-
-				const amount = Number(tx.amount ?? 0);
-				if (!Number.isFinite(amount) || amount === 0) continue;
-
-				items.push({
-					external_id: tx.id,
-					direction: amount > 0 ? "IN" : "OUT",
-					amount_minor: Math.abs(amount),
-					currency: tx.currency ?? account.currency ?? "GBP",
-					counterparty_name:
-						tx.merchant?.name ??
-						tx.counterparty?.name ??
-						tx.description ??
-						null,
-					counterparty_account:
-						tx.counterparty?.account_number ??
-						tx.counterparty?.user_id ??
-						null,
-					reference: tx.notes || tx.description || null,
-					category_uid: tx.category ?? null,
-					settled_at: tx.settled ? new Date(tx.settled) : null,
-					transaction_time: tx.created ? new Date(tx.created) : null,
-					raw_payload: tx,
-				});
+		const seen = new Set();
+		let chunkStart = from;
+		while (chunkStart < to) {
+			const chunkEnd = new Date(Math.min(chunkStart.getTime() + CHUNK_MS, to.getTime()));
+			const slice = await fetchMonzoTransactionChunk(account, chunkStart, chunkEnd);
+			if (!slice.ok) return slice;
+			for (const it of slice.items) {
+				if (seen.has(it.external_id)) continue;
+				seen.add(it.external_id);
+				items.push(it);
 			}
-
-			if (batch.length < 100) break;
-			// Use the last seen transaction's id as the cursor for the
-			// next page (Monzo accepts either a timestamp or a tx id as
-			// `since`). Using the id is exact pagination, no risk of
-			// re-fetching the same item.
-			const lastId = batch[batch.length - 1]?.id;
-			if (!lastId) break;
-			cursorSince = lastId;
+			chunkStart = chunkEnd;
 		}
-
 		return { ok: true, items };
 	},
 };
+
+async function fetchMonzoTransactionChunk(account, from, to) {
+	const items = [];
+	// Monzo paginates with `since` (cursor or timestamp) + `before` +
+	// `limit`. We walk forward from `from` until we run out of pages.
+	let cursorSince = from.toISOString();
+	let safety = 0;
+	while (safety++ < 50) {
+		const params = new URLSearchParams({
+			account_id: account.external_account_uid,
+			since: cursorSince,
+			before: to.toISOString(),
+			limit: "100",
+			"expand[]": "merchant",
+		});
+		const res = await authedFetch(account, `/transactions?${params}`);
+		if (!res.ok) return res;
+		const batch = res.body?.transactions ?? [];
+		if (batch.length === 0) break;
+
+		for (const tx of batch) {
+			// Monzo includes pending tx + reservations; we only persist
+			// settled or active ones. Declined/pending tx come back with
+			// settled === "" - skip them.
+			if (tx.decline_reason) continue;
+
+			const amount = Number(tx.amount ?? 0);
+			if (!Number.isFinite(amount) || amount === 0) continue;
+
+			items.push({
+				external_id: tx.id,
+				direction: amount > 0 ? "IN" : "OUT",
+				amount_minor: Math.abs(amount),
+				currency: tx.currency ?? account.currency ?? "GBP",
+				counterparty_name:
+					tx.merchant?.name ??
+					tx.counterparty?.name ??
+					tx.description ??
+					null,
+				counterparty_account:
+					tx.counterparty?.account_number ??
+					tx.counterparty?.user_id ??
+					null,
+				reference: tx.notes || tx.description || null,
+				category_uid: tx.category ?? null,
+				settled_at: tx.settled ? new Date(tx.settled) : null,
+				transaction_time: tx.created ? new Date(tx.created) : null,
+				raw_payload: tx,
+			});
+		}
+
+		if (batch.length < 100) break;
+		// Use the last seen transaction's id as the cursor for the
+		// next page (Monzo accepts either a timestamp or a tx id as
+		// `since`). Using the id is exact pagination, no risk of
+		// re-fetching the same item.
+		const lastId = batch[batch.length - 1]?.id;
+		if (!lastId) break;
+		cursorSince = lastId;
+	}
+	return { ok: true, items };
+}

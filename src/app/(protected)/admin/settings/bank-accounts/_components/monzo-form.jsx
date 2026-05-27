@@ -147,6 +147,12 @@ export default function MonzoForm({ open, onOpenChange, initial }) {
 			const res = await probeMonzoAction({ id: savedId });
 			if (res.ok) {
 				setNeedsSca(false);
+				if (Array.isArray(res.accounts) && res.accounts.length > 0) {
+					setDiscovered(res.accounts);
+					if (res.accounts.length === 1 && !chosenAccount) {
+						setChosenAccount(res.accounts[0].id);
+					}
+				}
 				toast.success(`Connected - ${res.account_label ?? res.account_count + " account(s)"}.`);
 			} else {
 				if (/verification_required/i.test(res.error || "")) {

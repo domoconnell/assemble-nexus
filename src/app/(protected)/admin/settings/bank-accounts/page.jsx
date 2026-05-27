@@ -63,17 +63,24 @@ export default async function BankAccountsSettingsPage({ searchParams }) {
 	const callback = await handleOauthCallback(sp, venue.id);
 
 	// Strip the OAuth params from the URL after we've handled them, so a
-	// page refresh doesn't try to re-exchange a now-burned code.
+	// page refresh doesn't try to re-exchange a now-burned code. We also
+	// carry forward the bank_account id so the client can auto-open the
+	// account-picker dialog and save the user a click.
 	if (callback) {
 		const params = new URLSearchParams();
 		params.set("oauth", callback.status);
 		if (callback.message) params.set("msg", callback.message);
+		const callbackState = typeof sp?.state === "string" ? sp.state : "";
+		if (callbackState.startsWith(NEXUS_STATE_PREFIX) && callback.status === "ok") {
+			params.set("open", callbackState.slice(NEXUS_STATE_PREFIX.length));
+		}
 		redirect(`/admin/settings/bank-accounts?${params}`);
 	}
 
 	const accounts = await listBankAccounts(venue.id, { includeInactive: true });
 	const oauthStatus = typeof sp?.oauth === "string" ? sp.oauth : null;
 	const oauthMessage = typeof sp?.msg === "string" ? sp.msg : null;
+	const openAccountId = typeof sp?.open === "string" ? sp.open : null;
 
 	return (
 		<div className="mx-auto p-6 lg:p-10 max-w-3xl space-y-8">
@@ -97,6 +104,7 @@ export default async function BankAccountsSettingsPage({ searchParams }) {
 				accounts={accounts}
 				oauthStatus={oauthStatus}
 				oauthMessage={oauthMessage}
+				openAccountId={openAccountId}
 			/>
 		</div>
 	);

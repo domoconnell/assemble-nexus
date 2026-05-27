@@ -35,7 +35,7 @@ const PROVIDER_LABELS = {
 	monzo: "Monzo",
 };
 
-export default function BankAccountsClient({ accounts, oauthStatus, oauthMessage }) {
+export default function BankAccountsClient({ accounts, oauthStatus, oauthMessage, openAccountId }) {
 	const router = useRouter();
 	const [addOpen, setAddOpen] = useState(false);
 	const [chosenProvider, setChosenProvider] = useState(null);
@@ -43,23 +43,32 @@ export default function BankAccountsClient({ accounts, oauthStatus, oauthMessage
 	const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 	const [syncingId, setSyncingId] = useState(null);
 
-	// Surface the result of the OAuth callback (handled server-side on
-	// the page itself) as a toast, then strip the params from the URL so
-	// a refresh doesn't replay it.
+	// After a successful OAuth callback, the server hands us the
+	// bank_account id to open. Auto-open the edit dialog on mount so the
+	// user lands straight on step 3 (pick which Monzo account to link)
+	// instead of having to click Edit themselves.
 	const oauthShownRef = useRef(false);
 	useEffect(() => {
-		if (!oauthStatus || oauthShownRef.current) return;
+		if (oauthShownRef.current) return;
+		if (!oauthStatus && !openAccountId) return;
 		oauthShownRef.current = true;
 		if (oauthStatus === "ok") {
 			toast.success(oauthMessage || "Authorised.");
-		} else {
+		} else if (oauthStatus === "error") {
 			toast.error(oauthMessage || "OAuth callback failed.");
+		}
+		if (openAccountId) {
+			const target = accounts.find((a) => a.id === openAccountId);
+			if (target) {
+				setChosenProvider(target.provider);
+				setEditing(target);
+			}
 		}
 		// Replace URL without the oauth params - in-page only, no fetch.
 		if (typeof window !== "undefined") {
 			window.history.replaceState({}, "", "/admin/settings/bank-accounts");
 		}
-	}, [oauthStatus, oauthMessage]);
+	}, [oauthStatus, oauthMessage, openAccountId, accounts]);
 
 	function openAdd(provider) {
 		setChosenProvider(provider);
