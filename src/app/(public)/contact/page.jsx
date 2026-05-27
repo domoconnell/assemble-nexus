@@ -19,7 +19,12 @@ export default async function ContactPage() {
 	const hero = content.hero ?? {};
 	const hireBlock = content.hire_block ?? {};
 	const general = content.general ?? {};
-	const press = content.press ?? {};
+
+	const phone = venue.phone ?? null;
+	const contactEmail = venue.contact_email ?? general.email ?? null;
+	const addressLines = Array.isArray(venue.address_lines)
+		? venue.address_lines.filter(Boolean)
+		: [];
 
 	return (
 		<>
@@ -30,7 +35,7 @@ export default async function ContactPage() {
 				subtitle={hero.subtitle ? <RichText html={hero.subtitle} /> : "Quickest answer is the booking form. For everything else, here's how to reach a human."}
 				hue="from-emerald-500/15 via-teal-700/10 to-transparent"
 			/>
-			<Section>
+			<Section className="py-12! lg:py-16!">
 				<div className="grid gap-10 lg:grid-cols-2">
 					<div className="space-y-8">
 						<div>
@@ -50,33 +55,55 @@ export default async function ContactPage() {
 								</CtaButton>
 							</div>
 						</div>
+
 						<div>
 							<h2 className="text-xs uppercase tracking-[0.22em] text-foreground/70">
 								{general.title ?? "General"}
 							</h2>
-							<p className="mt-3 text-base text-muted-foreground leading-relaxed">
-								<a
-									href={`mailto:${general.email ?? "hello@example.com"}`}
-									className="text-foreground hover:text-primary transition"
-								>
-									{general.email ?? "hello@example.com"}
-								</a>
-							</p>
+							<dl className="mt-3 space-y-2 text-base text-muted-foreground">
+								{contactEmail && (
+									<div>
+										<dt className="sr-only">Email</dt>
+										<dd>
+											<a
+												href={`mailto:${contactEmail}`}
+												className="text-foreground hover:text-primary transition"
+											>
+												{contactEmail}
+											</a>
+										</dd>
+									</div>
+								)}
+								{phone && (
+									<div>
+										<dt className="sr-only">Phone</dt>
+										<dd>
+											<a
+												href={`tel:${phone.replace(/\s+/g, "")}`}
+												className="text-foreground hover:text-primary transition"
+											>
+												{phone}
+											</a>
+										</dd>
+									</div>
+								)}
+							</dl>
 						</div>
+
+					</div>
+
+					{addressLines.length > 0 && (
 						<div>
 							<h2 className="text-xs uppercase tracking-[0.22em] text-foreground/70">
-								{press.title ?? "Press"}
+								Address
 							</h2>
-							<p className="mt-3 text-base text-muted-foreground leading-relaxed">
-								<a
-									href={`mailto:${press.email ?? "press@example.com"}`}
-									className="text-foreground hover:text-primary transition"
-								>
-									{press.email ?? "press@example.com"}
-								</a>
-							</p>
+							<address className="mt-3 text-base not-italic text-muted-foreground leading-relaxed">
+								{addressLines.map((line) => (
+									<div key={line}>{line}</div>
+								))}
+							</address>
 						</div>
-					</div>
+					)}
 				</div>
 			</Section>
 		</>

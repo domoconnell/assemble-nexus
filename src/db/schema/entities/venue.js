@@ -6,6 +6,9 @@ export const venue = pgTable("venue", {
     name: text("name").notNull(),
     address_lines: jsonb("address_lines"),
     timezone: text("timezone").default("Europe/London").notNull(),
+    // Public contact details, surfaced in the site footer + contact page.
+    phone: text("phone"),
+    contact_email: text("contact_email"),
     stripe_account_id: text("stripe_account_id"),
     sendgrid_from_email: text("sendgrid_from_email"),
     branding_payload: jsonb("branding_payload"),

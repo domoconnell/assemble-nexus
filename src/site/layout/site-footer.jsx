@@ -2,8 +2,16 @@ import Link from "next/link";
 import { Container } from "@/site/ui/container";
 import { Logo } from "@/site/ui/logo";
 
-export function SiteFooter({ rooms = [], hasUpcomingEvents = false }) {
-	const columns = [];
+export function SiteFooter({
+	rooms = [],
+	hasUpcomingEvents = false,
+	phone = null,
+	contactEmail = null,
+	addressLines = null,
+}) {
+	const addressOneLine = Array.isArray(addressLines)
+		? addressLines.filter(Boolean).join(", ")
+		: "";
 
 	const visitLinks = [
 		{ label: "Find us", href: "/about#location" },
@@ -13,23 +21,25 @@ export function SiteFooter({ rooms = [], hasUpcomingEvents = false }) {
 	if (hasUpcomingEvents) {
 		visitLinks.push({ label: "Upcoming events", href: "/whats-on" });
 	}
-	columns.push({ title: "Visit", links: visitLinks });
 
 	const hireLinks = [];
 	for (const r of rooms) {
 		hireLinks.push({ label: r.name, href: `/rooms/${r.slug}` });
 	}
 	hireLinks.push({ label: "Book a room", href: "/book" });
-	columns.push({ title: "Hire", links: hireLinks });
 
-	columns.push({
-		title: "Connect",
-		links: [
-			{ label: "Help", href: "/help" },
-			{ label: "Contact", href: "/contact" },
-			{ label: "Assemble Church", href: "https://www.assemblechurch.com", external: true },
-		],
-	});
+	const connectLinks = [
+		{ label: "Help", href: "/help" },
+		{ label: "Contact", href: "/contact" },
+		{ label: "Assemble Church", href: "https://www.assemblechurch.com", external: true },
+	];
+
+	const columns = [
+		{ title: "Visit", links: visitLinks },
+		{ title: "Hire", links: hireLinks },
+	];
+
+	const year = new Date().getFullYear();
 
 	return (
 		<footer className="border-t border-foreground/10 mt-24">
@@ -42,6 +52,7 @@ export function SiteFooter({ rooms = [], hasUpcomingEvents = false }) {
 							Three rooms, a working café, and a team that knows the room.
 						</p>
 					</div>
+
 					{columns.map((col) => (
 						<div key={col.title}>
 							<h3 className="text-xs uppercase tracking-[0.22em] text-foreground/70 font-medium">
@@ -72,25 +83,76 @@ export function SiteFooter({ rooms = [], hasUpcomingEvents = false }) {
 							</ul>
 						</div>
 					))}
+
+					<div>
+						<h3 className="text-xs uppercase tracking-[0.22em] text-foreground/70 font-medium">
+							Connect
+						</h3>
+						<ul className="mt-4 space-y-2.5">
+							{connectLinks.map((l) => (
+								<li key={l.href + l.label}>
+									{l.external ? (
+										<a
+											href={l.href}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="text-sm text-muted-foreground hover:text-foreground transition"
+										>
+											{l.label}
+										</a>
+									) : (
+										<Link
+											href={l.href}
+											className="text-sm text-muted-foreground hover:text-foreground transition"
+										>
+											{l.label}
+										</Link>
+									)}
+								</li>
+							))}
+							{contactEmail && (
+								<li>
+									<a
+										href={`mailto:${contactEmail}`}
+										className="text-sm text-muted-foreground hover:text-foreground transition"
+									>
+										{contactEmail}
+									</a>
+								</li>
+							)}
+							{phone && (
+								<li>
+									<a
+										href={`tel:${phone.replace(/\s+/g, "")}`}
+										className="text-sm text-muted-foreground hover:text-foreground transition"
+									>
+										{phone}
+									</a>
+								</li>
+							)}
+						</ul>
+					</div>
 				</div>
-				<div className="border-t border-foreground/10 py-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between text-xs text-muted-foreground">
-					<span>© {new Date().getFullYear()} The Assembly Rooms. All rights reserved.</span>
-					<div className="flex gap-6">
-						<Link href="/about" className="hover:text-foreground transition">
-							About
-						</Link>
-						<Link href="/contact" className="hover:text-foreground transition">
-							Contact
-						</Link>
+
+				<div className="border-t border-foreground/10 py-8 space-y-3 text-xs text-muted-foreground">
+					{addressOneLine && (
+						<div className="text-foreground/85">{addressOneLine}</div>
+					)}
+					<p className="leading-relaxed">
+						© {year} The Assembly Rooms Newark Limited. All rights reserved.
+						Company number <span className="font-mono">17222980</span>,
+						registered in England &amp; Wales. Wholly owned and operated
+						by{" "}
 						<a
 							href="https://www.assemblechurch.com"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="hover:text-foreground transition"
+							className="whitespace-nowrap underline underline-offset-2 hover:text-foreground"
 						>
-							Assemble Church ↗
+							Assemble Church
 						</a>
-					</div>
+						.
+					</p>
 				</div>
 			</Container>
 		</footer>

@@ -29,7 +29,13 @@ export default async function DelegateLayout({ children }) {
 		<div className="theme-site min-h-svh bg-background text-foreground antialiased">
 			<SiteHeader navItems={navItems} />
 			<main>{children}</main>
-			<SiteFooter rooms={nav.rooms} hasUpcomingEvents={nav.hasUpcomingEvents} />
+			<SiteFooter
+				rooms={nav.rooms}
+				hasUpcomingEvents={nav.hasUpcomingEvents}
+				phone={venue.phone ?? null}
+				contactEmail={venue.contact_email ?? null}
+				addressLines={Array.isArray(venue.address_lines) ? venue.address_lines : null}
+			/>
 		</div>
 	);
 }

@@ -16,6 +16,8 @@ export default function VenueProfileEditor({ initial }) {
 		Array.isArray(initial?.address_lines) ? initial.address_lines.join("\n") : "",
 	);
 	const [timezone, setTimezone] = useState(initial?.timezone ?? "Europe/London");
+	const [phone, setPhone] = useState(initial?.phone ?? "");
+	const [contactEmail, setContactEmail] = useState(initial?.contact_email ?? "");
 	const [sendgridFrom, setSendgridFrom] = useState(initial?.sendgrid_from_email ?? "");
 	const [saving, setSaving] = useState(false);
 
@@ -32,6 +34,8 @@ export default function VenueProfileEditor({ initial }) {
 					.map((s) => s.trim())
 					.filter(Boolean),
 				timezone: timezone.trim(),
+				phone: phone.trim(),
+				contact_email: contactEmail.trim(),
 				sendgrid_from_email: sendgridFrom.trim(),
 			});
 			toast.success("Saved");
@@ -75,6 +79,35 @@ export default function VenueProfileEditor({ initial }) {
 					One line per row. Appears on ticket invoices and Schema.org event
 					metadata for SEO.
 				</p>
+			</div>
+
+			<div className="grid gap-4 sm:grid-cols-2">
+				<div className="space-y-2">
+					<Label htmlFor="venue-phone">Phone number</Label>
+					<Input
+						id="venue-phone"
+						type="tel"
+						placeholder="01636 556110"
+						value={phone}
+						onChange={(e) => setPhone(e.target.value)}
+					/>
+					<p className="text-xs text-muted-foreground">
+						Public-facing number shown in the site footer + contact page.
+					</p>
+				</div>
+				<div className="space-y-2">
+					<Label htmlFor="venue-contact-email">Contact email</Label>
+					<Input
+						id="venue-contact-email"
+						type="email"
+						placeholder="hello@assembly-rooms.com"
+						value={contactEmail}
+						onChange={(e) => setContactEmail(e.target.value)}
+					/>
+					<p className="text-xs text-muted-foreground">
+						Public-facing email shown in the site footer + contact page.
+					</p>
+				</div>
 			</div>
 
 			<div className="grid gap-4 sm:grid-cols-2">
