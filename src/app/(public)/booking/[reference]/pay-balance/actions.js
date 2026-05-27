@@ -36,12 +36,22 @@ export async function startBookingBalancePaymentAction(input) {
 		throw new Error("Nothing outstanding to pay.");
 	}
 
+	const psp = await getActivePsp(row.venue_id);
 	const existing = await getPendingIntentForBooking(row.id, "balance");
 	if (existing) {
-		return { intent_id: existing.external_id, provider: existing.provider };
+		let clientSecret = null;
+		if (psp.key === "stripe" && psp.retrievePaymentIntent) {
+			const intent = await psp.retrievePaymentIntent(existing.external_id, { withSecret: true });
+			clientSecret = intent?.client_secret ?? null;
+		}
+		return {
+			intent_id: existing.external_id,
+			provider: existing.provider,
+			client_secret: clientSecret,
+			publishable_key: psp.publishableKey ?? null,
+		};
 	}
 
-	const psp = await getActivePsp(row.venue_id);
 	const intent = await psp.createPaymentIntent({
 		amount_cents: outstanding,
 		currency: "gbp",
@@ -50,5 +60,10 @@ export async function startBookingBalancePaymentAction(input) {
 	});
 
 	revalidatePath(`/booking/${row.reference}/pay-balance`);
-	return { intent_id: intent.id, provider: psp.key };
+	return {
+		intent_id: intent.id,
+		provider: psp.key,
+		client_secret: intent.client_secret || null,
+		publishable_key: psp.publishableKey ?? null,
+	};
 }

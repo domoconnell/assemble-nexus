@@ -1,9 +1,12 @@
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db/index.js";
 import { tenancy_invoice } from "@/db/schema/entities/tenancy.js";
+import { psp_intent } from "@/db/schema/entities/psp_intent.js";
 import { listActiveVenues } from "@/db/queries/venue.js";
 import { getStripeSettings } from "@/db/queries/settings.js";
+import { finaliseTicketOrder } from "@/lib/ticketing/finalize.js";
+import { finaliseBookingDeposit, finaliseBookingBalance } from "@/lib/booking/finalize.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -124,26 +127,75 @@ function verifyStripeSignature(rawBody, header, secret) {
 async function handlePaymentIntentSucceeded(event) {
 	const pi = event?.data?.object;
 	if (!pi) return;
-	const invoiceId = pi.metadata?.tenancy_invoice_id;
-	if (!invoiceId) return; // not one of ours
 
-	const [inv] = await db
+	// Tenancy invoices: identified by metadata.tenancy_invoice_id on the
+	// payment intent we created when issuing the Bacs charge. Flip
+	// status to paid using the event's settlement timestamp.
+	const tenancyInvoiceId = pi.metadata?.tenancy_invoice_id;
+	if (tenancyInvoiceId) {
+		const [inv] = await db
+			.select()
+			.from(tenancy_invoice)
+			.where(eq(tenancy_invoice.id, tenancyInvoiceId))
+			.limit(1);
+		if (inv && inv.status !== "paid") {
+			const paid_at = event.created ? new Date(event.created * 1000) : new Date();
+			await db
+				.update(tenancy_invoice)
+				.set({ status: "paid", paid_at })
+				.where(eq(tenancy_invoice.id, inv.id));
+		}
+		return;
+	}
+
+	// Card payments for ticket orders / booking deposits / balances:
+	// look up the psp_intent row by the Stripe id and dispatch to the
+	// matching finalise helper. All idempotent - finalisers no-op if
+	// the underlying entity is already in its terminal state.
+	const [row] = await db
 		.select()
-		.from(tenancy_invoice)
-		.where(eq(tenancy_invoice.id, invoiceId))
+		.from(psp_intent)
+		.where(and(eq(psp_intent.provider, "stripe"), eq(psp_intent.external_id, pi.id)))
 		.limit(1);
-	if (!inv) return;
-	if (inv.status === "paid") return; // already settled - idempotent no-op
+	if (!row) return;
 
-	// Stripe's payment_intent.succeeded fires when Bacs clears. Use the
-	// event creation time as the paid_at - it's closer to the actual
-	// settlement than `now()` (the webhook may queue briefly).
-	const paid_at = event.created ? new Date(event.created * 1000) : new Date();
+	// Mark the psp_intent as succeeded so other code paths reading the
+	// row see the right state without having to consult Stripe.
+	if (row.status !== "succeeded") {
+		await db
+			.update(psp_intent)
+			.set({ status: "succeeded" })
+			.where(eq(psp_intent.id, row.id));
+	}
 
-	await db
-		.update(tenancy_invoice)
-		.set({ status: "paid", paid_at })
-		.where(eq(tenancy_invoice.id, inv.id));
+	if (row.ticket_order_id) {
+		try {
+			await finaliseTicketOrder(row.ticket_order_id, { paymentRef: pi.id });
+		} catch (err) {
+			console.error("[stripe-webhook] finaliseTicketOrder", err);
+			throw err;
+		}
+		return;
+	}
+	if (row.booking_id) {
+		const kind = row.metadata?.kind ?? "deposit";
+		try {
+			if (kind === "balance") {
+				await finaliseBookingBalance(row.booking_id, {
+					paymentRef: pi.id,
+					amountPaidCents: row.amount_cents,
+				});
+			} else {
+				await finaliseBookingDeposit(row.booking_id, {
+					paymentRef: pi.id,
+					amountPaidCents: row.amount_cents,
+				});
+			}
+		} catch (err) {
+			console.error("[stripe-webhook] finaliseBooking", err);
+			throw err;
+		}
+	}
 }
 
 async function handlePaymentIntentFailed(event) {

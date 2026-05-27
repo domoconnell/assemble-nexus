@@ -39,9 +39,18 @@ export default async function BookingPayPage({ params }) {
 
 	const pending = await getPendingIntentForBooking(b.id);
 	let pspKey = null;
+	let publishableKey = null;
+	let clientSecret = null;
 	if (pending) {
 		const psp = await getActivePsp(b.venue_id);
 		pspKey = psp.key;
+		publishableKey = psp.publishableKey ?? null;
+		// For Stripe, the browser needs the client_secret to mount Elements
+		// against the pending intent. We pull it back through the driver.
+		if (psp.key === "stripe" && psp.retrievePaymentIntent) {
+			const intent = await psp.retrievePaymentIntent(pending.external_id, { withSecret: true });
+			clientSecret = intent?.client_secret ?? null;
+		}
 	}
 
 	const balanceDue = Math.max(0, (b.total_cents ?? 0) - (b.deposit_required_cents ?? 0));
@@ -115,6 +124,8 @@ export default async function BookingPayPage({ params }) {
 								depositCents={b.deposit_required_cents}
 								provider={pspKey}
 								pendingIntentId={pending?.external_id ?? null}
+								publishableKey={publishableKey}
+								clientSecret={clientSecret}
 							/>
 						</aside>
 					</div>

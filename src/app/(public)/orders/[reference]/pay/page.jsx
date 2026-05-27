@@ -57,6 +57,11 @@ export default async function TicketOrderPayPage({ params }) {
 	}
 
 	const psp = await getActivePsp(venue.id);
+	let clientSecret = null;
+	if (psp.key === "stripe" && psp.retrievePaymentIntent) {
+		const intent = await psp.retrievePaymentIntent(pending.external_id, { withSecret: true });
+		clientSecret = intent?.client_secret ?? null;
+	}
 
 	const ticketLines = lines.filter((l) => l.kind === "ticket" && !l.parent_line_id);
 	const bundleLines = lines.filter((l) => l.kind === "bundle");
@@ -172,6 +177,8 @@ export default async function TicketOrderPayPage({ params }) {
 								totalCents={order.total_cents}
 								provider={psp.key}
 								intentId={pending.external_id}
+								clientSecret={clientSecret}
+								publishableKey={psp.publishableKey ?? null}
 							/>
 						</aside>
 					</div>

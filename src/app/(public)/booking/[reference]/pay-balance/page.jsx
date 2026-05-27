@@ -42,9 +42,16 @@ export default async function BookingPayBalancePage({ params }) {
 
 	const pending = await getPendingIntentForBooking(b.id, "balance");
 	let pspKey = null;
+	let publishableKey = null;
+	let clientSecret = null;
 	if (pending) {
 		const psp = await getActivePsp(b.venue_id);
 		pspKey = psp.key;
+		publishableKey = psp.publishableKey ?? null;
+		if (psp.key === "stripe" && psp.retrievePaymentIntent) {
+			const intent = await psp.retrievePaymentIntent(pending.external_id, { withSecret: true });
+			clientSecret = intent?.client_secret ?? null;
+		}
 	}
 
 	return (
@@ -109,6 +116,8 @@ export default async function BookingPayBalancePage({ params }) {
 								balanceCents={outstanding}
 								provider={pspKey}
 								pendingIntentId={pending?.external_id ?? null}
+								publishableKey={publishableKey}
+								clientSecret={clientSecret}
 							/>
 						</aside>
 					</div>

@@ -11,13 +11,20 @@ export default function BookingDepositPanel({
 	depositCents,
 	provider,
 	pendingIntentId,
+	publishableKey,
+	clientSecret,
 }) {
 	const router = useRouter();
 	const [starting, setStarting] = useState(false);
 	const [error, setError] = useState(null);
 	const [intent, setIntent] = useState(
 		provider && pendingIntentId
-			? { provider, intent_id: pendingIntentId }
+			? {
+					provider,
+					intent_id: pendingIntentId,
+					publishable_key: publishableKey ?? null,
+					client_secret: clientSecret ?? null,
+				}
 			: null,
 	);
 
@@ -39,6 +46,8 @@ export default function BookingDepositPanel({
 			<PaymentForm
 				provider={intent.provider}
 				intentId={intent.intent_id}
+				clientSecret={intent.client_secret}
+				publishableKey={intent.publishable_key}
 				amountCents={depositCents}
 				currency="gbp"
 				onSuccess={() => router.refresh()}

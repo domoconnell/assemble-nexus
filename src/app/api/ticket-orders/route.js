@@ -324,6 +324,7 @@ export async function POST(request) {
 		reference: createdOrder.reference,
 		intent,
 		provider: psp.key,
+		publishable_key: psp.publishableKey ?? null,
 	});
 	for (const cookie of setCookieHeaders) {
 		response.headers.append("Set-Cookie", cookie);

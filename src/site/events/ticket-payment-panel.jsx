@@ -8,12 +8,16 @@ export default function TicketPaymentPanel({
 	totalCents,
 	provider,
 	intentId,
+	clientSecret,
+	publishableKey,
 }) {
 	const router = useRouter();
 	return (
 		<PaymentForm
 			provider={provider}
 			intentId={intentId}
+			clientSecret={clientSecret}
+			publishableKey={publishableKey}
 			amountCents={totalCents}
 			currency="gbp"
 			onSuccess={() => {
