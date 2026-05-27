@@ -285,16 +285,38 @@ async function backfillBalanceFromTransactions(accountId, venueId, {
 async function markTransfersForVenue(venueId) {
 	const accounts = await listActiveBankAccounts(venueId);
 	const uids = accounts.map((a) => a.external_account_uid).filter(Boolean);
-	if (uids.length < 2) return; // need at least two to have a transfer
+	const hasStripeBank = accounts.some((a) => a.provider === "stripe");
 
-	await db.execute(sql`
-		UPDATE bank_transaction
-		SET is_transfer = true
-		WHERE venue_id = ${venueId}
-			AND counterparty_account IS NOT NULL
-			AND counterparty_account IN (${sql.join(uids.map((u) => sql`${u}`), sql`, `)})
-			AND is_transfer = false
-	`);
+	if (uids.length >= 2) {
+		await db.execute(sql`
+			UPDATE bank_transaction
+			SET is_transfer = true
+			WHERE venue_id = ${venueId}
+				AND counterparty_account IS NOT NULL
+				AND counterparty_account IN (${sql.join(uids.map((u) => sql`${u}`), sql`, `)})
+				AND is_transfer = false
+		`);
+	}
+
+	// Stripe-as-bank-account: pair Stripe payouts with the bank inbound
+	// they later settle into, so we don't double-count card income.
+	//   - On the Stripe side, payouts are written with counterparty_account
+	//     = "stripe_payout" (see providers/stripe.js mapBalanceTransaction).
+	//   - On the receiving real bank, the inbound's counterparty_name
+	//     contains "stripe".
+	// Both sides get flagged is_transfer so neither hits the in/out totals.
+	if (hasStripeBank) {
+		await db.execute(sql`
+			UPDATE bank_transaction
+			SET is_transfer = true
+			WHERE venue_id = ${venueId}
+				AND is_transfer = false
+				AND (
+					counterparty_account = 'stripe_payout'
+					OR (direction = 'IN' AND LOWER(counterparty_name) LIKE '%stripe%')
+				)
+		`);
+	}
 }
 
 /**

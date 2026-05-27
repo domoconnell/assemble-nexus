@@ -18,6 +18,8 @@ import {
 	exchangeAuthCode as exchangeMonzoAuthCode,
 	listMonzoAccounts,
 } from "@/lib/banking/providers/monzo.js";
+import { stripeBankProvider } from "@/lib/banking/providers/stripe.js";
+import { getStripeSettings } from "@/db/queries/settings.js";
 import { syncBankAccount } from "@/lib/banking/sync.js";
 
 async function gate() {
@@ -401,6 +403,30 @@ export async function pickMonzoAccountAction(input) {
 	return { ok: true };
 }
 
+/**
+ * Build the Monzo OAuth re-authorise URL for an existing account. Used
+ * by the row-level "Re-authorise" button so the admin doesn't have to
+ * open the edit dialog when Monzo periodically demands a fresh SCA
+ * approval. Pure URL construction - no API call - so it's quick.
+ */
+export async function buildMonzoReauthUrlAction(input) {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const parsed = z.object({ id: z.string().uuid() }).parse(input);
+	const account = await loadAccount(parsed.id, venue.id);
+	const creds = account.credentials ?? {};
+	if (!creds.client_id || !creds.redirect_uri) {
+		throw new Error("This Monzo account is missing client_id or redirect_uri - edit it to add them first.");
+	}
+	const params = new URLSearchParams({
+		client_id: creds.client_id,
+		redirect_uri: creds.redirect_uri,
+		response_type: "code",
+		state: `nexus:${account.id}`,
+	});
+	return { ok: true, url: `https://auth.monzo.com/?${params}` };
+}
+
 export async function probeMonzoAction(input) {
 	await gate();
 	const venue = await requireCurrentVenue();
@@ -416,6 +442,108 @@ export async function probeMonzoAction(input) {
 		}
 	}
 	return monzoProvider.probe(account);
+}
+
+// ── Stripe (balance as a bank account) ─────────────────────────────────
+
+const StripeBankSaveSchema = z.object({
+	id: z.string().uuid().optional().nullable(),
+	label: z.string().min(1).max(120),
+	// Optional on edit (keep the existing key) and on create (we'll fall
+	// back to the PSP settings secret).
+	secret_key: z.string().min(1).max(2000).optional().nullable(),
+});
+
+/**
+ * Single-step Stripe bank account setup. The secret key falls back to
+ * whatever the venue already configured in Settings → Payments, so the
+ * common path is just paste a label and save. Probes the key, derives
+ * the account id (`acct_…`), and persists.
+ */
+export async function saveStripeBankAccountAction(input) {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const parsed = StripeBankSaveSchema.parse(input);
+
+	let existing = null;
+	if (parsed.id) existing = await loadAccount(parsed.id, venue.id);
+	const existingCreds = existing?.credentials ?? {};
+
+	// Resolve secret key in priority order: explicit paste -> existing
+	// saved key on this row -> PSP settings.
+	let secret_key = parsed.secret_key?.trim() || existingCreds.secret_key || null;
+	if (!secret_key) {
+		const psp = await getStripeSettings(venue.id);
+		secret_key = psp?.secret_key || null;
+	}
+	if (!secret_key) {
+		throw new Error(
+			"No Stripe secret key found. Add one in Settings → Payments, or paste it directly here.",
+		);
+	}
+
+	// Pull the Stripe account id once so we can stash it as the external
+	// account uid - lets the transfer-dedup logic in sync.js identify
+	// movements involving this account.
+	const acctRes = await fetch("https://api.stripe.com/v1/account", {
+		headers: { Authorization: `Bearer ${secret_key}`, Accept: "application/json" },
+		cache: "no-store",
+	});
+	if (!acctRes.ok) {
+		throw new Error(`Stripe rejected the key (${acctRes.status}).`);
+	}
+	const acct = await acctRes.json().catch(() => null);
+	const external_account_uid = acct?.id ?? "stripe_balance";
+
+	const credentials = { secret_key };
+
+	if (existing) {
+		await db
+			.update(bank_account)
+			.set({
+				label: parsed.label,
+				credentials,
+				external_account_uid,
+				currency: "GBP",
+			})
+			.where(eq(bank_account.id, existing.id));
+		revalidate();
+		return { ok: true, id: existing.id };
+	}
+
+	const [inserted] = await db
+		.insert(bank_account)
+		.values({
+			venue_id: venue.id,
+			provider: "stripe",
+			label: parsed.label,
+			external_account_uid,
+			credentials,
+			currency: "GBP",
+			sort_order: Date.now() % 1000,
+		})
+		.returning();
+	revalidate();
+	return { ok: true, id: inserted.id };
+}
+
+export async function probeStripeBankAccountAction(input) {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const account = await loadAccount(input.id, venue.id);
+	return stripeBankProvider.probe(account);
+}
+
+/**
+ * Convenience for the form: tells the UI whether a Stripe PSP key is
+ * already saved in Settings → Payments so we can show "use existing key"
+ * instead of asking the user to paste it again.
+ */
+export async function hasStripePspKeyAction() {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const psp = await getStripeSettings(venue.id);
+	return { ok: true, has_key: !!psp?.secret_key, env: psp?.environment ?? null };
 }
 
 // ── Generic ────────────────────────────────────────────────────────────

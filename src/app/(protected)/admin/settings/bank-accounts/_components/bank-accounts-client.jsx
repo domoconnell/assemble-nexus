@@ -15,10 +15,12 @@ import ConfirmDialog from "@/global/ui/components/confirm-dialog";
 import StarlingForm from "./starling-form";
 import RevolutForm from "./revolut-form";
 import MonzoForm from "./monzo-form";
+import StripeBankForm from "./stripe-bank-form";
 import {
 	deleteBankAccountAction,
 	setBankAccountActiveAction,
 	syncBankAccountNowAction,
+	buildMonzoReauthUrlAction,
 } from "../actions";
 
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
@@ -27,12 +29,14 @@ const PROVIDER_OPTIONS = [
 	{ key: "starling", label: "Starling Bank", blurb: "Personal Access Token. Single-account hire, simplest setup." },
 	{ key: "revolut", label: "Revolut Business", blurb: "Certificate-based OAuth. Supports multi-currency sub-accounts." },
 	{ key: "monzo", label: "Monzo", blurb: "OAuth client. Personal + Business accounts. Needs in-app approval after setup." },
+	{ key: "stripe", label: "Stripe balance", blurb: "Surface funds currently held by Stripe (pre-payout) as a bank line. Re-uses your PSP Stripe key." },
 ];
 
 const PROVIDER_LABELS = {
 	starling: "Starling",
 	revolut: "Revolut",
 	monzo: "Monzo",
+	stripe: "Stripe",
 };
 
 export default function BankAccountsClient({ accounts, oauthStatus, oauthMessage, openAccountId }) {
@@ -116,6 +120,18 @@ export default function BankAccountsClient({ accounts, oauthStatus, oauthMessage
 		}
 	}
 
+	async function reauthoriseMonzo(account) {
+		try {
+			const res = await buildMonzoReauthUrlAction({ id: account.id });
+			if (!res?.url) throw new Error("Couldn't build re-authorise URL.");
+			// Navigate in the same tab - Monzo redirects back to the same
+			// page, and our auto-callback handler picks the flow up there.
+			window.location.href = res.url;
+		} catch (err) {
+			toast.error(err?.message || "Couldn't start re-authorisation");
+		}
+	}
+
 	async function performDelete(id) {
 		try {
 			await deleteBankAccountAction({ id });
@@ -150,6 +166,7 @@ export default function BankAccountsClient({ accounts, oauthStatus, oauthMessage
 									onBackfill={() => sync(a, true)}
 									onToggleActive={() => toggleActive(a)}
 									onDelete={() => setConfirmDeleteId(a.id)}
+									onReauthMonzo={() => reauthoriseMonzo(a)}
 									syncing={syncingId === a.id}
 								/>
 							))}
@@ -211,6 +228,13 @@ export default function BankAccountsClient({ accounts, oauthStatus, oauthMessage
 					initial={editing}
 				/>
 			)}
+			{chosenProvider === "stripe" && (
+				<StripeBankForm
+					open
+					onOpenChange={(o) => !o && closeForm()}
+					initial={editing}
+				/>
+			)}
 
 			<ConfirmDialog
 				open={!!confirmDeleteId}
@@ -225,9 +249,17 @@ export default function BankAccountsClient({ accounts, oauthStatus, oauthMessage
 	);
 }
 
-function AccountRow({ account, onEdit, onSync, onBackfill, onToggleActive, onDelete, syncing }) {
+function AccountRow({ account, onEdit, onSync, onBackfill, onToggleActive, onDelete, onReauthMonzo, syncing }) {
 	const providerLabel = PROVIDER_LABELS[account.provider] ?? account.provider;
 	const lastSynced = account.last_synced_at ? new Date(account.last_synced_at) : null;
+	const err = account.last_sync_error || "";
+	// Monzo loses SCA periodically. When that happens, the sync error
+	// contains a recognisable phrase - surface a prominent Re-authorise
+	// button so the admin can fix it in two clicks. Outside of that we
+	// keep Re-authorise as a quiet menu option for Monzo only.
+	const needsReauth =
+		account.provider === "monzo" &&
+		/verification_required|Strong Customer Authentication|re-authorise|bad_access_token/i.test(err);
 	return (
 		<li className="rounded-lg border border-foreground/10 bg-card p-4 space-y-3">
 			<div className="flex items-baseline justify-between gap-3 flex-wrap">
@@ -242,6 +274,11 @@ function AccountRow({ account, onEdit, onSync, onBackfill, onToggleActive, onDel
 								Disabled
 							</span>
 						)}
+						{needsReauth && (
+							<span className="text-[10px] uppercase tracking-[0.18em] rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-2 py-0.5">
+								Needs re-auth
+							</span>
+						)}
 					</div>
 					<div className="text-xs text-muted-foreground mt-1">
 						{account.currency} · {account.external_account_uid ? <span className="font-mono">{account.external_account_uid.slice(0, 8)}…</span> : "Not yet linked"}
@@ -252,6 +289,11 @@ function AccountRow({ account, onEdit, onSync, onBackfill, onToggleActive, onDel
 					)}
 				</div>
 				<div className="flex items-center gap-2">
+					{needsReauth && (
+						<Button size="sm" onClick={onReauthMonzo} disabled={syncing}>
+							Re-authorise
+						</Button>
+					)}
 					<Button variant="outline" size="sm" onClick={onEdit} disabled={syncing}>
 						Edit
 					</Button>
@@ -261,6 +303,11 @@ function AccountRow({ account, onEdit, onSync, onBackfill, onToggleActive, onDel
 					<Button variant="outline" size="sm" onClick={onBackfill} disabled={syncing || !account.external_account_uid}>
 						Backfill
 					</Button>
+					{account.provider === "monzo" && !needsReauth && (
+						<Button variant="ghost" size="sm" onClick={onReauthMonzo} disabled={syncing}>
+							Re-authorise
+						</Button>
+					)}
 					<Button variant="ghost" size="sm" onClick={onToggleActive} disabled={syncing}>
 						{account.is_active ? "Disable" : "Enable"}
 					</Button>

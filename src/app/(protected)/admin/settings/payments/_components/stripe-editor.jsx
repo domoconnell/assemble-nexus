@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Copy, Check } from "lucide-react";
 import { Button } from "@/shadcn/components/ui/button";
 import { Input } from "@/shadcn/components/ui/input";
 import { Label } from "@/shadcn/components/ui/label";
@@ -20,6 +21,24 @@ export default function StripeEditor({ initial }) {
 	const [saving, setSaving] = useState(false);
 	const [testing, setTesting] = useState(false);
 	const [testResult, setTestResult] = useState(null);
+	const [webhookUrl, setWebhookUrl] = useState("");
+	const [copiedUrl, setCopiedUrl] = useState(false);
+
+	useEffect(() => {
+		if (typeof window !== "undefined") {
+			setWebhookUrl(`${window.location.origin}/api/webhooks/stripe`);
+		}
+	}, []);
+
+	async function copyWebhookUrl() {
+		try {
+			await navigator.clipboard.writeText(webhookUrl);
+			setCopiedUrl(true);
+			setTimeout(() => setCopiedUrl(false), 1500);
+		} catch {
+			toast.error("Copy failed - select the URL and copy manually.");
+		}
+	}
 
 	const isConfigured = Boolean(initial?.secret_key);
 
@@ -158,19 +177,55 @@ export default function StripeEditor({ initial }) {
 					</p>
 				</div>
 
-				<div className="space-y-1.5">
-					<Label htmlFor="stripe-webhook">Webhook signing secret (optional)</Label>
-					<Input
-						id="stripe-webhook"
-						type="password"
-						placeholder={initial?.webhook_signing_secret ? "•••••••• (saved)" : "whsec_…"}
-						value={webhookSecret}
-						onChange={(e) => setWebhookSecret(e.target.value)}
-						autoComplete="off"
-					/>
-					<p className="text-[11px] text-muted-foreground">
-						Used to verify Stripe webhook payloads if you wire any up.
-					</p>
+				<div className="space-y-3 rounded-md border border-foreground/10 bg-muted/30 p-4">
+					<div className="space-y-1.5">
+						<Label className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+							Webhooks
+						</Label>
+						<p className="text-[11px] text-muted-foreground">
+							Lets Stripe push events to us (e.g. a Bacs Direct Debit clearing
+							3-5 days after the charge). When wired up, tenancy invoices flip
+							from <span className="font-mono">processing</span> to{" "}
+							<span className="font-mono">paid</span> automatically.
+						</p>
+					</div>
+
+					<div className="space-y-1.5">
+						<Label className="text-[11px]">Endpoint URL (paste this into Stripe)</Label>
+						<div className="flex items-center gap-2">
+							<code className="flex-1 rounded-md border bg-background px-2 py-1.5 text-[11px] break-all">
+								{webhookUrl || "Resolving URL…"}
+							</code>
+							<Button
+								type="button"
+								size="icon"
+								variant="outline"
+								onClick={copyWebhookUrl}
+								disabled={!webhookUrl}
+								aria-label="Copy webhook URL"
+							>
+								{copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+							</Button>
+						</div>
+					</div>
+
+					<div className="space-y-1.5">
+						<Label htmlFor="stripe-webhook" className="text-[11px]">
+							Signing secret
+						</Label>
+						<Input
+							id="stripe-webhook"
+							type="password"
+							placeholder={initial?.webhook_signing_secret ? "•••••••• (saved)" : "whsec_…"}
+							value={webhookSecret}
+							onChange={(e) => setWebhookSecret(e.target.value)}
+							autoComplete="off"
+						/>
+						<p className="text-[11px] text-muted-foreground">
+							From Stripe → Developers → Webhooks → your endpoint → reveal
+							signing secret. We use it to verify each incoming event.
+						</p>
+					</div>
 				</div>
 
 				{testResult && (
