@@ -5,7 +5,7 @@ import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { requireServerSession } from "@/utils/auth/server-guard.js";
 import { requireCurrentVenue } from "@/db/queries/venue.js";
-import { getTenancyAgreementTemplate } from "@/db/queries/settings.js";
+import { getTenancyAgreementTemplate, getStripeSettings } from "@/db/queries/settings.js";
 import {
 	insertTenancy,
 	updateTenancy,
@@ -301,6 +301,55 @@ export async function cancelAgreementAction(input) {
  * tenant on to DD setup. Backstops the per-agreement send button on the
  * normal happy path.
  */
+/**
+ * Detach the saved Direct Debit mandate from a tenancy so a fresh one
+ * can be set up. Best-effort attempts to detach the payment method at
+ * the PSP too (so the same card/account can't be silently re-charged
+ * outside Nexus). Keeps the dd_token so the public setup link stays
+ * stable.
+ */
+export async function removeTenancyDdMandateAction(tenancyId) {
+	const venue = await gate();
+	const t = await getTenancyById(tenancyId, { venueId: venue.id });
+	if (!t) throw new Error("Tenancy not found.");
+	if (!t.direct_debit_mandate_id && !t.direct_debit_ready_at) {
+		return { ok: true, already: true };
+	}
+
+	// Best-effort: detach the payment method at Stripe so any future
+	// invoicer run can't silently re-charge it. Failures are logged but
+	// not surfaced - the local row gets cleared either way.
+	if (t.direct_debit_mandate_id && String(t.direct_debit_mandate_id).startsWith("pm_")) {
+		try {
+			const psp = await getStripeSettings(t.venue_id);
+			const secretKey = psp?.secret_key;
+			if (secretKey) {
+				await fetch(
+					`https://api.stripe.com/v1/payment_methods/${encodeURIComponent(t.direct_debit_mandate_id)}/detach`,
+					{
+						method: "POST",
+						headers: {
+							Authorization: `Bearer ${secretKey}`,
+							Accept: "application/json",
+						},
+						cache: "no-store",
+					},
+				);
+			}
+		} catch (err) {
+			console.error("[tenancy.removeDd] stripe detach failed", err);
+		}
+	}
+
+	await updateTenancy(t.id, {
+		direct_debit_mandate_id: null,
+		stripe_customer_id: null,
+		direct_debit_ready_at: null,
+	});
+	revalidatePath(`/admin/tenancies/${t.id}`);
+	return { ok: true };
+}
+
 /**
  * Stand-alone direct-debit setup nudge. Sends just the DD link to the
  * tenant. Refuses if there's no contact email or DD is already active,
