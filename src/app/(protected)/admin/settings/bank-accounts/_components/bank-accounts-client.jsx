@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/shadcn/components/ui/button";
@@ -35,13 +35,31 @@ const PROVIDER_LABELS = {
 	monzo: "Monzo",
 };
 
-export default function BankAccountsClient({ accounts }) {
+export default function BankAccountsClient({ accounts, oauthStatus, oauthMessage }) {
 	const router = useRouter();
 	const [addOpen, setAddOpen] = useState(false);
 	const [chosenProvider, setChosenProvider] = useState(null);
 	const [editing, setEditing] = useState(null); // bank_account row
 	const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 	const [syncingId, setSyncingId] = useState(null);
+
+	// Surface the result of the OAuth callback (handled server-side on
+	// the page itself) as a toast, then strip the params from the URL so
+	// a refresh doesn't replay it.
+	const oauthShownRef = useRef(false);
+	useEffect(() => {
+		if (!oauthStatus || oauthShownRef.current) return;
+		oauthShownRef.current = true;
+		if (oauthStatus === "ok") {
+			toast.success(oauthMessage || "Authorised.");
+		} else {
+			toast.error(oauthMessage || "OAuth callback failed.");
+		}
+		// Replace URL without the oauth params - in-page only, no fetch.
+		if (typeof window !== "undefined") {
+			window.history.replaceState({}, "", "/admin/settings/bank-accounts");
+		}
+	}, [oauthStatus, oauthMessage]);
 
 	function openAdd(provider) {
 		setChosenProvider(provider);

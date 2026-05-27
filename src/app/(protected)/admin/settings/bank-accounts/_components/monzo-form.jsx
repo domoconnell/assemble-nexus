@@ -59,15 +59,19 @@ export default function MonzoForm({ open, onOpenChange, initial }) {
 	const [needsSca, setNeedsSca] = useState(false);
 
 	const authoriseUrl = useMemo(() => {
-		if (!clientId || !redirectUri) return null;
+		if (!clientId || !redirectUri || !savedId) return null;
+		// We embed the bank_account id in `state` so the redirect URI can
+		// pick the flow back up server-side without the user copy-pasting
+		// the code. Prefix marks it as ours so we can ignore stray state
+		// values that aren't account ids.
 		const params = new URLSearchParams({
 			client_id: clientId,
 			redirect_uri: redirectUri,
 			response_type: "code",
-			state: cryptoState(),
+			state: `nexus:${savedId}`,
 		});
 		return `https://auth.monzo.com/?${params}`;
-	}, [clientId, redirectUri]);
+	}, [clientId, redirectUri, savedId]);
 
 	async function saveCreds() {
 		setBusy(true);
@@ -371,11 +375,3 @@ function describeMonzoAccount(a) {
 	return `${type} · ${a.currency || "GBP"}${ident}`;
 }
 
-function cryptoState() {
-	// Browser-side state value to satisfy OAuth - not validated server-side
-	// since the admin pastes the code by hand; it just keeps Monzo happy.
-	if (typeof window === "undefined" || !window.crypto) return "nexus";
-	const arr = new Uint8Array(8);
-	window.crypto.getRandomValues(arr);
-	return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
-}
