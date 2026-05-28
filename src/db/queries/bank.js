@@ -154,7 +154,16 @@ export async function listBankTransactions(venueId, { limit = 50, offset = 0, ac
 			.from(bank_transaction)
 			.where(where)
 			.orderBy(
-				desc(sql`COALESCE(${bank_transaction.settled_at}, ${bank_transaction.transaction_time})`),
+				// Sort by when the payment happened, not when it cleared.
+				// `settled_at` for Stripe is `available_on` (a few days in
+				// the future for pending charges) so using that for ordering
+				// puts pending rows out of order from the user's POV.
+				desc(sql`COALESCE(${bank_transaction.transaction_time}, ${bank_transaction.settled_at})`),
+				// Within the same timestamp, parents come before their
+				// synthetic fee rows. external_id of the fee row is
+				// "${parent.external_id}#fee" so ASC ordering naturally
+				// places the parent first.
+				asc(bank_transaction.external_id),
 			)
 			.limit(limit)
 			.offset(offset),

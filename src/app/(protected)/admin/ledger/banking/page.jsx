@@ -148,16 +148,28 @@ export default async function BankingPage({ searchParams }) {
 
 function HeadlineCards({ combined, inOut, monthName }) {
 	const cleared = combined?.cleared_minor ?? 0;
+	const effective = combined?.effective_minor ?? cleared;
+	const pending = combined?.pending_minor ?? 0;
 	const inMinor = inOut?.in_minor ?? 0;
 	const outMinor = inOut?.out_minor ?? 0;
 	const net = inOut?.net_minor ?? 0;
 	return (
 		<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 			<Card
-				label="Cleared balance"
-				value={fmtMinor(cleared)}
+				label="Balance"
+				value={fmtMinor(effective)}
 				tone="primary"
 				sub={combined ? `Across ${combined.account_count} account${combined.account_count === 1 ? "" : "s"} · ${stampFmt.format(new Date(combined.captured_at))}` : "-"}
+				footer={
+					pending !== 0 ? (
+						<>
+							<span className="font-mono tabular-nums">{fmtMinor(cleared)}</span> cleared ·{" "}
+							<span className="font-mono tabular-nums">{`${pending >= 0 ? "+" : "−"}${fmtMinor(Math.abs(pending))}`}</span> pending
+						</>
+					) : (
+						<><span className="font-mono tabular-nums">{fmtMinor(cleared)}</span> cleared</>
+					)
+				}
 			/>
 			<Card label={`In · ${monthName}`} value={`+${fmtMinor(inMinor)}`} tone="primary" sub="Settled this month, excluding transfers" />
 			<Card label={`Out · ${monthName}`} value={`−${fmtMinor(outMinor)}`} tone="destructive" sub="Settled this month, excluding transfers" />
@@ -171,7 +183,7 @@ function HeadlineCards({ combined, inOut, monthName }) {
 	);
 }
 
-function Card({ label, value, sub, tone = "default" }) {
+function Card({ label, value, sub, footer, tone = "default" }) {
 	const toneClass =
 		tone === "primary"
 			? "border-primary/30 bg-primary/5"
@@ -185,11 +197,13 @@ function Card({ label, value, sub, tone = "default" }) {
 			<div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
 			<div className={`font-display text-2xl tracking-tight ${valueClass}`}>{value}</div>
 			{sub && <div className="text-xs text-muted-foreground">{sub}</div>}
+			{footer && <div className="text-[11px] text-muted-foreground pt-1">{footer}</div>}
 		</div>
 	);
 }
 
 function TransactionsTable({ rows, accountsById }) {
+	const now = Date.now();
 	return (
 		<div className="rounded-xl border bg-card overflow-hidden">
 			<table className="w-full text-sm">
@@ -204,23 +218,55 @@ function TransactionsTable({ rows, accountsById }) {
 				</thead>
 				<tbody className="divide-y divide-foreground/5">
 					{rows.map((r) => {
-						const when = r.settled_at ?? r.transaction_time;
+						// Show when the payment happened, not when it cleared - Stripe
+						// charges sit on `available_on` (settled_at) days in the future
+						// before becoming payable.
+						const when = r.transaction_time ?? r.settled_at;
 						const dateStr = when ? dateFmt.format(new Date(when)) : "-";
+						const settledMs = r.settled_at ? new Date(r.settled_at).getTime() : null;
+						const isPending = settledMs == null || settledMs > now;
 						const isIn = r.direction === "IN";
 						const accountLabel = accountsById[r.bank_account_id]?.label ?? "-";
+						// Synthetic Stripe fee rows ride along with their parent
+						// balance_transaction (external_id `${parent.id}#fee`).
+						// Render them as a visually nested child of the row above.
+						const isFee =
+							r.source === "stripe" &&
+							typeof r.external_id === "string" &&
+							r.external_id.endsWith("#fee");
 						return (
-							<tr key={r.id} className={`hover:bg-muted/20 ${r.is_transfer ? "opacity-60" : ""}`}>
-								<td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">{dateStr}</td>
-								<td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{accountLabel}</td>
+							<tr
+								key={r.id}
+								className={`hover:bg-muted/20 ${r.is_transfer ? "opacity-60" : ""} ${isFee ? "bg-muted/10" : ""}`}
+							>
+								<td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">
+									{isFee ? "" : dateStr}
+								</td>
+								<td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
+									{isFee ? "" : accountLabel}
+								</td>
 								<td className="px-4 py-2.5">
 									<div className="flex items-baseline gap-2 flex-wrap">
-										<span>{r.counterparty_name || "-"}</span>
+										{isFee && (
+											<span
+												aria-hidden
+												className="inline-block w-3 h-3 border-l border-b border-muted-foreground/40 ml-1 mr-1 self-center -translate-y-0.75"
+											/>
+										)}
+										<span className={isFee ? "text-muted-foreground text-xs" : ""}>
+											{r.counterparty_name || "-"}
+										</span>
+										{isPending && !r.is_transfer && !isFee && (
+											<span className="text-[10px] uppercase tracking-[0.15em] text-amber-700 dark:text-amber-300 border border-amber-500/30 bg-amber-500/10 rounded-full px-1.5 py-0.5">
+												Pending
+											</span>
+										)}
 										{r.is_transfer && (
 											<span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground border border-foreground/15 rounded-full px-1.5 py-0.5">
 												Transfer
 											</span>
 										)}
-										{!r.is_transfer && !isIn && (
+										{!r.is_transfer && !isIn && !isFee && (
 											<ChurchTransferToggle
 												transactionId={r.id}
 												initial={r.is_church_transfer}
@@ -228,13 +274,13 @@ function TransactionsTable({ rows, accountsById }) {
 										)}
 									</div>
 								</td>
-								<td className="px-4 py-2.5 text-muted-foreground truncate max-w-xs">
+								<td className={`px-4 py-2.5 text-muted-foreground truncate max-w-xs ${isFee ? "text-xs" : ""}`}>
 									{r.reference || ""}
 								</td>
 								<td
 									className={`px-4 py-2.5 text-right font-mono tabular-nums whitespace-nowrap ${
 										isIn ? "text-primary" : "text-destructive"
-									}`}
+									} ${isFee ? "text-xs" : ""}`}
 								>
 									{isIn ? "+" : "−"}{fmtMinor(r.amount_minor)}
 								</td>

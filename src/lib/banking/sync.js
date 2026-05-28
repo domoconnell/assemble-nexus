@@ -274,18 +274,32 @@ async function backfillBalanceFromTransactions(accountId, venueId, {
 	return inserts.length;
 }
 
+const TRANSFER_PAIR_WINDOW_MS = 5 * 24 * 60 * 60 * 1000;
+
 /**
- * Best-effort transfer detection: any transaction whose
- * `counterparty_account` matches another active bank_account's
- * `external_account_uid` for the same venue is flagged. Run after each
- * sync so newly-imported transfer pairs get tagged.
+ * Transfer detection. Two passes, both idempotent:
  *
- * Cheap, idempotent UPDATE - re-running just rewrites the same rows.
+ * 1. **UID match**: if a transaction's `counterparty_account` matches
+ *    another active bank_account's `external_account_uid` for the same
+ *    venue, flag it. Catches normal bank-to-bank transfers where the
+ *    feed exposes the destination sort-code / account-number.
+ *
+ * 2. **Amount + time pair match**: for any unflagged OUT in one account
+ *    paired with an unflagged IN of the same amount + currency in a
+ *    different account of the same venue, within ±5 days - flag both.
+ *    Each transaction is paired at most once (greedy on time proximity).
+ *    This is what catches Stripe payouts: Stripe writes an OUT with
+ *    counterparty_account="stripe_payout", the destination bank later
+ *    sees an IN with a matching amount.
+ *
+ *    The pair matcher deliberately ignores counterparty_name -
+ *    name-based heuristics ("contains stripe") false-positived legitimate
+ *    card-payment income on the Stripe-as-bank side, which looks like
+ *    "Stripe charge" / "Stripe payment" too.
  */
 async function markTransfersForVenue(venueId) {
 	const accounts = await listActiveBankAccounts(venueId);
 	const uids = accounts.map((a) => a.external_account_uid).filter(Boolean);
-	const hasStripeBank = accounts.some((a) => a.provider === "stripe");
 
 	if (uids.length >= 2) {
 		await db.execute(sql`
@@ -298,25 +312,90 @@ async function markTransfersForVenue(venueId) {
 		`);
 	}
 
-	// Stripe-as-bank-account: pair Stripe payouts with the bank inbound
-	// they later settle into, so we don't double-count card income.
-	//   - On the Stripe side, payouts are written with counterparty_account
-	//     = "stripe_payout" (see providers/stripe.js mapBalanceTransaction).
-	//   - On the receiving real bank, the inbound's counterparty_name
-	//     contains "stripe".
-	// Both sides get flagged is_transfer so neither hits the in/out totals.
-	if (hasStripeBank) {
-		await db.execute(sql`
-			UPDATE bank_transaction
-			SET is_transfer = true
-			WHERE venue_id = ${venueId}
-				AND is_transfer = false
-				AND (
-					counterparty_account = 'stripe_payout'
-					OR (direction = 'IN' AND LOWER(counterparty_name) LIKE '%stripe%')
-				)
-		`);
+	if (accounts.length >= 2) {
+		await pairAmountMatchedTransfers(venueId);
 	}
+}
+
+/**
+ * Pair every unflagged OUT with the closest unflagged IN of the same
+ * amount + currency on a different account within `TRANSFER_PAIR_WINDOW_MS`.
+ * Greedy by absolute time difference; each transaction can only be used
+ * in one pair. Both sides get `is_transfer = true`.
+ */
+async function pairAmountMatchedTransfers(venueId) {
+	const rows = await db
+		.select({
+			id: bank_transaction.id,
+			bank_account_id: bank_transaction.bank_account_id,
+			direction: bank_transaction.direction,
+			amount_minor: bank_transaction.amount_minor,
+			currency: bank_transaction.currency,
+			settled_at: bank_transaction.settled_at,
+			transaction_time: bank_transaction.transaction_time,
+		})
+		.from(bank_transaction)
+		.where(
+			and(
+				eq(bank_transaction.venue_id, venueId),
+				eq(bank_transaction.is_transfer, false),
+			),
+		);
+
+	const whenMs = (r) => {
+		const t = r.settled_at ?? r.transaction_time;
+		return t ? new Date(t).getTime() : null;
+	};
+
+	const candidates = rows
+		.map((r) => ({ ...r, _t: whenMs(r) }))
+		.filter((r) => r._t != null);
+
+	const outs = candidates.filter((r) => r.direction === "OUT");
+	const ins = candidates.filter((r) => r.direction === "IN");
+	if (outs.length === 0 || ins.length === 0) return;
+
+	// Index INs by amount+currency for cheap lookup.
+	const insByKey = new Map();
+	for (const i of ins) {
+		const key = `${i.currency}:${i.amount_minor}`;
+		const bucket = insByKey.get(key) ?? [];
+		bucket.push(i);
+		insByKey.set(key, bucket);
+	}
+
+	// Build candidate pairs, sorted by time-distance so the tightest
+	// match wins when one OUT could match several INs (or vice versa).
+	const candidatePairs = [];
+	for (const o of outs) {
+		const bucket = insByKey.get(`${o.currency}:${o.amount_minor}`);
+		if (!bucket) continue;
+		for (const i of bucket) {
+			if (i.bank_account_id === o.bank_account_id) continue;
+			const delta = Math.abs(i._t - o._t);
+			if (delta > TRANSFER_PAIR_WINDOW_MS) continue;
+			candidatePairs.push({ outId: o.id, inId: i.id, delta });
+		}
+	}
+	if (candidatePairs.length === 0) return;
+	candidatePairs.sort((a, b) => a.delta - b.delta);
+
+	const usedOuts = new Set();
+	const usedIns = new Set();
+	const idsToFlag = [];
+	for (const p of candidatePairs) {
+		if (usedOuts.has(p.outId) || usedIns.has(p.inId)) continue;
+		usedOuts.add(p.outId);
+		usedIns.add(p.inId);
+		idsToFlag.push(p.outId, p.inId);
+	}
+
+	if (idsToFlag.length === 0) return;
+	await db.execute(sql`
+		UPDATE bank_transaction
+		SET is_transfer = true
+		WHERE id IN (${sql.join(idsToFlag.map((id) => sql`${id}`), sql`, `)})
+	`);
 }
 
 /**

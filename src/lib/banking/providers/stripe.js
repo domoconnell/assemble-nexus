@@ -123,6 +123,10 @@ export const stripeBankProvider = {
 				"created[lt]": String(toS),
 				limit: "100",
 			});
+			// Expand the underlying source (Charge / Refund / Payout) so we can
+			// pull a meaningful counterparty name from billing_details, our
+			// own metadata, or the description without a second API hop.
+			params.append("expand[]", "data.source");
 			if (startingAfter) params.set("starting_after", startingAfter);
 			const res = await stripeFetch(creds.secret_key, `/balance_transactions?${params}`);
 			if (!res.ok) return res;
@@ -134,7 +138,16 @@ export const stripeBankProvider = {
 				if (cur !== HOME_CURRENCY) continue;
 				const amount = Number(tx.amount ?? 0);
 				if (!Number.isFinite(amount) || amount === 0) continue;
-				items.push(mapBalanceTransaction(tx));
+				const mapped = mapBalanceTransaction(tx);
+				items.push(mapped);
+				// Stripe folds the processing fee into the parent
+				// balance_transaction (`fee` + `net`) rather than emitting a
+				// separate one. Synthesise an OUT row so the fee shows up as
+				// its own line in the ledger and the in/out totals balance.
+				const fee = Number(tx.fee ?? 0);
+				if (fee > 0 && tx.type !== "stripe_fee" && tx.type !== "payout_failure") {
+					items.push(mapBalanceTransactionFee(tx));
+				}
 			}
 
 			if (!res.body?.has_more) break;
@@ -151,19 +164,19 @@ function mapBalanceTransaction(tx) {
 	const direction = amount > 0 ? "IN" : "OUT";
 	const settledMs = tx.available_on ? tx.available_on * 1000 : null;
 	const createdMs = tx.created ? tx.created * 1000 : null;
-	const friendlyDescription = describeStripeType(tx);
+	const src = typeof tx.source === "object" && tx.source ? tx.source : null;
 
 	return {
 		external_id: tx.id,
 		direction,
 		amount_minor: Math.abs(amount),
 		currency: (tx.currency || HOME_CURRENCY).toUpperCase(),
-		counterparty_name: friendlyDescription,
+		counterparty_name: describeStripeName(tx, src),
 		// Stripe doesn't expose the destination bank account directly on
 		// balance_transactions - we use the type as a discriminator so the
 		// sync layer can spot payouts later.
 		counterparty_account: tx.type === "payout" ? "stripe_payout" : null,
-		reference: tx.description ?? null,
+		reference: describeStripeReference(tx, src),
 		category_uid: tx.type ?? null,
 		settled_at: settledMs ? new Date(settledMs) : null,
 		transaction_time: createdMs ? new Date(createdMs) : null,
@@ -171,17 +184,75 @@ function mapBalanceTransaction(tx) {
 	};
 }
 
+/**
+ * Synthetic OUT row for the processing fee carried on the parent
+ * balance_transaction. external_id pins to `${tx.id}#fee` so reruns
+ * upsert idempotently.
+ */
+function mapBalanceTransactionFee(tx) {
+	const fee = Number(tx.fee ?? 0);
+	const settledMs = tx.available_on ? tx.available_on * 1000 : null;
+	const createdMs = tx.created ? tx.created * 1000 : null;
+	return {
+		external_id: `${tx.id}#fee`,
+		direction: "OUT",
+		amount_minor: Math.abs(fee),
+		currency: (tx.currency || HOME_CURRENCY).toUpperCase(),
+		counterparty_name: "Stripe processing fee",
+		counterparty_account: null,
+		reference: tx.id,
+		category_uid: "stripe_fee",
+		settled_at: settledMs ? new Date(settledMs) : null,
+		transaction_time: createdMs ? new Date(createdMs) : null,
+		raw_payload: { synthetic_for: tx.id, fee_details: tx.fee_details ?? null },
+	};
+}
+
+function describeStripeName(tx, src) {
+	if (src) {
+		const billingName = src.billing_details?.name?.trim();
+		if (billingName) return billingName;
+		const meta = src.metadata ?? {};
+		const metaName =
+			meta.organisation_name ||
+			meta.customer_name ||
+			meta.contact_name;
+		if (metaName) return metaName;
+		const billingEmail = src.billing_details?.email?.trim();
+		if (billingEmail) return billingEmail;
+		if (src.statement_descriptor) return src.statement_descriptor;
+		if (src.description) return src.description;
+	}
+	return describeStripeType(tx);
+}
+
+function describeStripeReference(tx, src) {
+	if (src) {
+		const meta = src.metadata ?? {};
+		const ref =
+			meta.booking_reference ||
+			meta.ticket_order_reference ||
+			meta.tenancy_invoice_id ||
+			meta.booking_id ||
+			meta.ticket_order_id ||
+			meta.organisation_id;
+		if (ref) return ref;
+		if (src.description) return src.description;
+	}
+	return tx.description ?? null;
+}
+
 function describeStripeType(tx) {
 	const t = tx.type ?? "";
-	if (t === "charge") return "Stripe charge";
-	if (t === "payment") return "Stripe payment";
-	if (t === "refund" || t === "payment_refund") return "Stripe refund";
+	if (t === "charge") return "Card payment";
+	if (t === "payment") return "Card payment";
+	if (t === "refund" || t === "payment_refund") return "Refund";
 	if (t === "stripe_fee") return "Stripe fee";
 	if (t === "application_fee") return "Stripe application fee";
 	if (t === "application_fee_refund") return "Stripe application fee refund";
-	if (t === "payout") return "Stripe payout to bank";
-	if (t === "payout_failure") return "Stripe payout failure";
+	if (t === "payout") return "Payout to bank";
+	if (t === "payout_failure") return "Payout failure";
 	if (t === "transfer") return "Stripe transfer";
-	if (t === "adjustment") return "Stripe adjustment";
+	if (t === "adjustment") return "Adjustment";
 	return tx.description || `Stripe ${t || "transaction"}`;
 }
