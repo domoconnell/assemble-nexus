@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { headers } from "next/headers";
-import { getTenancyByDdToken } from "@/db/queries/tenancies";
+import { getOrganisationByDdToken } from "@/db/queries/crm";
 import { getVenueById } from "@/db/queries/venue";
 import { getActiveDdDriver } from "@/lib/tenancies/dd-driver";
 
@@ -9,10 +9,10 @@ export const dynamic = "force-dynamic";
 
 export default async function DirectDebitSetupPage({ params }) {
 	const { token } = await params;
-	const t = await getTenancyByDdToken(token);
-	if (!t) notFound();
+	const org = await getOrganisationByDdToken(token);
+	if (!org) notFound();
 
-	if (t.direct_debit_ready_at) {
+	if (org.direct_debit_ready_at) {
 		return (
 			<div className="min-h-screen bg-background py-10 px-4">
 				<div className="mx-auto max-w-2xl rounded-lg border bg-card p-8 text-center space-y-4">
@@ -29,7 +29,7 @@ export default async function DirectDebitSetupPage({ params }) {
 		);
 	}
 
-	const venue = await getVenueById(t.venue_id);
+	const venue = await getVenueById(org.venue_id);
 	const hdrs = await headers();
 	const proto = hdrs.get("x-forwarded-proto") || "https";
 	const host = hdrs.get("host") || "localhost:3000";
@@ -37,10 +37,10 @@ export default async function DirectDebitSetupPage({ params }) {
 
 	let session;
 	try {
-		const driver = await getActiveDdDriver(t.venue_id);
+		const driver = await getActiveDdDriver(org.venue_id);
 		session = await driver.createBacsDdSession({
-			tenancy: t,
-			tenantEmail: t.contact_email || "",
+			organisation: org,
+			tenantEmail: org.contact_email || "",
 			successUrl: `${origin}/tenancy/${token}/done?session_id={CHECKOUT_SESSION_ID}`,
 			cancelUrl: `${origin}/tenancy/${token}/direct-debit`,
 			origin,

@@ -1,10 +1,11 @@
 import { pgTable, uuid, text, timestamp, index } from "drizzle-orm/pg-core";
-import { tenancy } from "./tenancy.js";
+import { organisation } from "./organisation.js";
 
 /**
  * Fake-PSP equivalent of a Stripe Checkout `setup` session for Bacs
- * Direct Debit. Lets the standard tenancy DD flow run end-to-end
- * against a sandbox bank-details form, without a live Stripe account.
+ * Direct Debit. The mandate is owned by the organisation (not the
+ * tenancy), so one captured mandate can cover any number of tenancies
+ * or one-off charges for that org.
  *
  * Lifecycle:
  *   `open`      - row created when the setup page launches the session.
@@ -20,7 +21,7 @@ export const fake_dd_session = pgTable(
 	{
 		id: uuid("id").defaultRandom().primaryKey(),
 		external_id: text("external_id").notNull().unique(), // `fdd_…`
-		tenancy_id: uuid("tenancy_id").notNull().references(() => tenancy.id, { onDelete: "cascade" }),
+		organisation_id: uuid("organisation_id").notNull().references(() => organisation.id, { onDelete: "cascade" }),
 
 		status: text("status").notNull().default("open"),
 
@@ -45,7 +46,7 @@ export const fake_dd_session = pgTable(
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
 	},
 	(t) => [
-		index("fake_dd_session_tenancy_idx").on(t.tenancy_id),
+		index("fake_dd_session_organisation_idx").on(t.organisation_id),
 		index("fake_dd_session_status_idx").on(t.status),
 	],
 );

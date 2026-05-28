@@ -24,7 +24,7 @@ export default function JourneyHeader({ tenancy, agreements }) {
 	const hasDraft = agreements.some((a) => a.status === "draft");
 	const hasSent = agreements.some((a) => a.status === "sent");
 	const signed = agreements.find((a) => a.status === "signed");
-	const ddReady = !!tenancy.direct_debit_ready_at;
+	const ddReady = !!tenancy.org_direct_debit_ready_at;
 
 	const agreementCreated = agreements.length > 0;
 	const welcomeEligible = hasDraft && !signed && !ddReady;
@@ -59,7 +59,7 @@ export default function JourneyHeader({ tenancy, agreements }) {
 			label: "Direct debit set up",
 			done: ddReady,
 			detail: ddReady
-				? `Mandate ${tenancy.direct_debit_mandate_id?.slice(0, 12)}…`
+				? `Mandate ${tenancy.org_direct_debit_mandate_id?.slice(0, 12)}…`
 				: null,
 		},
 	];

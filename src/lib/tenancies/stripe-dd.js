@@ -52,10 +52,14 @@ export async function getStripeSecret(venueId) {
  * Debit. Returns the session - the consumer redirects the tenant to
  * `session.url`. After completion Stripe redirects to `success_url` with
  * `?session_id={CHECKOUT_SESSION_ID}` so we can pull the mandate.
+ *
+ * The mandate is owned by the organisation; the webhook handler looks
+ * up the org via `metadata.organisation_id` to persist the resulting
+ * customer/payment_method ids.
  */
 export async function createBacsDdSession({
 	venueId,
-	tenancy,
+	organisation,
 	tenantEmail,
 	successUrl,
 	cancelUrl,
@@ -67,7 +71,10 @@ export async function createBacsDdSession({
 		customer_email: tenantEmail,
 		success_url: successUrl,
 		cancel_url: cancelUrl,
-		metadata: { tenancy_id: tenancy.id, tenancy_token: tenancy.dd_token },
+		metadata: {
+			organisation_id: organisation.id,
+			organisation_token: organisation.dd_token,
+		},
 	});
 	return stripeRequest(secret, "/checkout/sessions", { method: "POST", body });
 }

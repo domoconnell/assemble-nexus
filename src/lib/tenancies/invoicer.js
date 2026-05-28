@@ -126,22 +126,25 @@ export async function issueTenancyInvoicesForToday(venueId, today = new Date()) 
 				await attachSessionsToInvoice(sessionIds, inv.id);
 			}
 
-			// If a Direct Debit mandate is on file, automatically initiate
-			// a Stripe charge against it. Bacs takes a few business days to
-			// clear; the resulting PaymentIntent will start as `processing`.
+			// If the parent organisation has a Direct Debit mandate on file,
+			// auto-charge it. The mandate lives on the org so one captured
+			// mandate covers every tenancy belonging to that org. Bacs takes
+			// a few business days to clear; the resulting PaymentIntent
+			// starts as `processing`.
 			let charge = null;
 			let chargeError = null;
-			if (t.direct_debit_mandate_id && t.stripe_customer_id) {
+			if (t.org_direct_debit_mandate_id && t.org_stripe_customer_id) {
 				try {
 					const driver = await getActiveDdDriver(t.venue_id);
 					const pi = await driver.chargeMandate({
-						customerId: t.stripe_customer_id,
-						paymentMethodId: t.direct_debit_mandate_id,
+						customerId: t.org_stripe_customer_id,
+						paymentMethodId: t.org_direct_debit_mandate_id,
 						amountCents: subtotal_cents,
 						description: `${inv.reference} · ${periodYm}`,
 						metadata: {
 							tenancy_id: t.id,
 							tenancy_invoice_id: inv.id,
+							organisation_id: t.organisation_id,
 							period_ym: periodYm,
 						},
 					});

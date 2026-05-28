@@ -15,11 +15,14 @@ import { fake_dd_session } from "@/db/schema/entities/fake_dd_session.js";
  */
 
 export async function createBacsDdSession({
-	tenancy,
+	organisation,
 	successUrl,
 	cancelUrl,
 	origin,
 }) {
+	if (!organisation?.id || !organisation?.dd_token) {
+		throw new Error("Missing organisation or dd_token for DD setup.");
+	}
 	const external_id = `fdd_${randomUUID()}`;
 	// successUrl already carries `?session_id={CHECKOUT_SESSION_ID}` in
 	// the real Stripe contract. Match exactly so callers can stay agnostic.
@@ -27,13 +30,13 @@ export async function createBacsDdSession({
 		.insert(fake_dd_session)
 		.values({
 			external_id,
-			tenancy_id: tenancy.id,
+			organisation_id: organisation.id,
 			status: "open",
 			success_url: successUrl,
 			cancel_url: cancelUrl,
 		})
 		.returning();
-	const sandboxUrl = `${origin}/tenancy/${tenancy.dd_token}/direct-debit/sandbox?session_id=${row.external_id}`;
+	const sandboxUrl = `${origin}/tenancy/${organisation.dd_token}/direct-debit/sandbox?session_id=${row.external_id}`;
 	return {
 		id: row.external_id,
 		url: sandboxUrl,

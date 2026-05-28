@@ -34,7 +34,7 @@ export default async function AgreementPage({ params }) {
 	);
 	const signed = !!agreement.signed_at;
 	const cancelled = agreement.status === "cancelled";
-	const needsDd = tenancy.dd_token && !tenancy.direct_debit_ready_at;
+	const needsDd = tenancy.org_dd_token && !tenancy.org_direct_debit_ready_at;
 
 	return (
 		<div className="min-h-screen bg-background py-10 px-4">
@@ -68,7 +68,7 @@ export default async function AgreementPage({ params }) {
 						{needsDd && (
 							<div className="mt-4">
 								<Link
-									href={`/tenancy/${tenancy.dd_token}/direct-debit`}
+									href={`/tenancy/${tenancy.org_dd_token}/direct-debit`}
 									className="inline-block rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90"
 								>
 									Continue to direct debit setup →
@@ -86,7 +86,7 @@ export default async function AgreementPage({ params }) {
 				{!signed && !cancelled && (
 					<SignButton
 						token={token}
-						chainTo={needsDd ? `/tenancy/${tenancy.dd_token}/direct-debit` : null}
+						chainTo={needsDd ? `/tenancy/${tenancy.org_dd_token}/direct-debit` : null}
 					/>
 				)}
 			</div>

@@ -71,8 +71,8 @@ export async function sendTenancyAgreementSendEmail({ tenancy, agreement, contac
 export async function sendTenancyAgreementSignedEmail({ tenancy, agreement, contactEmail, contactFirstName }) {
 	const venue = await getVenueById(tenancy.venue_id);
 	const ddUrl =
-		tenancy.dd_token && !tenancy.direct_debit_ready_at
-			? `${baseUrl()}/tenancy/${tenancy.dd_token}/direct-debit`
+		tenancy.org_dd_token && !tenancy.org_direct_debit_ready_at
+			? `${baseUrl()}/tenancy/${tenancy.org_dd_token}/direct-debit`
 			: "";
 	await safeSend("tenancy-agreement-signed", contactEmail, {
 		venue_name: venue?.name ?? "",
@@ -97,26 +97,32 @@ export async function sendTenancyAgreementCancelledEmail({ tenancy, agreement, c
 }
 
 /**
- * Stand-alone "please set up your direct debit" email. Used when the
- * agreement is already in place (or won't be sent at all) but the
- * tenant still needs to set up the mandate.
+ * Stand-alone "please set up your direct debit" email. Sent to the
+ * organisation's primary contact - the mandate is owned by the org so
+ * one email serves any number of tenancies / one-off charges.
  */
-export async function sendTenancyDdSetupEmail({ tenancy, contactEmail, contactFirstName }) {
-	const venue = await getVenueById(tenancy.venue_id);
+export async function sendOrganisationDdSetupEmail({ organisation, contactEmail, contactFirstName }) {
+	const venue = await getVenueById(organisation.venue_id);
 	await safeSend("tenancy-dd-setup", contactEmail, {
 		venue_name: venue?.name ?? "",
 		first_name: contactFirstName ?? "",
-		organisation_name: tenancy.organisation_name ?? "",
-		direct_debit_url: `${baseUrl()}/tenancy/${tenancy.dd_token}/direct-debit`,
+		organisation_name: organisation.name ?? "",
+		direct_debit_url: `${baseUrl()}/tenancy/${organisation.dd_token}/direct-debit`,
 	});
 }
 
-export async function sendTenancyDdReadyEmail({ tenancy, contactEmail, contactFirstName }) {
-	const venue = await getVenueById(tenancy.venue_id);
+/**
+ * Confirmation that the mandate was captured successfully. The
+ * invoice-day note is omitted because a single org can have many
+ * tenancies on different days; the welcome / agreement emails carry
+ * the per-tenancy detail when each tenancy is set up.
+ */
+export async function sendOrganisationDdReadyEmail({ organisation, contactEmail, contactFirstName }) {
+	const venue = await getVenueById(organisation.venue_id);
 	await safeSend("tenancy-dd-ready", contactEmail, {
 		venue_name: venue?.name ?? "",
 		first_name: contactFirstName ?? "",
-		organisation_name: tenancy.organisation_name ?? "",
-		invoice_day_of_month: dayOfMonthLabel(tenancy.invoice_day_of_month),
+		organisation_name: organisation.name ?? "",
+		invoice_day_of_month: "",
 	});
 }

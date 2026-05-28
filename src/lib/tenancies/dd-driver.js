@@ -3,11 +3,11 @@ import * as stripeDd from "./stripe-dd.js";
 import * as fakeDd from "./fake-dd.js";
 
 /**
- * Tenancy Direct Debit driver dispatcher. Mirrors `getActivePsp(venueId)`
- * - looks up the venue's payments provider and returns an object exposing
- * the three operations the DD flow needs:
+ * Direct Debit driver dispatcher. The mandate is owned by the
+ * organisation (one mandate covers any number of tenancies / one-off
+ * charges for that org).
  *
- *   createBacsDdSession({ tenancy, tenantEmail, successUrl, cancelUrl, origin })
+ *   createBacsDdSession({ organisation, tenantEmail, successUrl, cancelUrl, origin })
  *     -> { id, url }   (redirect the tenant to `url`)
  *
  *   fetchSessionMandate(sessionId)
@@ -33,10 +33,10 @@ export async function getActiveDdDriver(venueId) {
 function stripeDriver(venueId) {
 	return {
 		key: "stripe",
-		async createBacsDdSession({ tenancy, tenantEmail, successUrl, cancelUrl }) {
+		async createBacsDdSession({ organisation, tenantEmail, successUrl, cancelUrl }) {
 			const session = await stripeDd.createBacsDdSession({
 				venueId,
-				tenancy,
+				organisation,
 				tenantEmail,
 				successUrl,
 				cancelUrl,
@@ -55,9 +55,9 @@ function stripeDriver(venueId) {
 function fakeDriver() {
 	return {
 		key: "fake",
-		async createBacsDdSession({ tenancy, successUrl, cancelUrl, origin }) {
+		async createBacsDdSession({ organisation, successUrl, cancelUrl, origin }) {
 			return fakeDd.createBacsDdSession({
-				tenancy,
+				organisation,
 				successUrl,
 				cancelUrl,
 				origin,

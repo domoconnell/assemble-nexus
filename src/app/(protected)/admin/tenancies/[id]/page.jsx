@@ -78,7 +78,17 @@ export default async function TenancyDetailPage({ params }) {
 						</h1>
 						<p className="text-sm text-muted-foreground mt-1">
 							{t.kind === "private_rental" ? "Private rental" : "Scheduled recurring"} ·{" "}
-							{t.organisation_name ?? "-"} · {t.room_name}
+							{t.organisation_id ? (
+								<Link
+									href={`/admin/crm/${t.organisation_id}`}
+									className="hover:text-foreground underline-offset-2 hover:underline"
+								>
+									{t.organisation_name ?? "(unnamed)"}
+								</Link>
+							) : (
+								t.organisation_name ?? "-"
+							)}{" "}
+							· {t.room_name}
 						</p>
 					</div>
 					<span

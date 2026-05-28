@@ -29,6 +29,8 @@ import {
 	removeContactFromOrganisationAction,
 	deleteOrganisationAction,
 	saveOrganisationAction,
+	sendOrganisationDdSetupEmailAction,
+	removeOrganisationDdMandateAction,
 } from "../actions";
 
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
@@ -70,6 +72,7 @@ export default function OrganisationDetailClient({
 	events,
 	ticketOrders,
 	expenses,
+	tenancies = [],
 }) {
 	const router = useRouter();
 	const [pending, startTransition] = useTransition();
@@ -207,6 +210,7 @@ export default function OrganisationDetailClient({
 					<TabsTrigger value="bookings">Bookings ({bookings.length})</TabsTrigger>
 					<TabsTrigger value="events">Events ({events.length})</TabsTrigger>
 					<TabsTrigger value="tickets">Ticket orders ({ticketOrders.length})</TabsTrigger>
+					<TabsTrigger value="tenancies">Tenancies ({tenancies.length})</TabsTrigger>
 					<TabsTrigger value="expenses">Expenses ({expenses.length})</TabsTrigger>
 				</TabsList>
 
@@ -222,6 +226,8 @@ export default function OrganisationDetailClient({
 							{organisation.notes || <span className="text-muted-foreground italic">No notes yet.</span>}
 						</p>
 					</section>
+
+					<DirectDebitWidget organisation={organisation} tenancies={tenancies} />
 
 					<section className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 space-y-3">
 						<h2 className="text-sm uppercase tracking-[0.2em] text-destructive">Danger zone</h2>
@@ -336,6 +342,20 @@ export default function OrganisationDetailClient({
 							t.paid_at ? dateFmt.format(new Date(t.paid_at)) : "-",
 						])}
 					/>
+				</TabsContent>
+
+				<TabsContent value="tenancies">
+					{tenancies.length === 0 ? (
+						<div className="rounded-lg border border-dashed bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+							No tenancies linked to this organisation.
+						</div>
+					) : (
+						<ul className="rounded-lg border bg-card divide-y divide-foreground/10 overflow-hidden">
+							{tenancies.map((tn) => (
+								<TenancyRow key={tn.id} tenancy={tn} />
+							))}
+						</ul>
+					)}
 				</TabsContent>
 
 				<TabsContent value="expenses">
@@ -548,5 +568,212 @@ function ListTable({ headers, rows, emptyMessage }) {
 				</tbody>
 			</table>
 		</div>
+	);
+}
+
+const ddDateFmt = new Intl.DateTimeFormat("en-GB", {
+	day: "numeric", month: "short", year: "numeric",
+	timeZone: "Europe/London",
+});
+
+/**
+ * Direct Debit widget. The mandate lives on the organisation, so one
+ * mandate covers every tenancy + any one-off charges for this org.
+ *
+ * - Active: show mandate IDs + a "Remove mandate" affordance.
+ * - Pending: show "Send setup email" button + the public setup URL.
+ */
+function DirectDebitWidget({ organisation, tenancies }) {
+	const router = useRouter();
+	const [sending, setSending] = useState(false);
+	const [confirmingRemove, setConfirmingRemove] = useState(false);
+	const [removing, setRemoving] = useState(false);
+
+	const ready = !!organisation.direct_debit_ready_at;
+	const link = organisation.dd_token
+		? `/tenancy/${organisation.dd_token}/direct-debit`
+		: null;
+
+	async function sendEmail() {
+		setSending(true);
+		try {
+			await sendOrganisationDdSetupEmailAction(organisation.id);
+			toast.success("Direct debit email sent");
+			router.refresh();
+		} catch (err) {
+			toast.error(err?.message || "Could not send email.");
+		} finally {
+			setSending(false);
+		}
+	}
+
+	async function removeMandate() {
+		setRemoving(true);
+		try {
+			await removeOrganisationDdMandateAction(organisation.id);
+			toast.success("Direct debit mandate removed.");
+			setConfirmingRemove(false);
+			router.refresh();
+		} catch (err) {
+			toast.error(err?.message || "Could not remove mandate.");
+		} finally {
+			setRemoving(false);
+		}
+	}
+
+	const activeTenancies = (tenancies ?? []).filter((t) => t.status !== "ended");
+
+	return (
+		<section className="rounded-lg border bg-card p-6 space-y-3">
+			<div className="flex items-baseline justify-between gap-3 flex-wrap">
+				<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
+					Direct debit
+				</h2>
+				{!ready && (
+					<Button size="sm" onClick={sendEmail} disabled={sending}>
+						{sending ? "Sending…" : "Send setup email"}
+					</Button>
+				)}
+			</div>
+
+			{ready ? (
+				<>
+					<div className="flex items-center justify-between gap-3 flex-wrap">
+						<div className="flex items-center gap-2">
+							<span className="text-[10px] uppercase tracking-[0.18em] rounded-full border border-primary/30 bg-primary/10 text-primary px-2 py-0.5">
+								Active
+							</span>
+							<span className="text-xs text-muted-foreground">
+								Mandate confirmed{" "}
+								{ddDateFmt.format(new Date(organisation.direct_debit_ready_at))}
+							</span>
+						</div>
+						{!confirmingRemove && (
+							<Button
+								size="sm"
+								variant="ghost"
+								onClick={() => setConfirmingRemove(true)}
+							>
+								Remove mandate
+							</Button>
+						)}
+					</div>
+					<div className="text-xs text-muted-foreground space-y-1">
+						{organisation.direct_debit_mandate_id && (
+							<div>
+								Mandate ID:{" "}
+								<span className="font-mono">{organisation.direct_debit_mandate_id}</span>
+							</div>
+						)}
+						{organisation.stripe_customer_id && (
+							<div>
+								Stripe customer:{" "}
+								<span className="font-mono">{organisation.stripe_customer_id}</span>
+							</div>
+						)}
+					</div>
+					{activeTenancies.length > 0 && (
+						<p className="text-[11px] text-muted-foreground pt-1 border-t border-foreground/10">
+							Covers {activeTenancies.length} active tenanc
+							{activeTenancies.length === 1 ? "y" : "ies"} and any one-off
+							charges for this organisation.
+						</p>
+					)}
+
+					{confirmingRemove && (
+						<div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+							<div className="text-xs text-destructive font-medium">
+								Remove this Direct Debit mandate?
+							</div>
+							<div className="text-xs text-muted-foreground">
+								The saved bank details will be cleared and detached at the
+								PSP, so no future invoice can be auto-collected for this
+								organisation. The setup link stays the same so the tenant
+								(or you) can connect a fresh account.
+							</div>
+							<div className="flex items-center gap-2">
+								<Button
+									size="sm"
+									variant="destructive"
+									onClick={removeMandate}
+									disabled={removing}
+								>
+									{removing ? "Removing…" : "Remove mandate"}
+								</Button>
+								<Button
+									size="sm"
+									variant="ghost"
+									onClick={() => setConfirmingRemove(false)}
+									disabled={removing}
+								>
+									Keep
+								</Button>
+							</div>
+						</div>
+					)}
+				</>
+			) : (
+				<>
+					<div className="flex items-center gap-2">
+						<span className="text-[10px] uppercase tracking-[0.18em] rounded-full border border-foreground/15 text-muted-foreground px-2 py-0.5">
+							Not yet set up
+						</span>
+					</div>
+					<p className="text-xs text-muted-foreground">
+						No mandate captured for this organisation yet. The setup link below
+						works independently of any agreement and stays valid for the life of
+						the organisation - use <em>Send setup email</em> to email it to the
+						primary contact directly.
+					</p>
+					{link ? (
+						<div className="flex items-center gap-2 flex-wrap">
+							<a
+								href={link}
+								target="_blank"
+								rel="noreferrer"
+								className="text-xs text-foreground underline"
+							>
+								Open setup link →
+							</a>
+							<code className="text-[11px] text-muted-foreground break-all">
+								{link}
+							</code>
+						</div>
+					) : (
+						<p className="text-[11px] text-muted-foreground italic">
+							The direct debit link is generated the first time you click
+							<em> Send setup email</em>.
+						</p>
+					)}
+				</>
+			)}
+		</section>
+	);
+}
+
+function TenancyRow({ tenancy: tn }) {
+	const label = tn.label || `${tn.kind === "private_rental" ? "Private rental" : "Recurring"} · ${tn.room_name}`;
+	return (
+		<li className="flex items-baseline justify-between gap-3 p-4 flex-wrap">
+			<div className="min-w-0">
+				<Link
+					href={`/admin/tenancies/${tn.id}`}
+					className="text-sm font-medium hover:text-primary"
+				>
+					{label}
+				</Link>
+				<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mt-0.5">
+					{tn.status} · {tn.kind === "private_rental" ? "Private rental" : "Scheduled"} ·{" "}
+					{tn.room_name}
+				</div>
+			</div>
+			<span className="text-xs text-muted-foreground">
+				{tn.kind === "private_rental"
+					? fmt(tn.monthly_rate_cents)
+					: tn.per_session_rate_cents
+						? `${fmt(tn.per_session_rate_cents)} / session`
+						: "-"}
+			</span>
+		</li>
 	);
 }

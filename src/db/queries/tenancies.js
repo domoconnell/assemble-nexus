@@ -36,7 +36,7 @@ export async function listTenancies(venueId, { status, includeEnded = false } = 
 			room_id: tenancy.room_id,
 			room_name: room.name,
 			room_is_public: room.is_public,
-			direct_debit_ready_at: tenancy.direct_debit_ready_at,
+			org_direct_debit_ready_at: organisation.direct_debit_ready_at,
 			// Latest signed agreement signed_at via subquery - lets the list
 			// page show a "Signed" badge without loading every agreement row.
 			agreement_signed_at: sql`(
@@ -57,6 +57,37 @@ export async function listTenancies(venueId, { status, includeEnded = false } = 
 		.orderBy(asc(tenancy.status), desc(tenancy.starts_on));
 }
 
+/**
+ * Tenancies belonging to a given organisation. Used by the CRM org page
+ * to render the Tenancies tab. (The DD widget reads the mandate state
+ * directly off the organisation row.)
+ */
+export async function listTenanciesForOrganisation(organisationId) {
+	return db
+		.select({
+			id: tenancy.id,
+			kind: tenancy.kind,
+			status: tenancy.status,
+			label: tenancy.label,
+			starts_on: tenancy.starts_on,
+			ends_on: tenancy.ends_on,
+			monthly_rate_cents: tenancy.monthly_rate_cents,
+			per_session_rate_cents: tenancy.per_session_rate_cents,
+			invoice_day_of_month: tenancy.invoice_day_of_month,
+			room_id: tenancy.room_id,
+			room_name: room.name,
+		})
+		.from(tenancy)
+		.innerJoin(room, eq(room.id, tenancy.room_id))
+		.where(
+			and(
+				eq(tenancy.organisation_id, organisationId),
+				isNull(tenancy.deletedAt),
+			),
+		)
+		.orderBy(asc(tenancy.status), desc(tenancy.starts_on));
+}
+
 export async function getTenancyById(id, { venueId } = {}) {
 	const conditions = [eq(tenancy.id, id), isNull(tenancy.deletedAt)];
 	if (venueId) conditions.push(eq(tenancy.venue_id, venueId));
@@ -64,6 +95,13 @@ export async function getTenancyById(id, { venueId } = {}) {
 		.select({
 			tenancy: tenancy,
 			organisation_name: organisation.name,
+			// Direct Debit lives on the organisation - surface it here so
+			// the tenancy page can show the mandate status without a
+			// second round-trip.
+			org_dd_token: organisation.dd_token,
+			org_stripe_customer_id: organisation.stripe_customer_id,
+			org_direct_debit_mandate_id: organisation.direct_debit_mandate_id,
+			org_direct_debit_ready_at: organisation.direct_debit_ready_at,
 			contact_first_name: contact.first_name,
 			contact_last_name: contact.last_name,
 			contact_email: contact.email,
@@ -79,35 +117,6 @@ export async function getTenancyById(id, { venueId } = {}) {
 		)
 		.innerJoin(room, eq(room.id, tenancy.room_id))
 		.where(and(...conditions))
-		.limit(1);
-	if (!row) return null;
-	return { ...row.tenancy, ...row, tenancy: undefined };
-}
-
-/**
- * Fetch a tenancy by its standalone Direct Debit token (no-auth DD setup
- * flow). Independent of any specific agreement so DD can be re-collected
- * even when there's no active agreement.
- */
-export async function getTenancyByDdToken(token) {
-	if (!token) return null;
-	const [row] = await db
-		.select({
-			tenancy: tenancy,
-			organisation_name: organisation.name,
-			contact_first_name: contact.first_name,
-			contact_last_name: contact.last_name,
-			contact_email: contact.email,
-			room_name: room.name,
-		})
-		.from(tenancy)
-		.leftJoin(organisation, eq(organisation.id, tenancy.organisation_id))
-		.leftJoin(
-			contact,
-			eq(contact.id, sql`COALESCE(${tenancy.contact_id}, ${organisation.primary_contact_id})`),
-		)
-		.innerJoin(room, eq(room.id, tenancy.room_id))
-		.where(and(eq(tenancy.dd_token, token), isNull(tenancy.deletedAt)))
 		.limit(1);
 	if (!row) return null;
 	return { ...row.tenancy, ...row, tenancy: undefined };
@@ -155,6 +164,8 @@ export async function getActiveAgreement(tenancyId) {
 /**
  * Resolve a public-facing token to the full agreement row + parent
  * tenancy context the sign page needs (organisation, contact, room).
+ * Also surfaces the org's DD token + readiness so the page can chain
+ * the tenant to DD setup after signing.
  */
 export async function getAgreementByToken(token) {
 	if (!token) return null;
@@ -163,6 +174,8 @@ export async function getAgreementByToken(token) {
 			agreement: tenancy_agreement,
 			tenancy: tenancy,
 			organisation_name: organisation.name,
+			org_dd_token: organisation.dd_token,
+			org_direct_debit_ready_at: organisation.direct_debit_ready_at,
 			contact_first_name: contact.first_name,
 			contact_last_name: contact.last_name,
 			contact_email: contact.email,
@@ -189,6 +202,8 @@ export async function getAgreementByToken(token) {
 		tenancy: {
 			...row.tenancy,
 			organisation_name: row.organisation_name,
+			org_dd_token: row.org_dd_token,
+			org_direct_debit_ready_at: row.org_direct_debit_ready_at,
 			contact_first_name: row.contact_first_name,
 			contact_last_name: row.contact_last_name,
 			contact_email: row.contact_email,
@@ -477,6 +492,10 @@ export async function attachSessionsToInvoice(sessionIds, invoiceId) {
  * Active tenancies that need their sessions topped up. Returns rows that
  * have at least one segment date still inside the materialisation window
  * the cron honours.
+ *
+ * The invoicer also calls this and needs the parent org's DD mandate to
+ * auto-charge new invoices, so the org's mandate fields are joined in
+ * under `org_*` keys (same shape as `getTenancyById`).
  */
 export async function listActiveScheduledTenancies(venueId) {
 	const conditions = [
@@ -485,7 +504,27 @@ export async function listActiveScheduledTenancies(venueId) {
 		isNull(tenancy.deletedAt),
 	];
 	if (venueId) conditions.push(eq(tenancy.venue_id, venueId));
-	return db.select().from(tenancy).where(and(...conditions));
+	return db
+		.select({
+			id: tenancy.id,
+			venue_id: tenancy.venue_id,
+			kind: tenancy.kind,
+			status: tenancy.status,
+			label: tenancy.label,
+			organisation_id: tenancy.organisation_id,
+			room_id: tenancy.room_id,
+			monthly_rate_cents: tenancy.monthly_rate_cents,
+			per_session_rate_cents: tenancy.per_session_rate_cents,
+			invoice_day_of_month: tenancy.invoice_day_of_month,
+			schedule_rule: tenancy.schedule_rule,
+			starts_on: tenancy.starts_on,
+			ends_on: tenancy.ends_on,
+			org_stripe_customer_id: organisation.stripe_customer_id,
+			org_direct_debit_mandate_id: organisation.direct_debit_mandate_id,
+		})
+		.from(tenancy)
+		.leftJoin(organisation, eq(organisation.id, tenancy.organisation_id))
+		.where(and(...conditions));
 }
 
 export async function listActivePrivateRentals(venueId) {
@@ -495,5 +534,25 @@ export async function listActivePrivateRentals(venueId) {
 		isNull(tenancy.deletedAt),
 	];
 	if (venueId) conditions.push(eq(tenancy.venue_id, venueId));
-	return db.select().from(tenancy).where(and(...conditions));
+	return db
+		.select({
+			id: tenancy.id,
+			venue_id: tenancy.venue_id,
+			kind: tenancy.kind,
+			status: tenancy.status,
+			label: tenancy.label,
+			organisation_id: tenancy.organisation_id,
+			room_id: tenancy.room_id,
+			monthly_rate_cents: tenancy.monthly_rate_cents,
+			per_session_rate_cents: tenancy.per_session_rate_cents,
+			invoice_day_of_month: tenancy.invoice_day_of_month,
+			schedule_rule: tenancy.schedule_rule,
+			starts_on: tenancy.starts_on,
+			ends_on: tenancy.ends_on,
+			org_stripe_customer_id: organisation.stripe_customer_id,
+			org_direct_debit_mandate_id: organisation.direct_debit_mandate_id,
+		})
+		.from(tenancy)
+		.leftJoin(organisation, eq(organisation.id, tenancy.organisation_id))
+		.where(and(...conditions));
 }

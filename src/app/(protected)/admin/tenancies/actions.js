@@ -5,7 +5,7 @@ import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { requireServerSession } from "@/utils/auth/server-guard.js";
 import { requireCurrentVenue } from "@/db/queries/venue.js";
-import { getTenancyAgreementTemplate, getStripeSettings } from "@/db/queries/settings.js";
+import { getTenancyAgreementTemplate } from "@/db/queries/settings.js";
 import {
 	insertTenancy,
 	updateTenancy,
@@ -25,7 +25,6 @@ import {
 	sendTenancyAgreementSendEmail,
 	sendTenancyAgreementCancelledEmail,
 	sendTenancyWelcomeEmail,
-	sendTenancyDdSetupEmail,
 } from "@/utils/email/tenancy-emails.js";
 
 const WeekdaySchema = z.enum(["SU", "MO", "TU", "WE", "TH", "FR", "SA"]);
@@ -82,7 +81,6 @@ export async function createTenancyAction(input) {
 	const venue = await gate();
 	const parsed = CreateSchema.parse(input);
 	const template = await getTenancyAgreementTemplate(venue.id);
-	const ddToken = newToken();
 	const row = await insertTenancy({
 		venue_id: venue.id,
 		organisation_id: parsed.organisation_id,
@@ -100,7 +98,6 @@ export async function createTenancyAction(input) {
 		schedule_rule:
 			parsed.kind === "scheduled_recurring" ? parsed.schedule_rule : null,
 		notes: parsed.notes?.trim() || null,
-		dd_token: ddToken,
 	});
 	// Seed the first draft agreement from the venue template, so the admin
 	// can immediately review/edit/send without an extra "create draft" click.
@@ -295,96 +292,12 @@ export async function cancelAgreementAction(input) {
  * "Send welcome email" - the dual-purpose initial nudge. Only valid when:
  *   - there is a draft agreement ready to send (we'll mark it "sent")
  *   - there is no existing signed agreement
- *   - there is no active direct debit yet
+ *   - the organisation has no active direct debit yet
  *
  * The link goes to the agreement sign page; signing there chains the
  * tenant on to DD setup. Backstops the per-agreement send button on the
  * normal happy path.
  */
-/**
- * Detach the saved Direct Debit mandate from a tenancy so a fresh one
- * can be set up. Best-effort attempts to detach the payment method at
- * the PSP too (so the same card/account can't be silently re-charged
- * outside Nexus). Keeps the dd_token so the public setup link stays
- * stable.
- */
-export async function removeTenancyDdMandateAction(tenancyId) {
-	const venue = await gate();
-	const t = await getTenancyById(tenancyId, { venueId: venue.id });
-	if (!t) throw new Error("Tenancy not found.");
-	if (!t.direct_debit_mandate_id && !t.direct_debit_ready_at) {
-		return { ok: true, already: true };
-	}
-
-	// Best-effort: detach the payment method at Stripe so any future
-	// invoicer run can't silently re-charge it. Failures are logged but
-	// not surfaced - the local row gets cleared either way.
-	if (t.direct_debit_mandate_id && String(t.direct_debit_mandate_id).startsWith("pm_")) {
-		try {
-			const psp = await getStripeSettings(t.venue_id);
-			const secretKey = psp?.secret_key;
-			if (secretKey) {
-				await fetch(
-					`https://api.stripe.com/v1/payment_methods/${encodeURIComponent(t.direct_debit_mandate_id)}/detach`,
-					{
-						method: "POST",
-						headers: {
-							Authorization: `Bearer ${secretKey}`,
-							Accept: "application/json",
-						},
-						cache: "no-store",
-					},
-				);
-			}
-		} catch (err) {
-			console.error("[tenancy.removeDd] stripe detach failed", err);
-		}
-	}
-
-	await updateTenancy(t.id, {
-		direct_debit_mandate_id: null,
-		stripe_customer_id: null,
-		direct_debit_ready_at: null,
-	});
-	revalidatePath(`/admin/tenancies/${t.id}`);
-	return { ok: true };
-}
-
-/**
- * Stand-alone direct-debit setup nudge. Sends just the DD link to the
- * tenant. Refuses if there's no contact email or DD is already active,
- * but is otherwise independent of agreement state - useful for the
- * "agreement signed in person, just need the DD" path or to re-send the
- * link after a mandate failure.
- */
-export async function sendDdSetupEmailAction(tenancyId) {
-	const venue = await gate();
-	const t = await getTenancyById(tenancyId, { venueId: venue.id });
-	if (!t) throw new Error("Tenancy not found.");
-	if (!t.contact_email) {
-		throw new Error(
-			"No contact email on this tenancy. Assign a contact in the CRM, or set the organisation's primary contact.",
-		);
-	}
-	if (t.direct_debit_ready_at) {
-		throw new Error("This tenancy already has an active direct debit.");
-	}
-	// Back-fill dd_token for tenancies created before the column existed so
-	// staff don't have to recreate them just to send the email.
-	let dd_token = t.dd_token;
-	if (!dd_token) {
-		dd_token = newToken();
-		await updateTenancy(t.id, { dd_token });
-	}
-	await sendTenancyDdSetupEmail({
-		tenancy: { ...t, dd_token },
-		contactEmail: t.contact_email,
-		contactFirstName: t.contact_first_name,
-	});
-	revalidatePath(`/admin/tenancies/${t.id}`);
-	return { ok: true };
-}
-
 export async function sendWelcomeEmailAction(tenancyId) {
 	const venue = await gate();
 	const t = await getTenancyById(tenancyId, { venueId: venue.id });
@@ -394,8 +307,8 @@ export async function sendWelcomeEmailAction(tenancyId) {
 			"No contact email on this tenancy. Assign a contact in the CRM, or set the organisation's primary contact.",
 		);
 	}
-	if (t.direct_debit_ready_at) {
-		throw new Error("This tenancy already has an active direct debit.");
+	if (t.org_direct_debit_ready_at) {
+		throw new Error("This organisation already has an active direct debit.");
 	}
 	const all = await listAgreementsForTenancy(t.id);
 	if (all.some((a) => a.status === "signed")) {

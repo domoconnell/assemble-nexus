@@ -124,7 +124,7 @@ function TenancyGroup({ title, rows, muted }) {
 											signed
 										</span>
 									)}
-									{t.direct_debit_ready_at && (
+									{t.org_direct_debit_ready_at && (
 										<span className="text-[10px] uppercase tracking-[0.18em] text-primary">
 											DD ready
 										</span>

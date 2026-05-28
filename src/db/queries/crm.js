@@ -29,6 +29,72 @@ export async function getOrganisationById(id) {
 	return row ?? null;
 }
 
+/**
+ * Same as `getOrganisationByDdToken` but keyed on the org's id. Used by
+ * the CRM "send DD setup email" / "remove mandate" actions so they have
+ * the org row + primary contact email/name in one round-trip.
+ */
+export async function getOrganisationWithContact(id) {
+	if (!id) return null;
+	const [row] = await db
+		.select({
+			organisation: organisation,
+			contact_email: contact.email,
+			contact_first_name: contact.first_name,
+			contact_last_name: contact.last_name,
+		})
+		.from(organisation)
+		.leftJoin(contact, eq(contact.id, organisation.primary_contact_id))
+		.where(and(eq(organisation.id, id), isNull(organisation.deletedAt)))
+		.limit(1);
+	if (!row) return null;
+	return {
+		...row.organisation,
+		contact_email: row.contact_email ?? null,
+		contact_first_name: row.contact_first_name ?? null,
+		contact_last_name: row.contact_last_name ?? null,
+	};
+}
+
+/**
+ * Resolve an organisation by its public Direct Debit token. The
+ * no-auth setup pages live at /tenancy/[token]/direct-debit and use
+ * this to look the customer up without a session.
+ *
+ * Also pulls the primary contact's email + first name so the DD-ready
+ * email knows where to send the confirmation.
+ */
+export async function getOrganisationByDdToken(token) {
+	if (!token) return null;
+	const [row] = await db
+		.select({
+			organisation: organisation,
+			contact_email: contact.email,
+			contact_first_name: contact.first_name,
+			contact_last_name: contact.last_name,
+		})
+		.from(organisation)
+		.leftJoin(contact, eq(contact.id, organisation.primary_contact_id))
+		.where(
+			and(
+				eq(organisation.dd_token, token),
+				isNull(organisation.deletedAt),
+			),
+		)
+		.limit(1);
+	if (!row) return null;
+	return {
+		...row.organisation,
+		contact_email: row.contact_email ?? null,
+		contact_first_name: row.contact_first_name ?? null,
+		contact_last_name: row.contact_last_name ?? null,
+	};
+}
+
+export async function updateOrganisationDd(id, patch) {
+	await db.update(organisation).set(patch).where(eq(organisation.id, id));
+}
+
 /* ------------------------------------------------------------------------ */
 /* contacts on an organisation                                              */
 /* ------------------------------------------------------------------------ */

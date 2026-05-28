@@ -40,8 +40,8 @@ export async function signTenancyAgreementAction(input) {
 			ok: true,
 			already_signed: true,
 			next_url:
-				tenancy.dd_token && !tenancy.direct_debit_ready_at
-					? `/tenancy/${tenancy.dd_token}/direct-debit`
+				tenancy.org_dd_token && !tenancy.org_direct_debit_ready_at
+					? `/tenancy/${tenancy.org_dd_token}/direct-debit`
 					: null,
 		};
 	}
@@ -73,8 +73,8 @@ export async function signTenancyAgreementAction(input) {
 		ok: true,
 		already_signed: false,
 		next_url:
-			tenancy.dd_token && !tenancy.direct_debit_ready_at
-				? `/tenancy/${tenancy.dd_token}/direct-debit`
+			tenancy.org_dd_token && !tenancy.org_direct_debit_ready_at
+				? `/tenancy/${tenancy.org_dd_token}/direct-debit`
 				: null,
 	};
 }

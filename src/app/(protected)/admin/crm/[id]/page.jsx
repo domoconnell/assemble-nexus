@@ -9,6 +9,7 @@ import {
 	listExpensesForOrganisation,
 	listOrganisationsWithBalances,
 } from "@/db/queries/crm";
+import { listTenanciesForOrganisation } from "@/db/queries/tenancies";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import OrganisationDetailClient from "./client";
 
@@ -27,12 +28,13 @@ export default async function OrganisationDetailPage({ params }) {
 
 	const venue = await requireCurrentVenue();
 
-	const [contacts, bookings, events, ticketOrders, expenses, allWithBalances] = await Promise.all([
+	const [contacts, bookings, events, ticketOrders, expenses, tenancies, allWithBalances] = await Promise.all([
 		listContactsForOrganisation(org.id),
 		listBookingsForOrganisation(org.id),
 		listEventsForOrganisation(org.id),
 		listTicketOrdersForOrganisation(org.id),
 		listExpensesForOrganisation(org.id),
+		listTenanciesForOrganisation(org.id),
 		listOrganisationsWithBalances(venue.id),
 	]);
 
@@ -63,6 +65,7 @@ export default async function OrganisationDetailPage({ params }) {
 				events={events}
 				ticketOrders={ticketOrders}
 				expenses={expenses}
+				tenancies={tenancies}
 			/>
 		</div>
 	);

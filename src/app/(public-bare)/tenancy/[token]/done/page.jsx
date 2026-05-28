@@ -1,11 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { eq } from "drizzle-orm";
-import { db } from "@/db/index.js";
-import { tenancy } from "@/db/schema/entities/tenancy.js";
-import { getTenancyByDdToken } from "@/db/queries/tenancies";
+import { getOrganisationByDdToken, updateOrganisationDd } from "@/db/queries/crm";
 import { getActiveDdDriver } from "@/lib/tenancies/dd-driver";
-import { sendTenancyDdReadyEmail } from "@/utils/email/tenancy-emails";
+import { sendOrganisationDdReadyEmail } from "@/utils/email/tenancy-emails";
 
 export const dynamic = "force-dynamic";
 
@@ -14,33 +11,30 @@ export default async function DirectDebitDonePage({ params, searchParams }) {
 	const sp = await searchParams;
 	const sessionId = typeof sp?.session_id === "string" ? sp.session_id : null;
 
-	const t = await getTenancyByDdToken(token);
-	if (!t) notFound();
+	const org = await getOrganisationByDdToken(token);
+	if (!org) notFound();
 
 	let outcome = "unknown";
 	let errorMessage = null;
 
-	if (t.direct_debit_ready_at) {
+	if (org.direct_debit_ready_at) {
 		outcome = "already_ready";
 	} else if (sessionId) {
 		try {
-			const driver = await getActiveDdDriver(t.venue_id);
+			const driver = await getActiveDdDriver(org.venue_id);
 			const mandate = await driver.fetchSessionMandate(sessionId);
 			if (mandate && mandate.payment_method_id) {
 				const now = new Date();
-				await db
-					.update(tenancy)
-					.set({
-						stripe_customer_id: mandate.customer_id,
-						direct_debit_mandate_id: mandate.payment_method_id,
-						direct_debit_ready_at: now,
-					})
-					.where(eq(tenancy.id, t.id));
+				await updateOrganisationDd(org.id, {
+					stripe_customer_id: mandate.customer_id,
+					direct_debit_mandate_id: mandate.payment_method_id,
+					direct_debit_ready_at: now,
+				});
 				outcome = "saved";
-				await sendTenancyDdReadyEmail({
-					tenancy: { ...t, direct_debit_ready_at: now },
-					contactEmail: t.contact_email,
-					contactFirstName: t.contact_first_name,
+				await sendOrganisationDdReadyEmail({
+					organisation: { ...org, direct_debit_ready_at: now },
+					contactEmail: org.contact_email,
+					contactFirstName: org.contact_first_name,
 				});
 			} else {
 				outcome = "pending";

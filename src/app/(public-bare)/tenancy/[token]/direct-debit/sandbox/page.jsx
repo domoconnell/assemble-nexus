@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getTenancyByDdToken } from "@/db/queries/tenancies";
+import { getOrganisationByDdToken } from "@/db/queries/crm";
 import { getVenueById } from "@/db/queries/venue";
 import { getFakeSession } from "@/lib/tenancies/fake-dd";
 import SandboxForm from "./_form";
@@ -17,13 +17,13 @@ export default async function SandboxPage({ params, searchParams }) {
 	const sp = await searchParams;
 	const sessionId = typeof sp?.session_id === "string" ? sp.session_id : null;
 
-	const t = await getTenancyByDdToken(token);
-	if (!t) notFound();
+	const org = await getOrganisationByDdToken(token);
+	if (!org) notFound();
 
 	const session = sessionId ? await getFakeSession(sessionId) : null;
-	if (!session || session.tenancy_id !== t.id) notFound();
+	if (!session || session.organisation_id !== org.id) notFound();
 
-	const venue = await getVenueById(t.venue_id);
+	const venue = await getVenueById(org.venue_id);
 
 	if (session.status === "cancelled") {
 		return (
@@ -69,7 +69,7 @@ export default async function SandboxPage({ params, searchParams }) {
 						</div>
 						<h1 className="text-2xl font-semibold">Set up your direct debit</h1>
 						<p className="text-sm text-muted-foreground mt-1">
-							{venue?.name} - {t.organisation_name ?? "Tenancy"}
+							{venue?.name} - {org.name}
 						</p>
 					</div>
 				</div>
@@ -78,7 +78,7 @@ export default async function SandboxPage({ params, searchParams }) {
 					sessionId={session.external_id}
 					cancelHref={`/tenancy/${token}/direct-debit`}
 					accountName={
-						[t.contact_first_name, t.contact_last_name].filter(Boolean).join(" ") || ""
+						[org.contact_first_name, org.contact_last_name].filter(Boolean).join(" ") || ""
 					}
 				/>
 

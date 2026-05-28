@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db/index.js";
@@ -9,6 +10,13 @@ import { contact } from "@/db/schema/entities/contact.js";
 import { organisation_contact, ORGANISATION_CONTACT_ROLES } from "@/db/schema/entities/organisation_contact.js";
 import { requireServerSession } from "@/utils/auth/server-guard.js";
 import { requireCurrentVenue } from "@/db/queries/venue.js";
+import { getOrganisationWithContact, updateOrganisationDd } from "@/db/queries/crm.js";
+import { getStripeSettings } from "@/db/queries/settings.js";
+import { sendOrganisationDdSetupEmail } from "@/utils/email/tenancy-emails.js";
+
+function newToken() {
+	return randomBytes(24).toString("base64url");
+}
 
 async function gate() {
 	return requireServerSession();
@@ -47,9 +55,12 @@ export async function saveOrganisationAction(input) {
 		revalidatePath(`/admin/crm/${parsed.id}`);
 		return { id: parsed.id };
 	}
+	// New orgs get a stable Direct Debit setup token up front - the public
+	// `/tenancy/[token]/direct-debit` page resolves orgs by this token so
+	// it must exist before any tenancy is created against the org.
 	const [inserted] = await db
 		.insert(organisation)
-		.values(values)
+		.values({ ...values, dd_token: newToken() })
 		.returning({ id: organisation.id });
 	revalidatePath("/admin/crm");
 	return { id: inserted.id };
@@ -174,5 +185,88 @@ export async function removeContactFromOrganisationAction({ organisation_id, con
 			),
 		);
 	revalidatePath(`/admin/crm/${organisation_id}`);
+	return { ok: true };
+}
+
+/* ------------------------------------------------------------------------ */
+/* Direct Debit (mandate lives on the organisation)                          */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Email the org's primary contact a public link to set up the Direct
+ * Debit mandate. Refuses if there's no contact email or the mandate is
+ * already in place. Back-fills `dd_token` for orgs created before the
+ * column existed so staff don't have to re-create them.
+ */
+export async function sendOrganisationDdSetupEmailAction(organisationId) {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const org = await getOrganisationWithContact(organisationId);
+	if (!org || org.venue_id !== venue.id) throw new Error("Organisation not found.");
+	if (!org.contact_email) {
+		throw new Error(
+			"No contact email on this organisation. Add a primary contact in the CRM first.",
+		);
+	}
+	if (org.direct_debit_ready_at) {
+		throw new Error("This organisation already has an active direct debit.");
+	}
+	let dd_token = org.dd_token;
+	if (!dd_token) {
+		dd_token = newToken();
+		await updateOrganisationDd(org.id, { dd_token });
+	}
+	await sendOrganisationDdSetupEmail({
+		organisation: { ...org, dd_token },
+		contactEmail: org.contact_email,
+		contactFirstName: org.contact_first_name,
+	});
+	revalidatePath(`/admin/crm/${org.id}`);
+	return { ok: true };
+}
+
+/**
+ * Detach the saved DD mandate from an organisation so a fresh one can be
+ * set up. Best-effort attempts to detach the payment method at Stripe so
+ * the same account can't be silently re-charged outside Nexus. Keeps
+ * `dd_token` so the public setup link stays stable.
+ */
+export async function removeOrganisationDdMandateAction(organisationId) {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const org = await getOrganisationWithContact(organisationId);
+	if (!org || org.venue_id !== venue.id) throw new Error("Organisation not found.");
+	if (!org.direct_debit_mandate_id && !org.direct_debit_ready_at) {
+		return { ok: true, already: true };
+	}
+
+	if (org.direct_debit_mandate_id && String(org.direct_debit_mandate_id).startsWith("pm_")) {
+		try {
+			const psp = await getStripeSettings(org.venue_id);
+			const secretKey = psp?.secret_key;
+			if (secretKey) {
+				await fetch(
+					`https://api.stripe.com/v1/payment_methods/${encodeURIComponent(org.direct_debit_mandate_id)}/detach`,
+					{
+						method: "POST",
+						headers: {
+							Authorization: `Bearer ${secretKey}`,
+							Accept: "application/json",
+						},
+						cache: "no-store",
+					},
+				);
+			}
+		} catch (err) {
+			console.error("[org.removeDd] stripe detach failed", err);
+		}
+	}
+
+	await updateOrganisationDd(org.id, {
+		direct_debit_mandate_id: null,
+		stripe_customer_id: null,
+		direct_debit_ready_at: null,
+	});
+	revalidatePath(`/admin/crm/${org.id}`);
 	return { ok: true };
 }
