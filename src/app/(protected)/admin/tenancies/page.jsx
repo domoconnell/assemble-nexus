@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import { listTenancies } from "@/db/queries/tenancies";
+import { normaliseSchedule } from "@/lib/tenancies/schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -11,27 +12,36 @@ const dateFmt = new Intl.DateTimeFormat("en-GB", {
 	day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London",
 });
 
-const WEEKDAY_LABEL = { SU: "Sun", MO: "Mon", TU: "Tue", WE: "Wed", TH: "Thu", FR: "Fri", SA: "Sat" };
-
 function kindLabel(kind) {
 	return kind === "private_rental" ? "Private rental" : "Scheduled recurring";
 }
 
 function scheduleSummary(t) {
 	if (t.kind !== "scheduled_recurring") return null;
-	const rule = t.schedule_rule;
-	if (!rule?.by_weekday?.length) return null;
-	const days = rule.by_weekday.map((d) => WEEKDAY_LABEL[d] ?? d).join(", ");
-	return `${days} · ${rule.time_start}-${rule.time_end}`;
+	const rules = normaliseSchedule(t.schedule_rule);
+	if (rules.length === 0) return null;
+	if (rules.length === 1) {
+		const r = rules[0];
+		const days = (r.by_weekday ?? []).join(", ");
+		return `${days} ${r.time_start}-${r.time_end}`;
+	}
+	return `${rules.length} schedules`;
 }
 
 function rateLabel(t) {
 	if (t.kind === "private_rental") {
 		return t.monthly_rate_cents != null ? `${fmtGbp(t.monthly_rate_cents)} / month` : "-";
 	}
-	return t.per_session_rate_cents != null
-		? `${fmtGbp(t.per_session_rate_cents)} / session`
-		: "-";
+	const rules = normaliseSchedule(t.schedule_rule);
+	const rates = rules
+		.map((r) => r.per_session_rate_cents)
+		.filter((c) => c != null);
+	if (rates.length === 0) return "-";
+	const min = Math.min(...rates);
+	const max = Math.max(...rates);
+	return min === max
+		? `${fmtGbp(min)} / session`
+		: `${fmtGbp(min)}–${fmtGbp(max)} / session`;
 }
 
 export default async function TenanciesPage({ searchParams }) {

@@ -89,6 +89,7 @@ export async function issueTenancyInvoicesForToday(venueId, today = new Date()) 
 			}
 
 			let subtotal_cents = 0;
+			let uncapped_subtotal_cents = null;
 			let sessionIds = [];
 
 			if (t.kind === "private_rental") {
@@ -98,11 +99,20 @@ export async function issueTenancyInvoicesForToday(venueId, today = new Date()) 
 				const billable = sessions.filter(
 					(s) => s.status !== "cancelled" && !s.invoice_id,
 				);
-				subtotal_cents = billable.reduce(
+				const summed = billable.reduce(
 					(sum, s) => sum + (s.rate_cents_snapshot ?? 0),
 					0,
 				);
 				sessionIds = billable.map((s) => s.id);
+				if (t.monthly_override_cents != null) {
+					// Fixed monthly fee: bill the override every month and
+					// stash the would-have-been sum so the invoice can show
+					// the effective adjustment.
+					subtotal_cents = t.monthly_override_cents;
+					uncapped_subtotal_cents = summed;
+				} else {
+					subtotal_cents = summed;
+				}
 			}
 
 			if (subtotal_cents <= 0) {
@@ -117,6 +127,7 @@ export async function issueTenancyInvoicesForToday(venueId, today = new Date()) 
 				period_ym: periodYm,
 				status: "issued",
 				subtotal_cents,
+				uncapped_subtotal_cents,
 				vat_cents: 0,
 				total_cents: subtotal_cents,
 				issued_at: new Date(),

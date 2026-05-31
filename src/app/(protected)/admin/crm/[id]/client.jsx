@@ -751,6 +751,19 @@ function DirectDebitWidget({ organisation, tenancies }) {
 	);
 }
 
+function scheduledRateLabel(raw) {
+	const rules = Array.isArray(raw)
+		? raw
+		: raw && typeof raw === "object" && raw.by_weekday
+			? [{ per_session_rate_cents: null }]
+			: [];
+	const rates = rules.map((r) => r.per_session_rate_cents).filter((c) => c != null);
+	if (rates.length === 0) return "-";
+	const min = Math.min(...rates);
+	const max = Math.max(...rates);
+	return min === max ? `${fmt(min)} / session` : `${fmt(min)}–${fmt(max)} / session`;
+}
+
 function TenancyRow({ tenancy: tn }) {
 	const label = tn.label || `${tn.kind === "private_rental" ? "Private rental" : "Recurring"} · ${tn.room_name}`;
 	return (
@@ -781,9 +794,7 @@ function TenancyRow({ tenancy: tn }) {
 				<span className="text-muted-foreground">
 					{tn.kind === "private_rental"
 						? fmt(tn.monthly_rate_cents)
-						: tn.per_session_rate_cents
-							? `${fmt(tn.per_session_rate_cents)} / session`
-							: "-"}
+						: scheduledRateLabel(tn.schedule_rule)}
 				</span>
 			</div>
 		</li>

@@ -39,10 +39,29 @@ export function buildAgreementVars({ tenancy, venue }) {
 				: "",
 		per_session_rate:
 			tenancy.kind === "scheduled_recurring"
-				? fmtGbp(tenancy.per_session_rate_cents)
+				? scheduledRateRange(tenancy.schedule_rule)
 				: "",
 		invoice_day_of_month: String(tenancy.invoice_day_of_month ?? 1),
 	};
+}
+
+/**
+ * Format the per-session rate as a single figure when every rule charges
+ * the same, or "£X-£Y" when they differ. Used as the {{per_session_rate}}
+ * merge-var in agreement HTML, kept simple so admin-authored templates
+ * don't need to change.
+ */
+function scheduledRateRange(raw) {
+	const rules = Array.isArray(raw)
+		? raw
+		: raw && typeof raw === "object" && raw.by_weekday
+			? [raw]
+			: [];
+	const rates = rules.map((r) => r.per_session_rate_cents).filter((c) => c != null);
+	if (rates.length === 0) return "";
+	const min = Math.min(...rates);
+	const max = Math.max(...rates);
+	return min === max ? fmtGbp(min) : `${fmtGbp(min)} - ${fmtGbp(max)}`;
 }
 
 export function renderAgreementHtml(html, vars) {

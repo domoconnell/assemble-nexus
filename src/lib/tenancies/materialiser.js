@@ -42,10 +42,14 @@ export async function materialiseSessionsThrough(venueId, until) {
 				await insertSessions(
 					fresh.map((s) => ({
 						tenancy_id: t.id,
+						rule_id: s.rule_id,
 						starts_at: s.starts_at,
 						ends_at: s.ends_at,
 						status: "scheduled",
-						rate_cents_snapshot: t.per_session_rate_cents ?? null,
+						// Rate snapshotted from the rule that produced this
+						// occurrence; lets future rate changes apply to new
+						// sessions without re-pricing already-materialised ones.
+						rate_cents_snapshot: s.rate_cents ?? null,
 					})),
 				);
 			}

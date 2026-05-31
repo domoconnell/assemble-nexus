@@ -52,6 +52,39 @@ function dayOfMonthLabel(d) {
 	return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 }
 
+/**
+ * When `uncapped_subtotal_cents` is set, the invoice was capped (or
+ * topped-up) by the tenancy's fixed monthly override. Show the math so
+ * the customer can see the implied discount/surcharge.
+ */
+function OverrideBreakdown({ invoice }) {
+	const uncapped = invoice.uncapped_subtotal_cents;
+	if (uncapped == null) return null;
+	const billed = invoice.subtotal_cents ?? 0;
+	const delta = uncapped - billed;
+	const direction = delta > 0 ? "discount" : delta < 0 ? "surcharge" : null;
+	return (
+		<div className="rounded-md border border-foreground/10 bg-muted/20 p-3 text-xs space-y-1 max-w-md">
+			<div className="flex items-baseline justify-between gap-2">
+				<span className="text-muted-foreground">Sessions this month</span>
+				<span className="font-mono tabular-nums">{fmtGbp(uncapped)}</span>
+			</div>
+			{direction && (
+				<div className="flex items-baseline justify-between gap-2">
+					<span className="text-muted-foreground capitalize">{direction} (fixed-fee adjustment)</span>
+					<span className={`font-mono tabular-nums ${delta > 0 ? "text-primary" : "text-destructive"}`}>
+						{delta > 0 ? "−" : "+"}{fmtGbp(Math.abs(delta))}
+					</span>
+				</div>
+			)}
+			<div className="flex items-baseline justify-between gap-2 pt-1 border-t border-foreground/10">
+				<span className="font-medium">Charged</span>
+				<span className="font-mono tabular-nums font-medium">{fmtGbp(billed)}</span>
+			</div>
+		</div>
+	);
+}
+
 export default function InvoicesSection({ invoices, invoiceDayOfMonth }) {
 	const router = useRouter();
 	const [markingId, setMarkingId] = useState(null);
@@ -129,6 +162,8 @@ export default function InvoicesSection({ invoices, invoiceDayOfMonth }) {
 										<span className="text-sm font-mono">{fmtGbp(inv.total_cents)}</span>
 									</div>
 								</div>
+
+								<OverrideBreakdown invoice={inv} />
 
 								{inv.status === "paid" && inv.paid_at && (
 									<div className="text-xs text-muted-foreground">

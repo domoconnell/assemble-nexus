@@ -24,11 +24,13 @@ export const TENANCY_STATUSES = ["active", "paused", "ended"];
  *   customer's. Flat `monthly_rate_cents`, no calendar entries (the room
  *   is just theirs), one invoice per month.
  *
- *   `scheduled_recurring` - a public room is reserved on a repeating
- *   weekly pattern (e.g. Wed + Thu mornings). The materialiser generates
- *   one `tenancy_session` per occurrence; sessions block the calendar
- *   like booking_segments do. Invoice each month = sum of non-cancelled
- *   sessions in that month at `per_session_rate_cents`.
+ *   `scheduled_recurring` - a public room is reserved on one or more
+ *   recurring patterns (e.g. Wed + Thu mornings, plus 1st & 3rd Mondays
+ *   of every month). The materialiser generates one `tenancy_session`
+ *   per occurrence and tags it with the `rule_id` it came from; sessions
+ *   block the calendar like booking_segments do. Invoice each month =
+ *   sum of non-cancelled sessions in that month at each session's
+ *   snapshotted rate, itemised per rule.
  *
  * Open-ended by default - set `ends_on` to wind down.
  */
@@ -58,10 +60,30 @@ export const tenancy = pgTable(
 		// private_rental
 		monthly_rate_cents: integer("monthly_rate_cents"),
 
-		// scheduled_recurring
-		// e.g. { by_weekday: ["WE","TH"], time_start: "09:00", time_end: "13:00",
-		//        booking_type_id: "...", layout_id: "..." }
+		// scheduled_recurring. Array of rules; each rule has its own
+		// recurrence pattern, time window, and per-session rate. Shape:
+		//   [{
+		//     id: <uuid>,
+		//     kind: "weekly" | "monthly_nth",
+		//     by_weekday: ["MO","TH"],
+		//     interval: 1,                   // every N weeks/months
+		//     by_set_pos: [1,3,-1],          // monthly_nth: which occurrences in the month (-1 = last)
+		//     time_start: "09:00",
+		//     time_end:   "11:00",
+		//     per_session_rate_cents: 2000,
+		//     label: "Mon AM",               // optional human label, shown on invoices
+		//   }, …]
 		schedule_rule: jsonb("schedule_rule"),
+		// Optional fixed monthly amount for scheduled_recurring tenancies.
+		// When set, every month's invoice subtotal is this exact figure
+		// instead of summing each session's snapshotted rate. The "would-
+		// have-been" sum still lands on `tenancy_invoice.uncapped_subtotal_cents`
+		// so the invoice can show the effective adjustment.
+		monthly_override_cents: integer("monthly_override_cents"),
+		// LEGACY: tenancy-wide per-session rate. Superseded by the
+		// per-rule rate inside `schedule_rule[]`. Kept on the row during
+		// the transition window; no new code reads it. Will be dropped in
+		// a follow-up migration once back-fills + sweeps land.
 		per_session_rate_cents: integer("per_session_rate_cents"),
 
 		notes: text("notes"),
@@ -158,9 +180,15 @@ export const tenancy_session = pgTable(
 
 		status: text("status").notNull().default("scheduled"),
 
-		// Snapshot of the tenancy's per-session rate at the time the session
-		// was materialised. Lets us change the headline rate without
-		// reprice-ing already-invoiced months.
+		// The id of the schedule rule (a member of tenancy.schedule_rule[])
+		// that materialised this session. Lets the invoice group sessions
+		// per schedule for itemised lines without storing rate/description
+		// duplicates on every session row.
+		rule_id: uuid("rule_id"),
+
+		// Snapshot of the per-session rate at the time the session was
+		// materialised. Pulled from the matching rule. Frozen so changing
+		// the rule's rate later doesn't retro-price invoiced months.
 		rate_cents_snapshot: integer("rate_cents_snapshot"),
 
 		cancelled_at: timestamp("cancelled_at", { withTimezone: true }),
@@ -199,6 +227,12 @@ export const tenancy_invoice = pgTable(
 		status: text("status").notNull().default("issued"),
 
 		subtotal_cents: integer("subtotal_cents").default(0).notNull(),
+		// The "would-have-been" sum of session rates before the tenancy's
+		// monthly override (or any other cap) was applied. NULL when no
+		// override was in play - the invoicer can then assume
+		// subtotal == sessions sum. When non-null, render the invoice with
+		// an "Adjustment" line for (uncapped - subtotal).
+		uncapped_subtotal_cents: integer("uncapped_subtotal_cents"),
 		vat_cents: integer("vat_cents").default(0).notNull(),
 		total_cents: integer("total_cents").default(0).notNull(),
 

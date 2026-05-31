@@ -19,16 +19,27 @@ import {
 } from "@/shadcn/components/ui/select";
 import { DatePicker } from "@/site/booking/date-picker";
 import { createTenancyAction, updateTenancyAction } from "../actions";
+import SchedulesEditor from "./schedules-editor";
 
-const WEEKDAYS = [
-	{ key: "MO", label: "Mon" },
-	{ key: "TU", label: "Tue" },
-	{ key: "WE", label: "Wed" },
-	{ key: "TH", label: "Thu" },
-	{ key: "FR", label: "Fri" },
-	{ key: "SA", label: "Sat" },
-	{ key: "SU", label: "Sun" },
-];
+function normaliseSchedule(raw) {
+	if (Array.isArray(raw)) return raw;
+	if (raw && typeof raw === "object" && raw.by_weekday) {
+		return [{
+			id:
+				typeof crypto !== "undefined" && crypto.randomUUID
+					? crypto.randomUUID()
+					: `r_${Math.random().toString(36).slice(2, 10)}`,
+			kind: "weekly",
+			by_weekday: raw.by_weekday,
+			interval: 1,
+			time_start: raw.time_start ?? "",
+			time_end: raw.time_end ?? "",
+			per_session_rate_cents: null,
+			label: "",
+		}];
+	}
+	return [];
+}
 
 function toPounds(cents) {
 	if (cents == null) return "";
@@ -53,10 +64,8 @@ export default function TenancyForm({ organisations, rooms, initial = null }) {
 	const [endsOn, setEndsOn] = useState(initial?.ends_on ?? "");
 	const [invoiceDay, setInvoiceDay] = useState(initial?.invoice_day_of_month ?? 1);
 	const [monthlyRate, setMonthlyRate] = useState(toPounds(initial?.monthly_rate_cents));
-	const [perSessionRate, setPerSessionRate] = useState(toPounds(initial?.per_session_rate_cents));
-	const [weekdays, setWeekdays] = useState(initial?.schedule_rule?.by_weekday ?? []);
-	const [timeStart, setTimeStart] = useState(initial?.schedule_rule?.time_start ?? "");
-	const [timeEnd, setTimeEnd] = useState(initial?.schedule_rule?.time_end ?? "");
+	const [schedules, setSchedules] = useState(normaliseSchedule(initial?.schedule_rule));
+	const [monthlyOverride, setMonthlyOverride] = useState(toPounds(initial?.monthly_override_cents));
 	const [notes, setNotes] = useState(initial?.notes ?? "");
 	const [saving, setSaving] = useState(false);
 
@@ -66,15 +75,35 @@ export default function TenancyForm({ organisations, rooms, initial = null }) {
 	const [openSelect, setOpenSelect] = useState(null);
 	const selectOpen = (key) => (v) => setOpenSelect(v ? key : (openSelect === key ? null : openSelect));
 
-	function toggleWeekday(key) {
-		setWeekdays((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
-	}
-
 	async function submit(e) {
 		e.preventDefault();
 		if (!organisationId || !roomId || !startsOn) {
 			toast.error("Organisation, room and start date are required.");
 			return;
+		}
+		if (kind === "scheduled_recurring") {
+			if (schedules.length === 0) {
+				toast.error("Add at least one schedule.");
+				return;
+			}
+			for (const r of schedules) {
+				if ((r.by_weekday ?? []).length === 0) {
+					toast.error("Every schedule needs at least one weekday.");
+					return;
+				}
+				if (!r.time_start || !r.time_end) {
+					toast.error("Every schedule needs a start and end time.");
+					return;
+				}
+				if (r.per_session_rate_cents == null) {
+					toast.error("Every schedule needs a per-session rate.");
+					return;
+				}
+				if (r.kind === "monthly_nth" && (r.by_set_pos ?? []).length === 0) {
+					toast.error("Monthly schedules need at least one position picked (1st, 2nd, …).");
+					return;
+				}
+			}
 		}
 		setSaving(true);
 		try {
@@ -87,12 +116,9 @@ export default function TenancyForm({ organisations, rooms, initial = null }) {
 				ends_on: endsOn || null,
 				invoice_day_of_month: Number(invoiceDay),
 				monthly_rate_cents: kind === "private_rental" ? toCents(monthlyRate) : null,
-				per_session_rate_cents:
-					kind === "scheduled_recurring" ? toCents(perSessionRate) : null,
-				schedule_rule:
-					kind === "scheduled_recurring"
-						? { by_weekday: weekdays, time_start: timeStart, time_end: timeEnd }
-						: null,
+				schedule_rule: kind === "scheduled_recurring" ? schedules : null,
+				monthly_override_cents:
+					kind === "scheduled_recurring" ? toCents(monthlyOverride) : null,
 				notes: notes || null,
 			};
 			if (isEdit) {
@@ -102,8 +128,8 @@ export default function TenancyForm({ organisations, rooms, initial = null }) {
 					ends_on: payload.ends_on,
 					invoice_day_of_month: payload.invoice_day_of_month,
 					monthly_rate_cents: payload.monthly_rate_cents,
-					per_session_rate_cents: payload.per_session_rate_cents,
 					schedule_rule: payload.schedule_rule,
+					monthly_override_cents: payload.monthly_override_cents,
 					notes: payload.notes,
 				});
 				toast.success("Saved");
@@ -303,67 +329,46 @@ export default function TenancyForm({ organisations, rooms, initial = null }) {
 					</div>
 				</section>
 			) : (
-				<section className="rounded-lg border bg-card p-6 space-y-5">
-					<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-						Schedule & rate
-					</h2>
-					<div className="space-y-2">
-						<Label>Days of the week</Label>
-						<div className="flex flex-wrap gap-2">
-							{WEEKDAYS.map((d) => {
-								const active = weekdays.includes(d.key);
-								return (
-									<button
-										key={d.key}
-										type="button"
-										onClick={() => toggleWeekday(d.key)}
-										className={`rounded-md border px-3 py-1.5 text-sm transition ${
-											active
-												? "border-primary bg-primary/10 text-primary"
-												: "border-foreground/15 hover:border-foreground/30"
-										}`}
-									>
-										{d.label}
-									</button>
-								);
-							})}
+				<>
+					<section className="rounded-lg border bg-card p-6 space-y-4">
+						<div className="flex items-baseline justify-between gap-3 flex-wrap">
+							<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+								Schedules
+							</h2>
+							<p className="text-[11px] text-muted-foreground max-w-md">
+								One tenancy can run multiple recurring schedules - e.g. Mon
+								mornings AND the 1st & 3rd Sat of the month. Each schedule
+								has its own rate and shows as its own line on the invoice.
+							</p>
 						</div>
-					</div>
-					<div className="grid gap-4 sm:grid-cols-3">
-						<div className="space-y-2">
-							<Label htmlFor="time-start">Start time</Label>
-							<Input
-								id="time-start"
-								type="time"
-								value={timeStart}
-								onChange={(e) => setTimeStart(e.target.value)}
-								required={kind === "scheduled_recurring"}
-							/>
+						<SchedulesEditor value={schedules} onChange={setSchedules} />
+					</section>
+
+					<section className="rounded-lg border bg-card p-6 space-y-3">
+						<div className="flex items-baseline justify-between gap-3 flex-wrap">
+							<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+								Fixed monthly total (override)
+							</h2>
+							<p className="text-[11px] text-muted-foreground max-w-md">
+								Optional. When set, every invoice is this exact amount no
+								matter how many sessions fall in the month. The would-have-
+								been sum is shown on the invoice as a transparent adjustment.
+							</p>
 						</div>
-						<div className="space-y-2">
-							<Label htmlFor="time-end">End time</Label>
+						<div className="space-y-2 max-w-sm">
+							<Label htmlFor="monthly-override">Fixed monthly total (£)</Label>
 							<Input
-								id="time-end"
-								type="time"
-								value={timeEnd}
-								onChange={(e) => setTimeEnd(e.target.value)}
-								required={kind === "scheduled_recurring"}
-							/>
-						</div>
-						<div className="space-y-2">
-							<Label htmlFor="per-session-rate">Per-session rate (£)</Label>
-							<Input
-								id="per-session-rate"
+								id="monthly-override"
 								type="number"
 								min={0}
 								step="0.01"
-								value={perSessionRate}
-								onChange={(e) => setPerSessionRate(e.target.value)}
-								required={kind === "scheduled_recurring"}
+								value={monthlyOverride}
+								onChange={(e) => setMonthlyOverride(e.target.value)}
+								placeholder="Leave blank to bill per session"
 							/>
 						</div>
-					</div>
-				</section>
+					</section>
+				</>
 			)}
 
 			<section className="rounded-lg border bg-card p-6 space-y-3">

@@ -1,0 +1,1 @@
+ALTER TABLE "tenancy_session" ADD COLUMN "rule_id" uuid;

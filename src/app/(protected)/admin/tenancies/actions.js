@@ -31,6 +31,37 @@ const WeekdaySchema = z.enum(["SU", "MO", "TU", "WE", "TH", "FR", "SA"]);
 const TimeSchema = z.string().regex(/^\d{2}:\d{2}$/);
 const YmdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
+// Each element in tenancy.schedule_rule[]. A discriminated union per
+// `kind`; new kinds plug in by adding another z.object + a branch in
+// generateSessionDates.
+const ScheduleRuleSchema = z.discriminatedUnion("kind", [
+	z.object({
+		id: z.string().uuid(),
+		kind: z.literal("weekly"),
+		by_weekday: z.array(WeekdaySchema).min(1),
+		interval: z.coerce.number().int().min(1).max(52).default(1),
+		time_start: TimeSchema,
+		time_end: TimeSchema,
+		per_session_rate_cents: z.coerce.number().int().min(0),
+		label: z.string().max(80).optional().nullable(),
+	}),
+	z.object({
+		id: z.string().uuid(),
+		kind: z.literal("monthly_nth"),
+		by_weekday: z.array(WeekdaySchema).min(1),
+		// 1..4 = 1st..4th occurrence; -1 = last
+		by_set_pos: z.array(z.number().int().refine((n) => n === -1 || (n >= 1 && n <= 4), {
+			message: "by_set_pos values must be 1, 2, 3, 4, or -1 (last)",
+		})).min(1),
+		interval: z.coerce.number().int().min(1).max(12).default(1),
+		time_start: TimeSchema,
+		time_end: TimeSchema,
+		per_session_rate_cents: z.coerce.number().int().min(0),
+		label: z.string().max(80).optional().nullable(),
+	}),
+]);
+const SchedulesSchema = z.array(ScheduleRuleSchema).min(1);
+
 const CreateSchema = z
 	.object({
 		kind: z.enum(["private_rental", "scheduled_recurring"]),
@@ -42,15 +73,8 @@ const CreateSchema = z
 		ends_on: YmdSchema.optional().nullable().or(z.literal("")),
 		invoice_day_of_month: z.coerce.number().int().min(1).max(28).default(1),
 		monthly_rate_cents: z.coerce.number().int().min(0).optional().nullable(),
-		per_session_rate_cents: z.coerce.number().int().min(0).optional().nullable(),
-		schedule_rule: z
-			.object({
-				by_weekday: z.array(WeekdaySchema).min(1),
-				time_start: TimeSchema,
-				time_end: TimeSchema,
-			})
-			.optional()
-			.nullable(),
+		schedule_rule: SchedulesSchema.optional().nullable(),
+		monthly_override_cents: z.coerce.number().int().min(0).optional().nullable(),
 		notes: z.string().max(2000).optional().nullable(),
 	})
 	.refine(
@@ -63,9 +87,9 @@ const CreateSchema = z
 	.refine(
 		(d) =>
 			d.kind === "scheduled_recurring"
-				? d.schedule_rule && d.per_session_rate_cents != null
+				? Array.isArray(d.schedule_rule) && d.schedule_rule.length > 0
 				: true,
-		{ message: "Recurring tenancies need a schedule and a per-session rate.", path: ["schedule_rule"] },
+		{ message: "Recurring tenancies need at least one schedule.", path: ["schedule_rule"] },
 	);
 
 async function gate() {
@@ -93,10 +117,10 @@ export async function createTenancyAction(input) {
 		ends_on: parsed.ends_on?.trim() || null,
 		invoice_day_of_month: parsed.invoice_day_of_month,
 		monthly_rate_cents: parsed.kind === "private_rental" ? parsed.monthly_rate_cents : null,
-		per_session_rate_cents:
-			parsed.kind === "scheduled_recurring" ? parsed.per_session_rate_cents : null,
 		schedule_rule:
 			parsed.kind === "scheduled_recurring" ? parsed.schedule_rule : null,
+		monthly_override_cents:
+			parsed.kind === "scheduled_recurring" ? parsed.monthly_override_cents ?? null : null,
 		notes: parsed.notes?.trim() || null,
 	});
 	// Seed the first draft agreement from the venue template, so the admin
@@ -117,15 +141,8 @@ const UpdateSchema = z.object({
 	ends_on: YmdSchema.optional().nullable().or(z.literal("")),
 	invoice_day_of_month: z.coerce.number().int().min(1).max(28).optional(),
 	monthly_rate_cents: z.coerce.number().int().min(0).optional().nullable(),
-	per_session_rate_cents: z.coerce.number().int().min(0).optional().nullable(),
-	schedule_rule: z
-		.object({
-			by_weekday: z.array(WeekdaySchema).min(1),
-			time_start: TimeSchema,
-			time_end: TimeSchema,
-		})
-		.optional()
-		.nullable(),
+	schedule_rule: SchedulesSchema.optional().nullable(),
+	monthly_override_cents: z.coerce.number().int().min(0).optional().nullable(),
 	notes: z.string().max(2000).optional().nullable(),
 	status: z.enum(["active", "paused", "ended"]).optional(),
 });
