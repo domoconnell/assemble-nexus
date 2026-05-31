@@ -145,7 +145,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"tenancy-welcome": {
-		templateId: null,
+		templateId: "d-ba48d8bb9d634fb3ad200a07772e40c8",
 		description: "Dual-purpose welcome email. Sent when the admin clicks 'Send welcome email' on a tenancy that has a draft agreement, no signed agreement, and no active DD. Single link covers review + sign + DD setup - the sign page chains the tenant on to DD afterwards.",
 		audience: "delegate",
 		fields: {
@@ -158,7 +158,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"tenancy-agreement-send": {
-		templateId: null,
+		templateId: "d-67b01f9ef6e84bb98193441174235ac6",
 		description: "Sent when an admin sends a specific agreement (e.g. a re-issued draft after cancellation). Contains the link to review + sign; if DD is still needed the sign page chains on to it.",
 		audience: "delegate",
 		fields: {
@@ -171,7 +171,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"tenancy-agreement-signed": {
-		templateId: null,
+		templateId: "d-a6abdd31b3234d51b58235340b160789",
 		description: "Sent to a tenant after they sign an agreement digitally. Conditionally points to direct debit setup if the tenancy still needs DD.",
 		audience: "delegate",
 		fields: {
@@ -185,7 +185,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"tenancy-agreement-cancelled": {
-		templateId: null,
+		templateId: "d-374f314577e74a25b63ee5237265f7b5",
 		description: "Sent to a tenant when an admin cancels an outstanding agreement (e.g. terms changed, paperwork superseded). Lets them know not to act on the previous link.",
 		audience: "delegate",
 		fields: {
@@ -197,7 +197,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"tenancy-dd-setup": {
-		templateId: null,
+		templateId: "d-a3096cfcc2b34ccfb49d746231dd88cd",
 		description: "Stand-alone direct-debit setup nudge. Used when an admin wants to send just the DD link (e.g. agreement already signed in person, or DD mandate needs replacing without re-issuing the agreement).",
 		audience: "delegate",
 		fields: {
@@ -209,7 +209,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"tenancy-dd-ready": {
-		templateId: null,
+		templateId: "d-de4db91769154bd2bc41b268039c52a5",
 		description: "Sent to a tenant once their direct debit mandate is in place. Confirms the venue will pull funds on each invoice date.",
 		audience: "delegate",
 		fields: {
@@ -221,7 +221,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"booking-reminder": {
-		templateId: null,
+		templateId: "d-43b322e7a4434a5f87428185feb446e5",
 		description: "Sent by the daily cron at fixed offsets before a booking's first segment (currently 7 days and 1 day out). Skipped if already fired for that offset.",
 		audience: "hirer",
 		fields: {

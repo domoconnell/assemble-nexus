@@ -77,18 +77,6 @@ export const tenancy = pgTable(
 		agreement_signed_by_name: text("agreement_signed_by_name"),
 		agreement_signed_by_ip: text("agreement_signed_by_ip"),
 
-		// Public token for the standalone Direct Debit setup page. Lets
-		// the tenant manage the DD without an account, and lets the
-		// admin re-send a DD-only link without spinning up a new agreement.
-		dd_token: text("dd_token"),
-
-		// Stripe Bacs Direct Debit mandate captured after the tenant goes
-		// through the DD setup flow. `direct_debit_ready_at` is set once
-		// confirmed.
-		stripe_customer_id: text("stripe_customer_id"),
-		direct_debit_mandate_id: text("direct_debit_mandate_id"),
-		direct_debit_ready_at: timestamp("direct_debit_ready_at", { withTimezone: true }),
-
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
 		deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -98,7 +86,6 @@ export const tenancy = pgTable(
 		index("tenancy_organisation_idx").on(t.organisation_id),
 		index("tenancy_room_idx").on(t.room_id),
 		index("tenancy_agreement_token_idx").on(t.agreement_token),
-		index("tenancy_dd_token_idx").on(t.dd_token),
 	],
 );
 

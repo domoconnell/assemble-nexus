@@ -232,6 +232,7 @@ function describeStripeReference(tx, src) {
 		const ref =
 			meta.booking_reference ||
 			meta.ticket_order_reference ||
+			meta.tenancy_invoice_reference ||
 			meta.tenancy_invoice_id ||
 			meta.booking_id ||
 			meta.ticket_order_id ||

@@ -144,6 +144,9 @@ export async function issueTenancyInvoicesForToday(venueId, today = new Date()) 
 						metadata: {
 							tenancy_id: t.id,
 							tenancy_invoice_id: inv.id,
+							// Human-readable reference so the bank-tx ledger
+							// surfaces `TI-2026-XXXX` instead of the UUID.
+							tenancy_invoice_reference: inv.reference,
 							organisation_id: t.organisation_id,
 							period_ym: periodYm,
 						},
