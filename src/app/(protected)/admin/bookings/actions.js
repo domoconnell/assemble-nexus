@@ -34,9 +34,16 @@ function nullify(v) {
 const ApproveSchema = z.object({
 	booking_id: z.string().uuid(),
 	note: z.string().max(2000).optional().nullable(),
+	silent: z.boolean().optional().default(false),
 });
 
 const RejectSchema = z.object({
+	booking_id: z.string().uuid(),
+	reason: z.string().max(2000).optional().nullable(),
+	silent: z.boolean().optional().default(false),
+});
+
+const CancelSchema = z.object({
 	booking_id: z.string().uuid(),
 	reason: z.string().max(2000).optional().nullable(),
 });
@@ -113,7 +120,7 @@ export async function approveBookingAction(input) {
 		customer: cust,
 	});
 
-	if (cust) {
+	if (cust && !parsed.silent) {
 		await sendBookingApprovedEmail({
 			booking: updated,
 			customer: cust,
@@ -156,13 +163,55 @@ export async function rejectBookingAction(input) {
 	});
 
 	const [cust] = await db.select().from(customer).where(eq(customer.id, b.customer_id)).limit(1);
-	if (cust) {
+	if (cust && !parsed.silent) {
 		await sendBookingRejectedEmail({ booking: updated, customer: cust, reason: parsed.reason });
 	}
 
 	revalidatePath("/admin/bookings");
 	revalidatePath(`/admin/bookings/${b.id}`);
 	revalidatePath(`/booking/${b.reference}`);
+}
+
+/**
+ * Cancel a booking that's already past the pending stage (approved /
+ * confirmed / completed). Flips status to `cancelled`, records the
+ * actor on a booking_status_event row, and leaves segments in place so
+ * the audit trail is intact. No email is sent - the cancellation is
+ * always silent because there's no canonical "cancelled" email yet and
+ * the typical use is an internal correction. Pending bookings should
+ * use `rejectBookingAction` instead.
+ */
+export async function cancelBookingAction(input) {
+	const session = await gateAdmin();
+	const parsed = CancelSchema.parse({ ...input, reason: nullify(input.reason) });
+
+	const [b] = await db.select().from(booking).where(eq(booking.id, parsed.booking_id)).limit(1);
+	if (!b) throw new Error("Booking not found");
+	if (b.status === "pending") {
+		throw new Error("Use Reject for pending bookings.");
+	}
+	if (b.status === "cancelled" || b.status === "rejected") {
+		throw new Error(`Booking is already ${b.status}.`);
+	}
+
+	await db
+		.update(booking)
+		.set({ status: "cancelled", cancelled_at: new Date() })
+		.where(eq(booking.id, b.id));
+
+	await db.insert(booking_status_event).values({
+		booking_id: b.id,
+		from_status: b.status,
+		to_status: "cancelled",
+		actor_user_id: session.user?.id ?? null,
+		note: parsed.reason ?? null,
+	});
+
+	revalidatePath("/admin/bookings");
+	revalidatePath(`/admin/bookings/${b.id}`);
+	revalidatePath(`/booking/${b.reference}`);
+	revalidatePath("/admin/events");
+	revalidatePath("/my-bookings");
 }
 
 const MarkPaidSchema = z.object({

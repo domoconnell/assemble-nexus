@@ -8,6 +8,7 @@ import ConfirmDialog from "@/global/ui/components/confirm-dialog";
 import {
 	approveBookingAction,
 	rejectBookingAction,
+	cancelBookingAction,
 	markBookingDepositPaidOfflineAction,
 	issueBookingBalanceInvoiceAction,
 	markBookingBalancePaidOfflineAction,
@@ -36,7 +37,11 @@ export default function BookingDetailActions({
 }) {
 	const router = useRouter();
 	const [approveNote, setApproveNote] = useState("");
+	const [approveSilent, setApproveSilent] = useState(false);
 	const [rejectReason, setRejectReason] = useState("");
+	const [rejectSilent, setRejectSilent] = useState(false);
+	const [cancelReason, setCancelReason] = useState("");
+	const [cancelOpen, setCancelOpen] = useState(false);
 	const [busy, setBusy] = useState(null);
 	const [error, setError] = useState(null);
 	const [offlineDepositOpen, setOfflineDepositOpen] = useState(false);
@@ -184,11 +189,69 @@ export default function BookingDetailActions({
 		);
 	}
 
+	async function cancel() {
+		setBusy("cancel");
+		setError(null);
+		try {
+			await cancelBookingAction({ booking_id: bookingId, reason: cancelReason || null });
+			setCancelOpen(false);
+			router.refresh();
+		} catch (err) {
+			setError(err?.message || "Cancellation failed.");
+		} finally {
+			setBusy(null);
+		}
+	}
+
 	if (status !== "pending") {
+		const isTerminal = status === "cancelled" || status === "rejected";
 		return (
-			<section className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-				No actions available - this booking is{" "}
-				<span className="font-medium text-foreground">{status}</span>.
+			<section className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 space-y-3">
+				<h2 className="text-sm uppercase tracking-[0.2em] text-destructive">
+					Danger zone
+				</h2>
+				{error && (
+					<div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+						{error}
+					</div>
+				)}
+				{isTerminal ? (
+					<p className="text-sm text-muted-foreground">
+						This booking is <span className="font-medium text-foreground">{status}</span>.
+						Nothing further to do.
+					</p>
+				) : (
+					<div className="space-y-2">
+						<p className="text-sm text-foreground/80">
+							Cancelling flips this {status} booking to <strong>cancelled</strong>.
+							The customer is <strong>not</strong> emailed - they&apos;ll only see
+							the change if they revisit their booking link.
+						</p>
+						<Textarea
+							rows={3}
+							placeholder="Reason (internal note, kept on the booking history)…"
+							value={cancelReason}
+							onChange={(e) => setCancelReason(e.target.value)}
+						/>
+						<Button
+							variant="outline"
+							onClick={() => setCancelOpen(true)}
+							disabled={busy !== null}
+							className="border-destructive/40 text-destructive hover:bg-destructive/10"
+						>
+							Cancel booking
+						</Button>
+					</div>
+				)}
+				<ConfirmDialog
+					open={cancelOpen}
+					onOpenChange={setCancelOpen}
+					title="Cancel this booking?"
+					description="The booking moves to 'cancelled' silently - no email goes out. Segments and history stay on file for the audit trail."
+					confirmLabel={busy === "cancel" ? "Cancelling…" : "Cancel booking"}
+					destructive
+					onConfirm={cancel}
+				/>
 			</section>
 		);
 	}
@@ -197,7 +260,7 @@ export default function BookingDetailActions({
 		setBusy("approve");
 		setError(null);
 		try {
-			await approveBookingAction({ booking_id: bookingId, note: approveNote });
+			await approveBookingAction({ booking_id: bookingId, note: approveNote, silent: approveSilent });
 			router.refresh();
 		} catch (err) {
 			setError(err?.message || "Approval failed");
@@ -207,14 +270,18 @@ export default function BookingDetailActions({
 	}
 
 	async function reject() {
-		if (!rejectReason.trim()) {
-			setError("A short reason helps the customer understand why.");
+		if (!rejectReason.trim() && !rejectSilent) {
+			setError("A short reason helps the customer understand why - or tick \"Don't email\" to skip the email entirely.");
 			return;
 		}
 		setBusy("reject");
 		setError(null);
 		try {
-			await rejectBookingAction({ booking_id: bookingId, reason: rejectReason });
+			await rejectBookingAction({
+				booking_id: bookingId,
+				reason: rejectReason || null,
+				silent: rejectSilent,
+			});
 			router.refresh();
 		} catch (err) {
 			setError(err?.message || "Rejection failed");
@@ -241,6 +308,15 @@ export default function BookingDetailActions({
 					value={approveNote}
 					onChange={(e) => setApproveNote(e.target.value)}
 				/>
+				<label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+					<input
+						type="checkbox"
+						checked={approveSilent}
+						onChange={(e) => setApproveSilent(e.target.checked)}
+						className="rounded border-foreground/30"
+					/>
+					Don&apos;t email the customer
+				</label>
 				<Button onClick={approve} disabled={busy !== null} className="w-full">
 					{busy === "approve" ? "Approving…" : "Approve booking"}
 				</Button>
@@ -250,10 +326,21 @@ export default function BookingDetailActions({
 				<label className="text-sm font-medium">Reject</label>
 				<Textarea
 					rows={3}
-					placeholder="Reason for declining (shown to the customer)…"
+					placeholder={rejectSilent
+						? "Reason (internal note, not sent to the customer)…"
+						: "Reason for declining (shown to the customer)…"}
 					value={rejectReason}
 					onChange={(e) => setRejectReason(e.target.value)}
 				/>
+				<label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+					<input
+						type="checkbox"
+						checked={rejectSilent}
+						onChange={(e) => setRejectSilent(e.target.checked)}
+						className="rounded border-foreground/30"
+					/>
+					Don&apos;t email the customer
+				</label>
 				<Button
 					onClick={reject}
 					disabled={busy !== null}
