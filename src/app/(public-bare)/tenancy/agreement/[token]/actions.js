@@ -7,7 +7,11 @@ import {
 	getAgreementByToken,
 	updateAgreement,
 } from "@/db/queries/tenancies.js";
+import { getVenueById } from "@/db/queries/venue.js";
 import { sendTenancyAgreementSignedEmail } from "@/utils/email/tenancy-emails.js";
+import { buildAgreementVars, renderAgreementHtml } from "@/lib/tenancies/agreement.js";
+import { buildTenancyAgreementPdfBuffer } from "@/lib/tenancies/agreement-pdf.js";
+import { uploadFile } from "@/utils/files/files.server.js";
 
 const SignSchema = z.object({
 	token: z.string().min(1),
@@ -59,6 +63,35 @@ export async function signTenancyAgreementAction(input) {
 		signed_by_ip: ip,
 	});
 
+	// Render the signed agreement to PDF, persist a copy on S3 via the
+	// shared `file` table, and reuse the same buffer for the email
+	// attachment. Best-effort: if the upload fails, the agreement stays
+	// signed and the email still goes out without the attachment.
+	let pdfBuffer = null;
+	try {
+		const venue = await getVenueById(tenancy.venue_id);
+		const renderedHtml = renderAgreementHtml(
+			signed.html ?? "",
+			buildAgreementVars({ tenancy, venue }),
+		);
+		pdfBuffer = await buildTenancyAgreementPdfBuffer({
+			html: renderedHtml,
+			venue,
+			tenancy,
+			agreement: signed,
+		});
+		const orgSlug = slugify(tenancy.organisation_name) || "signed";
+		const uploaded = await uploadFile(pdfBuffer, {
+			originalName: `tenancy-agreement-${orgSlug}.pdf`,
+			mimeType: "application/pdf",
+			fileType: "tenancy-agreement",
+			isPublic: false,
+		});
+		await updateAgreement(signed.id, { pdf_file_id: uploaded.id });
+	} catch (err) {
+		console.error("[tenancy-agreement-pdf] persist failed", err?.message || err);
+	}
+
 	revalidatePath(`/tenancy/agreement/${parsed.token}`);
 	revalidatePath(`/admin/tenancies/${tenancy.id}`);
 
@@ -67,6 +100,7 @@ export async function signTenancyAgreementAction(input) {
 		agreement: signed,
 		contactEmail: tenancy.contact_email,
 		contactFirstName: tenancy.contact_first_name,
+		pdfBuffer,
 	});
 
 	return {
@@ -77,4 +111,12 @@ export async function signTenancyAgreementAction(input) {
 				? `/tenancy/${tenancy.org_dd_token}/direct-debit`
 				: null,
 	};
+}
+
+function slugify(s) {
+	return String(s ?? "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 64);
 }

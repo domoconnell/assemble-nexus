@@ -6,7 +6,7 @@ function baseUrl() {
 	return (process.env.BASE_URL || "").replace(/\/$/, "");
 }
 
-async function safeSend(templateKey, to, data) {
+async function safeSend(templateKey, to, data, { attachments } = {}) {
 	if (!to) return;
 	// Templates without a SendGrid id yet are expected during dev; skip
 	// silently rather than spamming console.error on every flow that
@@ -17,7 +17,7 @@ async function safeSend(templateKey, to, data) {
 		return;
 	}
 	try {
-		await sendTemplate(templateKey, to, data);
+		await sendTemplate(templateKey, to, data, attachments ? { attachments } : undefined);
 	} catch (err) {
 		console.error(`[email:${templateKey}]`, err?.message || err);
 	}
@@ -68,12 +68,37 @@ export async function sendTenancyAgreementSendEmail({ tenancy, agreement, contac
 	});
 }
 
-export async function sendTenancyAgreementSignedEmail({ tenancy, agreement, contactEmail, contactFirstName }) {
+/**
+ * Send the post-signature confirmation. The caller must pass `pdfBuffer`
+ * (the rendered, signed agreement) so the same bytes that just got
+ * persisted to S3 are attached to the email - one source of truth, no
+ * second render.
+ */
+export async function sendTenancyAgreementSignedEmail({
+	tenancy,
+	agreement,
+	contactEmail,
+	contactFirstName,
+	pdfBuffer,
+}) {
 	const venue = await getVenueById(tenancy.venue_id);
 	const ddUrl =
 		tenancy.org_dd_token && !tenancy.org_direct_debit_ready_at
 			? `${baseUrl()}/tenancy/${tenancy.org_dd_token}/direct-debit`
 			: "";
+
+	const attachments = pdfBuffer
+		? [
+			{
+				content: pdfBuffer.toString("base64"),
+				filename:
+					`tenancy-agreement-${slugify(tenancy.organisation_name) || "signed"}.pdf`,
+				type: "application/pdf",
+				disposition: "attachment",
+			},
+		]
+		: undefined;
+
 	await safeSend("tenancy-agreement-signed", contactEmail, {
 		venue_name: venue?.name ?? "",
 		first_name: contactFirstName ?? "",
@@ -83,7 +108,15 @@ export async function sendTenancyAgreementSignedEmail({ tenancy, agreement, cont
 			: "",
 		direct_debit_url: ddUrl,
 		needs_direct_debit: !!ddUrl,
-	});
+	}, { attachments });
+}
+
+function slugify(s) {
+	return String(s ?? "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 64);
 }
 
 export async function sendTenancyAgreementCancelledEmail({ tenancy, agreement, contactEmail, contactFirstName }) {

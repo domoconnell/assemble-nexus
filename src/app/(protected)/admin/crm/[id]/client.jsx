@@ -767,13 +767,25 @@ function TenancyRow({ tenancy: tn }) {
 					{tn.room_name}
 				</div>
 			</div>
-			<span className="text-xs text-muted-foreground">
-				{tn.kind === "private_rental"
-					? fmt(tn.monthly_rate_cents)
-					: tn.per_session_rate_cents
-						? `${fmt(tn.per_session_rate_cents)} / session`
-						: "-"}
-			</span>
+			<div className="flex items-center gap-3 text-xs">
+				{tn.latest_signed_pdf_file_id && (
+					<a
+						href={`/api/files/${tn.latest_signed_pdf_file_id}/download`}
+						target="_blank"
+						rel="noreferrer"
+						className="text-primary hover:underline"
+					>
+						Signed agreement →
+					</a>
+				)}
+				<span className="text-muted-foreground">
+					{tn.kind === "private_rental"
+						? fmt(tn.monthly_rate_cents)
+						: tn.per_session_rate_cents
+							? `${fmt(tn.per_session_rate_cents)} / session`
+							: "-"}
+				</span>
+			</div>
 		</li>
 	);
 }

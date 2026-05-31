@@ -121,6 +121,11 @@ export const tenancy_agreement = pgTable(
 		signed_at: timestamp("signed_at", { withTimezone: true }),
 		signed_by_name: text("signed_by_name"),
 		signed_by_ip: text("signed_by_ip"),
+		// Persisted snapshot of the signed agreement, rendered to PDF and
+		// uploaded to S3 via the `file` table. Populated by the sign action
+		// after a successful signature. Soft-delete-safe (set null on file
+		// deletion) so the agreement row never dangles.
+		pdf_file_id: uuid("pdf_file_id"),
 		cancelled_at: timestamp("cancelled_at", { withTimezone: true }),
 		cancelled_reason: text("cancelled_reason"),
 

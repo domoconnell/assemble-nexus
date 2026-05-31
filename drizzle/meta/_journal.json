@@ -351,6 +351,13 @@
       "when": 1780253367927,
       "tag": "0049_sturdy_stark_industries",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1780265245817,
+      "tag": "0050_clumsy_thanos",
+      "breakpoints": true
     }
   ]
 }

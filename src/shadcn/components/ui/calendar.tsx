@@ -22,14 +22,19 @@ function Calendar({
 				month: "space-y-4",
 				month_caption: "flex justify-center pt-1 relative items-center w-full",
 				caption_label: "text-sm font-medium",
-				nav: "absolute inset-x-1 flex items-center justify-between",
+				// nav overlays the (full-width) month_caption; nav must stack
+				// above it AND pass pointer events through its empty middle
+				// so the centered month label stays selectable. Without
+				// `pointer-events-auto` on the buttons, the inverse on nav
+				// would swallow their clicks too.
+				nav: "absolute inset-x-1 z-10 flex items-center justify-between pointer-events-none",
 				button_previous: cn(
 					buttonVariants({ variant: "outline" }),
-					"h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100",
+					"h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100 pointer-events-auto",
 				),
 				button_next: cn(
 					buttonVariants({ variant: "outline" }),
-					"h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100",
+					"h-7 w-7 bg-transparent p-0 opacity-70 hover:opacity-100 pointer-events-auto",
 				),
 				month_grid: "w-full border-collapse",
 				weekdays: "flex",

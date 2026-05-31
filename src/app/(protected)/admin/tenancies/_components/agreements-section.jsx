@@ -209,9 +209,21 @@ export default function AgreementsSection({ tenancy, agreements }) {
 									</div>
 								)}
 								{ag.status === "signed" && (
-									<div className="text-xs text-muted-foreground">
-										Signed by {ag.signed_by_name} on{" "}
-										{ag.signed_at ? dateTimeFmt.format(new Date(ag.signed_at)) : "-"}
+									<div className="text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
+										<span>
+											Signed by {ag.signed_by_name} on{" "}
+											{ag.signed_at ? dateTimeFmt.format(new Date(ag.signed_at)) : "-"}
+										</span>
+										{ag.pdf_file_id && (
+											<a
+												href={`/api/files/${ag.pdf_file_id}/download`}
+												className="text-primary hover:underline"
+												target="_blank"
+												rel="noreferrer"
+											>
+												Download signed PDF →
+											</a>
+										)}
 									</div>
 								)}
 								{ag.status === "cancelled" && (

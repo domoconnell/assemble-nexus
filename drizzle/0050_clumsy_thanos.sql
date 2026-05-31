@@ -1,0 +1,1 @@
+ALTER TABLE "tenancy_agreement" ADD COLUMN "pdf_file_id" uuid;

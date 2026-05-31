@@ -76,6 +76,17 @@ export async function listTenanciesForOrganisation(organisationId) {
 			invoice_day_of_month: tenancy.invoice_day_of_month,
 			room_id: tenancy.room_id,
 			room_name: room.name,
+			// `file.id` of the most-recent signed agreement's PDF, so the CRM
+			// row can offer a direct download without a second round trip.
+			latest_signed_pdf_file_id: sql`(
+				SELECT pdf_file_id FROM tenancy_agreement
+				WHERE tenancy_id = ${tenancy.id}
+					AND status = 'signed'
+					AND deleted_at IS NULL
+					AND pdf_file_id IS NOT NULL
+				ORDER BY signed_at DESC NULLS LAST
+				LIMIT 1
+			)`.as("latest_signed_pdf_file_id"),
 		})
 		.from(tenancy)
 		.innerJoin(room, eq(room.id, tenancy.room_id))

@@ -17,6 +17,7 @@ export const FILE_TYPES = new Set([
     "event-gallery",
     "invoice-pdf",
     "ticket-qr",
+    "tenancy-agreement",
     "general",
 ]);
 
