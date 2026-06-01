@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import {
-	getBoardReportRecipients,
 	getBoardReportHistory,
 } from "@/db/queries/settings";
+import { listStaffUsersSubscribedTo } from "@/db/queries/staff-notifications";
 import { currentMonthLondon, monthLabel } from "@/lib/finance/months";
-import RecipientsEditor from "./_components/recipients-editor";
 import SendNowButton from "./_components/send-now-button";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +43,7 @@ const sentDateFmt = new Intl.DateTimeFormat("en-GB", {
 export default async function BoardReportsPage() {
 	const venue = await requireCurrentVenue();
 	const [recipients, history] = await Promise.all([
-		getBoardReportRecipients(venue.id),
+		listStaffUsersSubscribedTo("monthly-board-pack"),
 		getBoardReportHistory(venue.id),
 	]);
 	const sentByYm = new Map(
@@ -119,17 +118,45 @@ export default async function BoardReportsPage() {
 			</section>
 
 			<section className="space-y-3">
-				<div>
-					<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-						Email recipients
-					</h2>
-					<p className="text-xs text-muted-foreground mt-1 max-w-prose">
-						The monthly cron sends the previous month&apos;s board pack to everyone on
-						this list. Add trustees, directors, and anyone else who needs the
-						report.
-					</p>
+				<div className="flex items-baseline justify-between gap-3 flex-wrap">
+					<div>
+						<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+							Email recipients
+						</h2>
+						<p className="text-xs text-muted-foreground mt-1 max-w-prose">
+							The monthly cron sends to every admin user who has{" "}
+							<strong>Monthly board pack</strong> ticked on{" "}
+							<Link href="/admin/users" className="underline hover:text-foreground">
+								Users
+							</Link>.
+						</p>
+					</div>
+					<Link
+						href="/admin/users"
+						className="text-xs text-muted-foreground hover:text-foreground underline"
+					>
+						Manage in Users →
+					</Link>
 				</div>
-				<RecipientsEditor initial={recipients} />
+				{recipients.length === 0 ? (
+					<div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-300">
+						No admin users are subscribed yet. Open Users and tick the box for
+						anyone who should receive the monthly pack.
+					</div>
+				) : (
+					<ul className="rounded-lg border bg-card divide-y divide-foreground/10">
+						{recipients.map((r) => (
+							<li key={r.id} className="flex items-baseline justify-between gap-3 px-4 py-3">
+								<div>
+									<div className="text-sm font-medium">
+										{`${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "—"}
+									</div>
+									<div className="text-xs text-muted-foreground">{r.email}</div>
+								</div>
+							</li>
+						))}
+					</ul>
+				)}
 			</section>
 		</div>
 	);

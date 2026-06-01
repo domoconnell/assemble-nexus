@@ -100,6 +100,12 @@
 						]
 					},
 					{
+						"section": "System",
+						"items": [
+							{ "title": "Users", "url": "/admin/users" }
+						]
+					},
+					{
 						"section": "Booking",
 						"items": [
 							{ "title": "Booking types", "url": "/admin/settings/booking-types" },

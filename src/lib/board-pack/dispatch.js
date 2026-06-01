@@ -1,8 +1,8 @@
 import {
-	getBoardReportRecipients,
 	getBoardReportHistory,
 	appendBoardReportSent,
 } from "@/db/queries/settings.js";
+import { listStaffUsersSubscribedTo } from "@/db/queries/staff-notifications.js";
 import { buildBoardPackPdf } from "./render.js";
 import { uploadBoardPackToS3 } from "./storage.js";
 import { sendBoardPackToRecipients } from "./email.js";
@@ -34,9 +34,14 @@ export async function dispatchBoardPack({
 		}
 	}
 
+	// Recipient list: when not overridden, pull every admin/staff user
+	// who hasn't opted out of `monthly-board-pack` via /admin/users.
 	const recipients = overrideRecipients
 		? overrideRecipients
-		: (await getBoardReportRecipients(venue.id))?.recipients ?? [];
+		: (await listStaffUsersSubscribedTo("monthly-board-pack")).map((u) => ({
+			email: u.email,
+			name: `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim(),
+		}));
 
 	const { buffer, data } = await buildBoardPackPdf({
 		venueId: venue.id,

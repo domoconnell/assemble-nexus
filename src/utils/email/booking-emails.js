@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { sendTemplate } from "./email.service.js";
+import { isSubscribed } from "./subscriptions.js";
 import { db } from "@/db/index.js";
 import { user } from "@/db/schema/entities/user.js";
 import { user_role } from "@/db/schema/entities/user_role.js";
@@ -82,8 +83,14 @@ async function safeSend(templateKey, to, data) {
 }
 
 async function listStaffNotificationRecipients() {
+	// Staff users with role admin/staff. We pull email_subscriptions
+	// alongside so we can drop anyone who's explicitly opted out without
+	// a second round-trip.
 	const rows = await db
-		.selectDistinct({ email: user.email })
+		.selectDistinct({
+			email: user.email,
+			email_subscriptions: user.email_subscriptions,
+		})
 		.from(user)
 		.innerJoin(user_role, eq(user_role.user_id, user.id))
 		.innerJoin(role, eq(role.id, user_role.role_id))
@@ -93,7 +100,10 @@ async function listStaffNotificationRecipients() {
 				isNull(user.deletedAt),
 			),
 		);
-	const recipients = rows.map((r) => r.email).filter(Boolean);
+	const recipients = rows
+		.filter((r) => isSubscribed(r, "booking-staff-notification"))
+		.map((r) => r.email)
+		.filter(Boolean);
 
 	const fallback = process.env.BOOKINGS_NOTIFICATION_EMAIL;
 	if (recipients.length === 0 && fallback) {
