@@ -14,6 +14,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node --env-file=.env scripts/seed.mjs",
+    "db:reset": "node --env-file=.env scripts/reset.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:smoke": "node --env-file=.env tests/smoke/run.mjs"
