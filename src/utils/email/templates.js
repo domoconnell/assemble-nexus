@@ -31,6 +31,18 @@ export const EMAIL_TEMPLATES = {
 		},
 	},
 
+	"email-verification": {
+		templateId: "d-1988874992614a30bdae0b982941a770",
+		description: "Sent to a new user after email/password signup to confirm their email is theirs. better-auth gates first sign-in on the link being clicked.",
+		audience: "any",
+		fields: {
+			venue_name: "Public venue name.",
+			verify_url: "Full URL the user clicks to verify their email.",
+			first_name: "Recipient's first name (empty for accounts without one).",
+			last_name: "Recipient's last name (empty for accounts without one).",
+		},
+	},
+
 	"auth-otp": {
 		templateId: "d-a0f5c5d0d93144d9bbe70d71bf63f3a2",
 		description: "Six-digit one-time code sent during booking and ticket checkout. Mobile-friendly alternative to the magic link - the code is entered back in the original tab so the session lands in the right browser. 10-minute expiry.",

@@ -80,11 +80,6 @@ export const tenancy = pgTable(
 		// have-been" sum still lands on `tenancy_invoice.uncapped_subtotal_cents`
 		// so the invoice can show the effective adjustment.
 		monthly_override_cents: integer("monthly_override_cents"),
-		// LEGACY: tenancy-wide per-session rate. Superseded by the
-		// per-rule rate inside `schedule_rule[]`. Kept on the row during
-		// the transition window; no new code reads it. Will be dropped in
-		// a follow-up migration once back-fills + sweeps land.
-		per_session_rate_cents: integer("per_session_rate_cents"),
 
 		notes: text("notes"),
 
@@ -140,6 +135,11 @@ export const tenancy_agreement = pgTable(
 		token: text("token").notNull(),
 
 		sent_at: timestamp("sent_at", { withTimezone: true }),
+		// When the public sign link stops working. Set to sent_at + 30 days
+		// the moment an agreement is sent; expired tokens render the
+		// public page as 404 so a forwarded email can't be acted on
+		// months later. NULL = no expiry (legacy rows, fail-open).
+		expires_at: timestamp("expires_at", { withTimezone: true }),
 		signed_at: timestamp("signed_at", { withTimezone: true }),
 		signed_by_name: text("signed_by_name"),
 		signed_by_ip: text("signed_by_ip"),
@@ -195,8 +195,9 @@ export const tenancy_session = pgTable(
 		cancelled_reason: text("cancelled_reason"),
 
 		// Once invoiced, points at the tenancy_invoice that included this
-		// session. Read-only after that.
-		invoice_id: uuid("invoice_id"),
+		// session. Read-only after that. `set null` on invoice delete so a
+		// voided/deleted invoice frees the sessions to be re-attached.
+		invoice_id: uuid("invoice_id").references(() => tenancy_invoice.id, { onDelete: "set null" }),
 
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),

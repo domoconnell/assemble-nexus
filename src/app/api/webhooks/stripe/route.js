@@ -4,6 +4,7 @@ import { db } from "@/db/index.js";
 import { tenancy_invoice } from "@/db/schema/entities/tenancy.js";
 import { organisation } from "@/db/schema/entities/organisation.js";
 import { psp_intent } from "@/db/schema/entities/psp_intent.js";
+import { webhook_event } from "@/db/schema/entities/webhook_event.js";
 import { listActiveVenues } from "@/db/queries/venue.js";
 import { getStripeSettings } from "@/db/queries/settings.js";
 import { finaliseTicketOrder } from "@/lib/ticketing/finalize.js";
@@ -56,6 +57,32 @@ export async function POST(request) {
 		event = JSON.parse(rawBody);
 	} catch {
 		return new Response("Invalid JSON", { status: 400 });
+	}
+
+	// Idempotency: dedup on event.id. The unique index on
+	// (provider, external_id) means a retried delivery hits the conflict
+	// and we bail without re-running side-effects.
+	if (event?.id) {
+		try {
+			const ins = await db
+				.insert(webhook_event)
+				.values({
+					provider: "stripe",
+					external_id: event.id,
+					event_type: event.type ?? null,
+				})
+				.onConflictDoNothing({
+					target: [webhook_event.provider, webhook_event.external_id],
+				})
+				.returning({ id: webhook_event.id });
+			if (ins.length === 0) {
+				return Response.json({ received: true, deduped: true });
+			}
+		} catch (err) {
+			console.error("[stripe-webhook] dedup insert failed", err);
+			// Proceed anyway - duplicate side-effects (e.g. invoice already
+			// paid) are guarded against in each handler.
+		}
 	}
 
 	try {
@@ -293,6 +320,9 @@ async function handleCheckoutSessionCompleted(event) {
 			stripe_customer_id: customerId,
 			direct_debit_mandate_id: paymentMethodId,
 			direct_debit_ready_at: new Date(),
+			// Burn the setup token; the public URL can't be re-used to
+			// overwrite the mandate. Admin can re-issue via the CRM page.
+			dd_token: null,
 		})
 		.where(eq(organisation.id, org.id));
 }

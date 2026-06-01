@@ -38,6 +38,10 @@ export async function signTenancyAgreementAction(input) {
 		throw new Error("This agreement has been cancelled. Contact the venue.");
 	}
 
+	if (agreement.expires_at && new Date(agreement.expires_at) < new Date()) {
+		throw new Error("This sign link has expired. Contact the venue for a fresh link.");
+	}
+
 	if (agreement.status === "signed") {
 		// Already signed; just return the next-step hint.
 		return {

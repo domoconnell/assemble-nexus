@@ -1,0 +1,2 @@
+ALTER TABLE "tenancy_session" ADD CONSTRAINT "tenancy_session_invoice_id_tenancy_invoice_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "public"."tenancy_invoice"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tenancy" DROP COLUMN "per_session_rate_cents";

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/shadcn/components/ui/button";
 import { Input } from "@/shadcn/components/ui/input";
 import { Label } from "@/shadcn/components/ui/label";
@@ -37,6 +38,11 @@ export default function SignButton({ token, chainTo }) {
 					token,
 					signed_by_name: trimmed,
 				});
+				toast.success(
+					res?.next_url
+						? "Signed. Taking you to direct debit setup…"
+						: "Agreement signed.",
+				);
 				if (res?.next_url) {
 					router.push(res.next_url);
 				} else {

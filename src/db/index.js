@@ -31,7 +31,10 @@ function createClient() {
     password: POSTGRES_PASSWORD,
     database: POSTGRES_DB,
     ssl: { ca, rejectUnauthorized: true },
-    max: 5,
+    // Tune to DigitalOcean managed-PG default of 25 connections. Leave
+    // headroom for the migrator + ad-hoc scripts. Each Next.js server
+    // dyno opens its own pool, so 12 × dynos must stay under the cap.
+    max: Number(process.env.POSTGRES_POOL_MAX) || 12,
     idle_timeout: 20,
     max_lifetime: 60 * 5,
   });

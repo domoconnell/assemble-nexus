@@ -249,9 +249,14 @@ export async function sendAgreementAction(agreementId) {
 			"No contact email on this tenancy. Assign a contact in the CRM, or set the organisation's primary contact.",
 		);
 	}
+	const now = new Date();
 	const updated = await updateAgreement(agreementId, {
 		status: "sent",
-		sent_at: new Date(),
+		sent_at: now,
+		// Sign link is good for 30 days from send. Long enough to chase a
+		// slow tenant; short enough that a forwarded link doesn't bind
+		// the org months later.
+		expires_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
 	});
 	await sendTenancyAgreementSendEmail({
 		tenancy: t,
@@ -335,9 +340,11 @@ export async function sendWelcomeEmailAction(tenancyId) {
 	if (!draft) {
 		throw new Error("No draft agreement to send. Create one first.");
 	}
+	const now = new Date();
 	const updated = await updateAgreement(draft.id, {
 		status: "sent",
-		sent_at: new Date(),
+		sent_at: now,
+		expires_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
 	});
 	await sendTenancyWelcomeEmail({
 		tenancy: t,

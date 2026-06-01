@@ -1,47 +1,53 @@
 # Go-live punch list
 
-Deep-dive audit synthesised into a prioritised list. Each item is actionable; check off as we work through tomorrow.
-
-> Filtered from raw audit findings — `.env` is correctly gitignored, ticket redemption is gated by per-event check-in code; those flagged in raw output are non-issues.
+Synthesised from the deep-dive audit. ✅ = done in this session.
 
 ---
 
 ## Blockers — must do before live
 
-- [ ] **Remove OTP logging.** `src/utils/auth/auth.js:85` logs one-time codes to stdout. One-line removal; leaks secrets to prod log aggregators.
-- [ ] **Wire error monitoring.** Sentry / Datadog / etc. Currently flying blind on production exceptions.
-- [ ] **Rate-limit auth endpoints.** Magic-link + OTP have no brute-force protection today. Per-email + per-IP throttle.
-- [ ] **Apply migrations 0047–0053 to prod DB** before deploying any code that touches the new columns.
-- [ ] **Verify all 18 SendGrid templates exist** in your SendGrid account with the `d-…` IDs in `src/utils/email/templates.js`. The 7 most recently wired need their HTML uploaded from `email_templates/`.
-- [ ] **Wire prod cron triggers** for `/crons/daily-tasks`, `/crons/bank-sync`, `/crons/monthly-report`, `/crons/square-sync`. Hitting each on a schedule with header `x-cron-secret: $CRON_SECRET`.
-- [ ] **Confirm DigitalOcean DB backups + point-in-time recovery** are enabled at the platform level.
+- [x] ✅ **OTP logging removed** — `src/utils/auth/auth.js`.
+- [ ] **Wire error monitoring** (Sentry / Bugsnag / etc). Decide on a service; both are roughly an afternoon's wiring. **Needs your call on which.**
+- [x] ✅ **Auth rate limiting** — `betterAuth.rateLimit` enabled with global 60s/30 and per-endpoint tighter caps on `/sign-in/magic-link`, `/email-otp/send-verification-otp`, `/magic-link/verify`, `/sign-in/email`.
+- [ ] **Apply migrations 0047–0056 to prod DB** before code deploy. _(Owned by you — deploy pipeline)._
+- [ ] **Verify 7 SendGrid templates exist** with the `d-…` IDs in `src/utils/email/templates.js`. HTML in `email_templates/`. _(Owned by you — SendGrid account)._
+- [ ] **Wire prod cron triggers** for `/crons/daily-tasks`, `/crons/bank-sync`, `/crons/monthly-report`, `/crons/square-sync`. _(Owned by you — DO Functions / Heroku Scheduler)._
+- [ ] **Confirm DO DB backups + PITR** at the platform level. _(Owned by you — DO console)._
 
 ## High priority
 
-- [ ] **`getAgreementById` missing soft-delete filter** — `src/db/queries/tenancies.js:241`. Currently returns deleted agreement rows.
-- [ ] **Audit soft-delete coverage** in `src/db/queries/events.js`, `finance.js`, `rooms.js`. Multiple queries flagged for missing `isNull(deletedAt)` filters.
-- [ ] **`typescript.ignoreBuildErrors: true`** in `next.config.mjs`. Decide: turn off and fix, or accept the risk knowingly.
-- [ ] **Staging smoke-test pass** — booking → approve → deposit → balance; tenancy → sign → DD → invoice. End-to-end on staging.
-- [ ] **One real Stripe live-mode card transaction** on prod.
-- [ ] **One real Bacs DD mandate capture** on prod (org-side flow).
-- [ ] **Add a second admin user** to avoid single-admin lockout risk on `dom@assemblechurch.com`.
-- [ ] **Card decline retry CTA** on `StripePaymentForm`. Currently no "try a different card" path; declined customers reload to retry.
-- [ ] **Success toast on tenancy agreement sign.** Mobile users may double-tap without confirmation.
+- [x] ✅ **`getAgreementById` soft-delete filter added.**
+- [x] ✅ **Soft-delete audit** — fixed `userCanEditEvent` in events.js and `sumBookingIncomeForMonth` in finance.js. rooms.js clean.
+- [ ] **`typescript.ignoreBuildErrors`** still `true` in `next.config.mjs`. Flipping it likely surfaces tens-to-hundreds of type errors given the codebase is .js-with-types. **Needs your call** on whether to bite that off pre-launch.
+- [ ] **Staging smoke-test pass** — booking → approve → deposit → balance; tenancy → sign → DD → invoice. _(Owned by you — staging deploy + manual run)._
+- [ ] **One real Stripe live-mode card transaction** on prod. _(Owned by you)._
+- [ ] **One real Bacs DD mandate** on prod. _(Owned by you)._
+- [ ] **Second admin user** via `/admin/users` → Add admin. _(Owned by you)._
+- [x] ✅ **Card decline retry CTA** — error block on payment form now spells out the retry path.
+- [x] ✅ **Success toast on tenancy agreement sign.**
 
 ## Medium
 
-- [ ] **Token expiry + single-use** on `tenancy_agreement.token` and `organisation.dd_token`. Currently permanent if leaked.
-- [ ] **Stripe webhook event-id dedup.** Persist `event.id`, skip duplicates. Defense in depth beyond the 5-min replay window.
-- [ ] **FK on `tenancy_session.invoice_id`** → `tenancy_invoice`. Currently no FK; orphan risk.
-- [ ] **Raise DB pool from `max: 5`** in `src/db/index.js`. Likely too low for prod load; 10–15 is a safer baseline.
-- [ ] **Email verification.** Disabled in better-auth today (`requireEmailVerification: false`). Decide: keep off (current design) or enable.
-- [ ] **`/api/auth/methods`** leaks email-existence + auth-method info. Tighten or auth-gate.
-- [ ] **Audit `next.config.experimental.staleTimes.dynamic: 180s`** — verify it doesn't cause stale data on payment / booking-status pages.
-- [ ] **BookingWidget submit confirmation** — add an explicit "we'll be in touch" state with reference number so customers know it landed.
+- [x] ✅ **Agreement token expiry** — `tenancy_agreement.expires_at` set to sent+30d. Public page + sign action reject expired tokens with a friendly "ask for a fresh link" message. `dd_token` deferred — needs a design call (stable link for tenants vs leak risk).
+- [x] ✅ **Stripe webhook event-id dedup** — new `webhook_event` table; the handler inserts on entry, returns early if conflicted.
+- [x] ✅ **FK `tenancy_session.invoice_id` → `tenancy_invoice`** added (set null on invoice delete).
+- [x] ✅ **DB connection pool** raised from 5 → 12 (env-tunable via `POSTGRES_POOL_MAX`).
+- [ ] **Email verification** — better-auth `requireEmailVerification: false` today. **Needs your call** — default-on is safer but adds a step to first-login.
+- [x] ✅ **Tighten `/api/auth/methods`** — per-IP in-memory rate limit (60s/10) prevents bulk enumeration. Returns 429 over the threshold.
+- [x] ✅ **`staleTimes.dynamic` lowered** 180s → 30s. Fixes stale "awaiting payment" UI after Stripe webhook fires.
+- [x] ✅ **Booking pending-state callout** — `/my-bookings/[id]` shows an amber "Thanks - we'll be in touch" banner with the booking reference when status is `pending`.
 
 ## Tidy-up
 
-- [ ] **Drop legacy `tenancy` columns:** `dd_token`, `stripe_customer_id`, `direct_debit_mandate_id`, `direct_debit_ready_at`, `per_session_rate_cents`. All unused; one migration.
-- [ ] **Delete stale `board_report_recipients` setting rows + `RecipientsEditor` component file** — superseded by per-user subscriptions.
-- [ ] **Payment-form mobile fix** — `grid-cols-3` on expiry/CVC is cramped on small screens; add `grid-cols-2 sm:grid-cols-3`.
-- [ ] **Expand unit-test coverage** — booking finaliser, Stripe webhook handlers, schedule engine, invoicer. Current coverage is 3 test files.
+- [x] ✅ **Dropped `tenancy.per_session_rate_cents`** (legacy DD columns already dropped in 0049).
+- [x] ✅ **Deleted `board_report_recipients` setting + `RecipientsEditor`** + the actions that touched them. Migration ran (1 row removed).
+- [x] ✅ **Payment-form mobile grid** — `grid-cols-2 sm:grid-cols-3` on expiry/CVC.
+- [ ] **Expand unit-test coverage** — deferred. Scope-heavy; suggest tackling per-feature as you add tests for the items in this list.
+
+## Migrations created this session
+
+- 0054 — `tenancy_session.invoice_id` FK + drop `tenancy.per_session_rate_cents`
+- 0055 — `webhook_event` table
+- 0056 — `tenancy_agreement.expires_at`
+
+Plus everything 0047–0053 from prior sessions that still need to land on prod.

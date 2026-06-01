@@ -75,15 +75,6 @@ export async function getChurchTransferSettings(venueId) {
 }
 
 /**
- * Email recipients for the monthly board-pack PDF cron. Stored as an
- * array of `{ email, name? }` entries so the admin UI can label trustees
- * vs directors etc.
- */
-export async function getBoardReportRecipients(venueId) {
-	return getSetting(venueId, "board_report_recipients", { recipients: [] });
-}
-
-/**
  * Log of which months have already been emailed out, keyed by `ym`.
  * The monthly cron reads this for idempotency (don't re-send) and the
  * Board reports admin page reads it to render "Sent on X" badges.

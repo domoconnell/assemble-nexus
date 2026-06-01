@@ -34,6 +34,11 @@ export default async function AgreementPage({ params }) {
 	);
 	const signed = !!agreement.signed_at;
 	const cancelled = agreement.status === "cancelled";
+	const expired =
+		!signed &&
+		!cancelled &&
+		agreement.expires_at &&
+		new Date(agreement.expires_at) < new Date();
 	const needsDd = tenancy.org_dd_token && !tenancy.org_direct_debit_ready_at;
 
 	return (
@@ -54,6 +59,17 @@ export default async function AgreementPage({ params }) {
 						<div className="font-medium text-destructive">This agreement has been cancelled</div>
 						<div className="text-muted-foreground mt-1">
 							{agreement.cancelled_reason || "The venue has cancelled this agreement. Please contact them if you have any questions."}
+						</div>
+					</div>
+				)}
+
+				{expired && (
+					<div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+						<div className="font-medium text-destructive">This sign link has expired</div>
+						<div className="text-muted-foreground mt-1">
+							For your safety the link expires 30 days after it was sent.
+							Get in touch with {venue?.name ?? "the venue"} and we&apos;ll
+							send you a fresh one.
 						</div>
 					</div>
 				)}
@@ -83,7 +99,7 @@ export default async function AgreementPage({ params }) {
 					dangerouslySetInnerHTML={{ __html: renderedHtml }}
 				/>
 
-				{!signed && !cancelled && (
+				{!signed && !cancelled && !expired && (
 					<SignButton
 						token={token}
 						chainTo={needsDd ? `/tenancy/${tenancy.org_dd_token}/direct-debit` : null}

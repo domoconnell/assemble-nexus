@@ -439,6 +439,7 @@ export async function sumBookingIncomeForMonth(venueId, monthStartDate, monthEnd
 				eq(booking.venue_id, venueId),
 				gte(booking.confirmed_at, monthStartDate),
 				sql`${booking.confirmed_at} < ${endIso}`,
+				isNull(booking.deletedAt),
 			),
 		);
 
@@ -450,6 +451,7 @@ export async function sumBookingIncomeForMonth(venueId, monthStartDate, monthEnd
 				eq(booking.venue_id, venueId),
 				gte(booking.balance_paid_at, monthStartDate),
 				sql`${booking.balance_paid_at} < ${endIso}`,
+				isNull(booking.deletedAt),
 			),
 		);
 

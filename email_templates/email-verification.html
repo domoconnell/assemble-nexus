@@ -1,0 +1,62 @@
+<!--
+  Template: email-verification
+  Audience: any (new signups confirming their email)
+  Variables:
+    {{venue_name}}      Public venue name.
+    {{verify_url}}      Full URL the user clicks to verify their email.
+    {{first_name}}      Recipient's first name (empty for accounts without one).
+    {{last_name}}       Recipient's last name (empty for accounts without one).
+-->
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#0f172a;font-size:14px;line-height:1.55;">
+  <tr>
+    <td style="padding:0 24px;">
+      {{#if first_name}}
+      <p style="margin:0 0 14px;">Hi {{first_name}},</p>
+      {{/if}}
+      <h1 style="font-size:22px;font-weight:600;margin:0 0 14px;color:#0f172a;letter-spacing:-0.3px;">
+        Confirm your email for {{venue_name}}
+      </h1>
+      <p style="margin:0 0 18px;color:#334155;">
+        We just need to check this email address really is yours. Click the
+        button below to confirm and finish setting up your account.
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:8px 24px 22px;text-align:center;">
+      <a href="{{verify_url}}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:6px;font-weight:600;font-size:14px;">
+        Confirm email →
+      </a>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:0 24px 12px;">
+      <p style="margin:0;color:#64748b;font-size:12px;">
+        Button not working? Paste this URL into your browser:
+      </p>
+      <p style="margin:6px 0 0;word-break:break-all;font-size:12px;color:#334155;">
+        <a href="{{verify_url}}" style="color:#0f766e;text-decoration:none;">{{verify_url}}</a>
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:18px 24px 0;border-top:1px solid #e2e8f0;">
+      <p style="margin:18px 0 0;font-size:12px;color:#64748b;">
+        Didn&apos;t sign up? You can safely ignore this email - no account
+        will be activated without this confirmation.
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:18px 24px 12px;">
+      <p style="margin:0;color:#0f172a;">
+        Thanks,<br />
+        {{venue_name}}
+      </p>
+    </td>
+  </tr>
+</table>

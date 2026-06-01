@@ -6,6 +6,33 @@ import { eq, and } from "drizzle-orm";
 
 const MIN_RESPONSE_TIME = 1000;
 
+// Per-IP in-memory rate limit: 10 lookups per 60s window. Stops bulk
+// email-enumeration scans. Single-instance scope is acceptable here -
+// the cost of a leak is bounded by the timing-equalised handler.
+const RATE_WINDOW_MS = 60 * 1000;
+const RATE_MAX = 10;
+const ipBuckets = globalThis.__methodsRateBuckets ?? new Map();
+globalThis.__methodsRateBuckets = ipBuckets;
+
+function clientIp(request) {
+    const fwd = request.headers.get("x-forwarded-for");
+    if (fwd) return fwd.split(",")[0].trim();
+    return request.headers.get("x-real-ip") || "unknown";
+}
+
+function checkRate(ip) {
+    const now = Date.now();
+    const bucket = ipBuckets.get(ip) ?? [];
+    const fresh = bucket.filter((t) => now - t < RATE_WINDOW_MS);
+    if (fresh.length >= RATE_MAX) {
+        ipBuckets.set(ip, fresh);
+        return false;
+    }
+    fresh.push(now);
+    ipBuckets.set(ip, fresh);
+    return true;
+}
+
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -14,12 +41,15 @@ function normaliseEmail(email) {
     return String(email || "").trim().toLowerCase();
 }
 
-function isCompanyEmail(email) {
-    return false;
-}
-
 export async function GET(request) {
     const start = Date.now();
+
+    if (!checkRate(clientIp(request))) {
+        return NextResponse.json(
+            { error: "Too many requests" },
+            { status: 429 },
+        );
+    }
 
     const { searchParams } = new URL(request.url);
     const email = normaliseEmail(searchParams.get("email"));

@@ -17,6 +17,23 @@ export const auth = betterAuth({
     advanced: {
         cookiePrefix: process.env.APP_SHORT_NAME || "app",
     },
+    // Rate-limit auth endpoints. Plugin-level overrides on magic-link
+    // (60s/5) and email-otp (60s/3) still apply. Memory-store is fine
+    // for a single-dyno deploy; switch to `storage: "secondary-storage"`
+    // with a Redis backend when we go multi-dyno.
+    rateLimit: {
+        enabled: true,
+        window: 60,
+        max: 30,
+        // Tighter ceilings on the highest-risk endpoints than the plugin
+        // defaults provide.
+        customRules: {
+            "/sign-in/magic-link": { window: 300, max: 5 },
+            "/email-otp/send-verification-otp": { window: 300, max: 5 },
+            "/magic-link/verify": { window: 60, max: 10 },
+            "/sign-in/email": { window: 300, max: 10 },
+        },
+    },
     user: {
         additionalFields: {
             level: {
@@ -29,7 +46,28 @@ export const auth = betterAuth({
     },
     emailAndPassword: {
         enabled: true,
-        requireEmailVerification: false,
+        // First sign-in is gated on the user clicking the verification
+        // link sent to their address. The `emailVerification` config
+        // below handles the send + sign-in-on-verify behaviour.
+        requireEmailVerification: true,
+    },
+    emailVerification: {
+        // Fire the verification email automatically on signup so we never
+        // end up with a user who can't log in because no email was sent.
+        sendOnSignUp: true,
+        // After the user clicks the link we sign them in immediately and
+        // bounce them on to the app. Skips an extra "now please sign in"
+        // step.
+        autoSignInAfterVerification: true,
+        sendVerificationEmail: async ({ user, url }) => {
+            const venue = await getCurrentVenue();
+            await sendTemplate("email-verification", user.email, {
+                venue_name: venue?.name ?? "",
+                verify_url: url,
+                first_name: user.first_name ?? "",
+                last_name: user.last_name ?? "",
+            });
+        },
     },
     database: drizzleAdapter(db, {
         provider: "pg",
@@ -79,10 +117,6 @@ export const auth = betterAuth({
                     .where(eq(user.email, email))
                     .limit(1);
 
-                // Log so engineers can copy the code while the SendGrid
-                // template is being set up. safeSend silently no-ops when
-                // the template ID is null.
-                console.log(`[auth-otp] ${email} → ${otp}`);
                 const venue = await getCurrentVenue();
                 await sendTemplate("auth-otp", email, {
                     venue_name: venue?.name ?? "",

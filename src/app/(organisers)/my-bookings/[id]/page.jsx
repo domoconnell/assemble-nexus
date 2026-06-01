@@ -125,6 +125,18 @@ export default async function MyBookingDetailPage({ params }) {
 					</span>
 				</div>
 
+				{b.status === "pending" && (
+					<div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
+						<div className="font-medium text-amber-700 dark:text-amber-300">
+							Thanks - we&apos;ve received your enquiry.
+						</div>
+						<div className="text-muted-foreground mt-1">
+							We&apos;ll review the dates against the calendar and email you within a working day. Reference{" "}
+							<span className="font-mono text-foreground">{b.reference}</span>.
+						</div>
+					</div>
+				)}
+
 				{linkedEvent && (
 					<Link
 						href={`/my-events/${linkedEvent.id}`}

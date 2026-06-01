@@ -242,7 +242,7 @@ export async function getAgreementById(id) {
 	const [row] = await db
 		.select()
 		.from(tenancy_agreement)
-		.where(eq(tenancy_agreement.id, id))
+		.where(and(eq(tenancy_agreement.id, id), isNull(tenancy_agreement.deletedAt)))
 		.limit(1);
 	return row ?? null;
 }

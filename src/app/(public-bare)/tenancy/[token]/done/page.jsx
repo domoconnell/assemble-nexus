@@ -29,6 +29,11 @@ export default async function DirectDebitDonePage({ params, searchParams }) {
 					stripe_customer_id: mandate.customer_id,
 					direct_debit_mandate_id: mandate.payment_method_id,
 					direct_debit_ready_at: now,
+					// Burn the setup token so the public URL can't be reused.
+					// If the org needs to change DD later, an admin clicks
+					// "Send setup email" on the CRM page, which back-fills
+					// a fresh token.
+					dd_token: null,
 				});
 				outcome = "saved";
 				await sendOrganisationDdReadyEmail({

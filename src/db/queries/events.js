@@ -263,7 +263,11 @@ export async function listEventsForHirer(userId) {
  * belong to the event's organiser).
  */
 export async function userCanEditEvent(userId, eventId) {
-	const [ev] = await db.select().from(event).where(eq(event.id, eventId)).limit(1);
+	const [ev] = await db
+		.select()
+		.from(event)
+		.where(and(eq(event.id, eventId), notDeleted(event)))
+		.limit(1);
 	if (!ev) return false;
 	if (!ev.event_organiser_id) return false;
 	const [link] = await db
