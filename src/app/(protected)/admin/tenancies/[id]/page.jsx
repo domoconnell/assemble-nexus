@@ -15,7 +15,7 @@ import {
 } from "@/db/queries/tenancies";
 import { listRoomRackHourlyRates } from "@/db/queries/room-rack-rates.js";
 import TenancyForm from "../_components/tenancy-form";
-import SessionRow from "../_components/session-row";
+import SessionsSection from "../_components/sessions-section";
 import JourneyHeader from "../_components/journey-header";
 import AgreementsSection from "../_components/agreements-section";
 import DirectDebitSection from "../_components/direct-debit-section";
@@ -24,11 +24,6 @@ import InvoicesSection from "../_components/invoices-section";
 
 export const dynamic = "force-dynamic";
 
-
-const dateFmt = new Intl.DateTimeFormat("en-GB", {
-	weekday: "short", day: "numeric", month: "short", year: "numeric",
-	hour: "2-digit", minute: "2-digit", timeZone: "Europe/London",
-});
 
 export default async function TenancyDetailPage({ params }) {
 	const { id } = await params;
@@ -121,43 +116,19 @@ export default async function TenancyDetailPage({ params }) {
 			<AgreementsSection tenancy={t} agreements={agreements} />
 
 			{hasScheduledLines && (
-				<section className="space-y-3">
-					<div className="flex items-baseline justify-between gap-3">
-						<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-							Upcoming sessions · {futureSessions.length}
-						</h2>
-					</div>
-					{futureSessions.length === 0 ? (
-						<div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-							No future sessions materialised yet. The daily cron tops these up - give it
-							a beat after creating the tenancy.
-						</div>
-					) : (
-						<ul className="rounded-lg border bg-card divide-y divide-foreground/10 overflow-hidden">
-							{futureSessions.map((s) => (
-								<SessionRow key={s.id} session={s} dateFmt={dateFmt} />
-							))}
-						</ul>
-					)}
-
-					{pastSessions.length > 0 && (
-						<details className="rounded-lg border bg-card overflow-hidden">
-							<summary className="px-4 py-3 text-sm cursor-pointer hover:bg-accent/30">
-								Recent past sessions ({pastSessions.length})
-							</summary>
-							<ul className="divide-y divide-foreground/10">
-								{pastSessions.map((s) => (
-									<SessionRow key={s.id} session={s} dateFmt={dateFmt} muted />
-								))}
-							</ul>
-						</details>
-					)}
-				</section>
+				<SessionsSection
+					tenancyId={t.id}
+					futureSessions={futureSessions}
+					pastSessions={pastSessions}
+				/>
 			)}
 
 			<InvoicesSection
 				invoices={invoices}
 				invoiceDayOfMonth={t.invoice_day_of_month}
+				tenancyId={t.id}
+				tenancyStartsOn={t.starts_on}
+				ddReady={!!t.org_direct_debit_ready_at}
 			/>
 
 			<section className="space-y-3">

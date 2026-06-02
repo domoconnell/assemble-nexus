@@ -7,6 +7,7 @@ import { booking } from "@/db/schema/entities/booking.js";
 import { ticket_order } from "@/db/schema/entities/ticket_order.js";
 import { event } from "@/db/schema/entities/event.js";
 import { expense } from "@/db/schema/entities/expense.js";
+import { tenancy, tenancy_invoice } from "@/db/schema/entities/tenancy.js";
 
 /* ------------------------------------------------------------------------ */
 /* organisations                                                            */
@@ -160,6 +161,26 @@ export async function listOrganisationsWithBalances(venueId) {
 		)
 		.groupBy(booking.organisation_id);
 
+	// they_owe_us also includes any unpaid tenancy invoice. We sum
+	// `total_cents` for issued (non-paid, non-void, non-deleted) invoices
+	// across every tenancy the org owns.
+	const tenancyInvoiceOutstanding = await db
+		.select({
+			org_id: tenancy.organisation_id,
+			amount: sql`coalesce(sum(${tenancy_invoice.total_cents}), 0)::bigint`,
+		})
+		.from(tenancy_invoice)
+		.innerJoin(tenancy, eq(tenancy.id, tenancy_invoice.tenancy_id))
+		.where(
+			and(
+				inArray(tenancy.organisation_id, ids),
+				isNull(tenancy.deletedAt),
+				isNull(tenancy_invoice.deletedAt),
+				eq(tenancy_invoice.status, "issued"),
+			),
+		)
+		.groupBy(tenancy.organisation_id);
+
 	// we_owe_them - sum of ticket revenue for events organised by the org,
 	// minus commission and platform fees that the venue keeps.
 	const ticketsForOrgEvents = await db
@@ -196,6 +217,9 @@ export async function listOrganisationsWithBalances(venueId) {
 		.groupBy(expense.organisation_id);
 
 	const owedToVenue = new Map(bookingOutstanding.map((r) => [r.org_id, Number(r.amount)]));
+	for (const r of tenancyInvoiceOutstanding) {
+		owedToVenue.set(r.org_id, (owedToVenue.get(r.org_id) ?? 0) + Number(r.amount));
+	}
 	const ticketRollup = new Map(
 		ticketsForOrgEvents.map((r) => [
 			r.org_id,

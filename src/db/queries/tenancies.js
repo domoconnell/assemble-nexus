@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db/index.js";
 import {
 	tenancy,
@@ -165,6 +165,8 @@ export async function getTenancyById(id, { venueId } = {}) {
 		.select({
 			tenancy: tenancy,
 			organisation_name: organisation.name,
+			organisation_address_lines: organisation.address_lines,
+			organisation_vat_number: organisation.vat_number,
 			// Direct Debit lives on the organisation - surface it here so
 			// the tenancy page can show the mandate status without a
 			// second round-trip.
@@ -436,6 +438,43 @@ export async function sumTenancyRentalForMonth(
 	};
 }
 
+/**
+ * Tenancy sessions in a time window for the venue, joined to room +
+ * tenancy + organisation so the dashboard's Today/This-week widget can
+ * render them next to bookings without extra round-trips. Only scheduled
+ * (i.e. not cancelled) sessions are returned — occupancy lines don't
+ * have sessions at all, so they're naturally excluded.
+ */
+export async function listTenancySessionsForRange(venueId, start, end) {
+	return db
+		.select({
+			id: tenancy_session.id,
+			tenancy_id: tenancy_session.tenancy_id,
+			starts_at: tenancy_session.starts_at,
+			ends_at: tenancy_session.ends_at,
+			room_id: room.id,
+			room_name: room.name,
+			organisation_name: organisation.name,
+			tenancy_label: tenancy.label,
+		})
+		.from(tenancy_session)
+		.innerJoin(tenancy, eq(tenancy_session.tenancy_id, tenancy.id))
+		.innerJoin(tenancy_line, eq(tenancy_session.tenancy_line_id, tenancy_line.id))
+		.innerJoin(room, eq(tenancy_line.room_id, room.id))
+		.leftJoin(organisation, eq(organisation.id, tenancy.organisation_id))
+		.where(
+			and(
+				eq(tenancy.venue_id, venueId),
+				isNull(tenancy.deletedAt),
+				isNull(tenancy_session.deletedAt),
+				eq(tenancy_session.status, "scheduled"),
+				lt(tenancy_session.starts_at, end),
+				gt(tenancy_session.ends_at, start),
+			),
+		)
+		.orderBy(asc(tenancy_session.starts_at));
+}
+
 export async function listOutstandingTenancyInvoices(venueId) {
 	return db
 		.select({
@@ -463,6 +502,43 @@ export async function listOutstandingTenancyInvoices(venueId) {
 		.orderBy(asc(tenancy_invoice.period_ym), asc(tenancy_invoice.issued_at));
 }
 
+/**
+ * Every tenancy invoice belonging to an organisation, across all of its
+ * tenancies. Used by the CRM organisation Invoices tab. Each row carries
+ * its parent tenancy's id + label so the UI can group / link back.
+ */
+export async function listInvoicesForOrganisation(organisationId) {
+	return db
+		.select({
+			id: tenancy_invoice.id,
+			tenancy_id: tenancy_invoice.tenancy_id,
+			reference: tenancy_invoice.reference,
+			period_ym: tenancy_invoice.period_ym,
+			status: tenancy_invoice.status,
+			subtotal_cents: tenancy_invoice.subtotal_cents,
+			uncapped_subtotal_cents: tenancy_invoice.uncapped_subtotal_cents,
+			rack_subtotal_cents: tenancy_invoice.rack_subtotal_cents,
+			line_discount_total_cents: tenancy_invoice.line_discount_total_cents,
+			total_cents: tenancy_invoice.total_cents,
+			issued_at: tenancy_invoice.issued_at,
+			paid_at: tenancy_invoice.paid_at,
+			stripe_payment_intent_id: tenancy_invoice.stripe_payment_intent_id,
+			dd_charge_status: tenancy_invoice.dd_charge_status,
+			dd_charged_at: tenancy_invoice.dd_charged_at,
+			tenancy_label: tenancy.label,
+		})
+		.from(tenancy_invoice)
+		.innerJoin(tenancy, eq(tenancy.id, tenancy_invoice.tenancy_id))
+		.where(
+			and(
+				eq(tenancy.organisation_id, organisationId),
+				isNull(tenancy_invoice.deletedAt),
+				isNull(tenancy.deletedAt),
+			),
+		)
+		.orderBy(desc(tenancy_invoice.period_ym), desc(tenancy_invoice.issued_at));
+}
+
 export async function listInvoicesForTenancy(tenancyId) {
 	return db
 		.select()
@@ -484,11 +560,46 @@ export async function getInvoiceForPeriod(tenancyId, periodYm) {
 			and(
 				eq(tenancy_invoice.tenancy_id, tenancyId),
 				eq(tenancy_invoice.period_ym, periodYm),
+				// Voided invoices shouldn't block re-issuing for the same
+				// period — the admin explicitly threw the old one away.
+				ne(tenancy_invoice.status, "void"),
 				isNull(tenancy_invoice.deletedAt),
 			),
 		)
 		.limit(1);
 	return row ?? null;
+}
+
+/**
+ * Detach every session linked to an invoice and put each session back
+ * in `scheduled`. Used by void + soft-delete so the work can be
+ * re-billed under a fresh invoice without leaving session rows pinned
+ * to a defunct invoice.
+ */
+export async function freeSessionsFromInvoice(invoiceId) {
+	await db
+		.update(tenancy_session)
+		.set({ invoice_id: null, status: "scheduled" })
+		.where(eq(tenancy_session.invoice_id, invoiceId));
+}
+
+/**
+ * Soft-delete a tenancy invoice. Used by the admin "Delete" button to
+ * hide an invoice entirely (the row stays for audit but `deletedAt` is
+ * set so listings and duplicate-period checks both skip it). Also frees
+ * any sessions that were attached so they can be re-billed.
+ */
+export async function softDeleteInvoice(id) {
+	await db
+		.update(tenancy_session)
+		.set({ invoice_id: null, status: "scheduled" })
+		.where(eq(tenancy_session.invoice_id, id));
+	const [row] = await db
+		.update(tenancy_invoice)
+		.set({ deletedAt: new Date() })
+		.where(eq(tenancy_invoice.id, id))
+		.returning();
+	return row;
 }
 
 export async function insertInvoice(values) {
@@ -529,11 +640,21 @@ export async function listInvoiceLines(invoiceId) {
 		.orderBy(asc(tenancy_invoice_line.sort_order), asc(tenancy_invoice_line.createdAt));
 }
 
+/**
+ * Attach a batch of sessions to an invoice — i.e. lock them in as "this
+ * has been billed". We deliberately do NOT change `status` here: a
+ * session's status is its physical state (scheduled → cancelled, or
+ * eventually "completed" after the time has passed), separate from
+ * whether it's been invoiced. The `invoice_id` column carries the
+ * billing link; `status` stays "scheduled" so the calendar and
+ * dashboard widget keep showing future sessions even after they've been
+ * billed in advance.
+ */
 export async function attachSessionsToInvoice(sessionIds, invoiceId) {
 	if (!sessionIds?.length) return;
 	await db
 		.update(tenancy_session)
-		.set({ invoice_id: invoiceId, status: "completed" })
+		.set({ invoice_id: invoiceId })
 		.where(inArray(tenancy_session.id, sessionIds));
 }
 

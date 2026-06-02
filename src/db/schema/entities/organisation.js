@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, jsonb, timestamp, index } from "drizzle-orm/pg-core";
 import { venue } from "./venue.js";
 
 export const ORGANISATION_KINDS = ["church", "business", "charity", "individual", "other"];
@@ -11,6 +11,14 @@ export const organisation = pgTable(
 		name: text("name").notNull(),
 		kind: text("kind").notNull().default("other"),
 		notes: text("notes"),
+		// Billing address rendered on tenancy invoices (each entry is one
+		// line — same shape as `venue.address_lines`). Optional; falls back
+		// to "{organisation_name}" alone when not set.
+		address_lines: jsonb("address_lines"),
+		// UK VAT number (if applicable). Rendered on the invoice. Free-text
+		// — we don't validate the format because organisations often paste
+		// it with weird whitespace.
+		vat_number: text("vat_number"),
 		// Set after a contact has been added; helps the list view show a
 		// "primary booker" without joining the contacts table on every render.
 		primary_contact_id: uuid("primary_contact_id"),

@@ -208,6 +208,24 @@ export const EMAIL_TEMPLATES = {
 		},
 	},
 
+	"tenancy-invoice": {
+		// User will wire the SendGrid template id once they've authored it.
+		// Falls back to safeSend skipping (logs "not wired in SendGrid yet").
+		templateId: "",
+		description: "Sent when an admin clicks 'Send' on a tenancy invoice. The rendered invoice PDF is attached.",
+		audience: "delegate",
+		fields: {
+			venue_name: "Public venue name.",
+			first_name: "Tenant contact's first name (may be empty).",
+			organisation_name: "Tenant organisation name.",
+			reference: "Invoice reference, e.g. TI-2026-FKIK.",
+			period: "Human-readable period, e.g. 'June 2026'.",
+			amount: "Pre-formatted amount, e.g. '£515.00'.",
+			due_label: "Pre-formatted due date or 'on receipt'.",
+			auto_billed: "Boolean - true when this invoice will be auto-charged via DD. Use with {{#if auto_billed}}.",
+		},
+	},
+
 	"tenancy-dd-setup": {
 		templateId: "d-a3096cfcc2b34ccfb49d746231dd88cd",
 		description: "Stand-alone direct-debit setup nudge. Used when an admin wants to send just the DD link (e.g. agreement already signed in person, or DD mandate needs replacing without re-issuing the agreement).",

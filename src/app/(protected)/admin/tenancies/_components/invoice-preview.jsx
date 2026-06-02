@@ -272,21 +272,21 @@ function InvoiceTable({ computed }) {
 								)}
 							</tr>
 						))}
-					</tbody>
-					<tfoot className="border-t border-foreground/10 bg-muted/20 text-sm">
+						{/* Totals rows live inside the same tbody so the divide-y
+						    border keeps applying — putting them in a <tfoot>
+						    introduced a visible gap between the last line item
+						    and the Standard rate total row. The bg tint moves
+						    onto each totals row instead. */}
 						{showReductionColumns ? (
 							<>
 								<tr>
-									<td colSpan={4} className="px-3 py-2 text-right font-medium text-muted-foreground">
+									<td colSpan={3} />
+									<td className="px-3 py-2 text-right font-medium text-muted-foreground">
 										Standard rate total
 									</td>
 									<td className="px-3 py-2 text-right font-mono tabular-nums font-medium">
 										{fmt(standardRateTotal)}
 									</td>
-									<td colSpan={3} />
-								</tr>
-								<tr>
-									<td colSpan={5} />
 									<td className="px-3 py-2 text-right font-medium text-muted-foreground">
 										Reduced total
 									</td>
@@ -304,13 +304,13 @@ function InvoiceTable({ computed }) {
 										<td
 											className={`px-3 py-2 text-right font-mono tabular-nums ${fixedFeeAdjustment > 0 ? "text-primary" : fixedFeeAdjustment < 0 ? "text-destructive" : ""}`}
 										>
-											{fixedFeeAdjustment > 0 ? "+" : fixedFeeAdjustment < 0 ? "−" : ""}
+											{fixedFeeAdjustment > 0 ? "−" : "+"}
 											{fmt(Math.abs(fixedFeeAdjustment))}
 										</td>
 										<td />
 									</tr>
 								)}
-								<tr className="border-t border-foreground/10">
+								<tr className="bg-muted/30">
 									<td colSpan={5} />
 									<td className="px-3 py-2 text-right font-semibold">Grand total</td>
 									<td className="px-3 py-2 text-right font-mono tabular-nums font-semibold">
@@ -353,13 +353,13 @@ function InvoiceTable({ computed }) {
 											<td
 												className={`px-3 py-2 text-right font-mono tabular-nums ${fixedFeeAdjustment > 0 ? "text-primary" : fixedFeeAdjustment < 0 ? "text-destructive" : ""}`}
 											>
-												{fixedFeeAdjustment > 0 ? "+" : fixedFeeAdjustment < 0 ? "−" : ""}
+												{fixedFeeAdjustment > 0 ? "−" : "+"}
 												{fmt(Math.abs(fixedFeeAdjustment))}
 											</td>
 										</tr>
 									</>
 								)}
-								<tr className="border-t border-foreground/10">
+								<tr className="bg-muted/30">
 									<td colSpan={4} className="px-3 py-2 text-right font-semibold">
 										Grand total
 									</td>
@@ -382,7 +382,7 @@ function InvoiceTable({ computed }) {
 								)}
 							</>
 						)}
-					</tfoot>
+					</tbody>
 				</table>
 				<ScrollBar orientation="horizontal" />
 			</ScrollArea>

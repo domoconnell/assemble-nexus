@@ -31,20 +31,29 @@ const OrganisationSchema = z.object({
 	name: z.string().min(1).max(200),
 	kind: z.enum(ORGANISATION_KINDS).default("other"),
 	notes: z.string().max(2000).optional().nullable(),
+	address_lines: z.array(z.string().max(200)).optional().nullable(),
+	vat_number: z.string().max(40).optional().nullable(),
 });
 
 export async function saveOrganisationAction(input) {
 	await gate();
 	const venue = await requireCurrentVenue();
+	const cleanAddress = Array.isArray(input.address_lines)
+		? input.address_lines.map((l) => (l ?? "").trim()).filter(Boolean)
+		: null;
 	const parsed = OrganisationSchema.parse({
 		...input,
 		notes: nullify(input.notes),
+		address_lines: cleanAddress && cleanAddress.length > 0 ? cleanAddress : null,
+		vat_number: nullify(input.vat_number),
 	});
 	const values = {
 		venue_id: venue.id,
 		name: parsed.name.trim(),
 		kind: parsed.kind,
 		notes: parsed.notes,
+		address_lines: parsed.address_lines,
+		vat_number: parsed.vat_number?.trim() || null,
 	};
 	if (parsed.id) {
 		await db

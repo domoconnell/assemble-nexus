@@ -9,7 +9,7 @@ import {
 	listDayActivityForMonth,
 } from "@/db/queries/bookings";
 import { getMonthlyPnl, listMonthlyPnlForRange } from "@/db/queries/finance";
-import { listOutstandingTenancyInvoices } from "@/db/queries/tenancies";
+import { listOutstandingTenancyInvoices, listTenancySessionsForRange } from "@/db/queries/tenancies";
 import { getCombinedLatestBalance, getBankInOutBetween } from "@/db/queries/bank";
 import {
 	getTopEventsBySales,
@@ -73,6 +73,7 @@ export default async function HomePage() {
 		outstandingCents,
 		segments,
 		blockouts,
+		tenancySessionsThisWeek,
 		dayActivity,
 		monthlyTrend,
 		upcomingEvents,
@@ -95,6 +96,7 @@ export default async function HomePage() {
 		sumOutstandingBalances(venue.id),
 		listSegmentsInRange(venue.id, todayStart, sevenDays),
 		listBlockoutsInRange(venue.id, todayStart, sevenDays),
+		listTenancySessionsForRange(venue.id, todayStart, sevenDays),
 		listDayActivityForMonth(venue.id, month.monthStartDate, month.monthEndDate),
 		listMonthlyPnlForRange(venue.id, { endYm: month.ym, monthsBack: 12 }),
 		listUpcomingEvents(venue.id, { limit: 10 }),
@@ -112,8 +114,8 @@ export default async function HomePage() {
 		0,
 	);
 
-	const todayItems = combineScheduleItems(segments, blockouts, todayKey, true);
-	const weekItems = combineScheduleItems(segments, blockouts, todayKey, false);
+	const todayItems = combineScheduleItems(segments, blockouts, tenancySessionsThisWeek, todayKey, true);
+	const weekItems = combineScheduleItems(segments, blockouts, tenancySessionsThisWeek, todayKey, false);
 
 	const greeting =
 		session?.user?.first_name ? `, ${session.user.first_name}` : "";
@@ -889,7 +891,7 @@ function WaterfallBox({ step }) {
 	);
 }
 
-function combineScheduleItems(segments, blockouts, todayKey, todayOnly) {
+function combineScheduleItems(segments, blockouts, tenancySessions, todayKey, todayOnly) {
 	const items = [];
 	for (const s of segments) {
 		const startsAt = new Date(s.starts_at);
@@ -905,6 +907,22 @@ function combineScheduleItems(segments, blockouts, todayKey, todayOnly) {
 			label: s.booking_reference,
 			href: `/admin/bookings/${s.booking_id}`,
 			status: s.booking_status,
+		});
+	}
+	for (const ts of tenancySessions ?? []) {
+		const startsAt = new Date(ts.starts_at);
+		const key = londonDayKey(startsAt);
+		if (todayOnly && key !== todayKey) continue;
+		items.push({
+			id: `tenancy-${ts.id}`,
+			kind: "tenancy",
+			day_key: key,
+			starts_at: startsAt,
+			ends_at: new Date(ts.ends_at),
+			room_name: ts.room_name,
+			label: ts.tenancy_label || ts.organisation_name || "Tenancy",
+			href: `/admin/tenancies/${ts.tenancy_id}`,
+			status: "scheduled",
 		});
 	}
 	for (const b of blockouts) {

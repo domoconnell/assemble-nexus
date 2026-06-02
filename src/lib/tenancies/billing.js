@@ -30,11 +30,11 @@ export function sumSessionMinutes(sessions) {
 }
 
 function formatHoursLabel(minutes) {
-	if (minutes <= 0) return "0 hours";
+	if (minutes <= 0) return "0 hrs";
 	const h = Math.floor(minutes / 60);
 	const m = minutes % 60;
 	if (h === 0) return `${m} mins`;
-	if (m === 0) return `${h} hour${h === 1 ? "" : "s"}`;
+	if (m === 0) return `${h} hr${h === 1 ? "" : "s"}`;
 	return `${h}h ${m}m`;
 }
 
@@ -76,7 +76,7 @@ function buildLineRowFields(line, billable, amountCents, rackHourlyRateCents) {
 		return {
 			rate_basis: "Occupancy",
 			rate_cents: rate,
-			quantity_label: "1 month",
+			quantity_label: "1 mnth",
 			standard_rate_subtotal_cents: rate,
 			override_description: "",
 			reduced_subtotal_cents: amountCents,

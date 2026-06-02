@@ -124,6 +124,74 @@ function slugify(s) {
 		.slice(0, 64);
 }
 
+const monthFmt = new Intl.DateTimeFormat("en-GB", {
+	month: "long",
+	year: "numeric",
+	timeZone: "Europe/London",
+});
+
+const dateFmt = new Intl.DateTimeFormat("en-GB", {
+	day: "numeric",
+	month: "long",
+	year: "numeric",
+	timeZone: "Europe/London",
+});
+
+const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
+
+function periodLabel(periodYm) {
+	if (!periodYm) return "";
+	const [y, m] = periodYm.split("-").map(Number);
+	return monthFmt.format(new Date(Date.UTC(y, m - 1, 1)));
+}
+
+/**
+ * Email an issued tenancy invoice to the tenant. Attaches the rendered
+ * PDF so the recipient gets a self-contained record.
+ */
+export async function sendTenancyInvoiceEmail({
+	tenancy,
+	invoice,
+	contactEmail,
+	contactFirstName,
+	pdfBuffer,
+}) {
+	const venue = await getVenueById(tenancy.venue_id);
+	const attachments = pdfBuffer
+		? [
+			{
+				content: pdfBuffer.toString("base64"),
+				filename: `tenancy-invoice-${invoice.reference}.pdf`,
+				type: "application/pdf",
+				disposition: "attachment",
+			},
+		]
+		: undefined;
+
+	const autoBilled = !!(
+		tenancy.auto_bill_via_dd &&
+		tenancy.org_direct_debit_ready_at &&
+		tenancy.org_direct_debit_mandate_id
+	);
+	await safeSend(
+		"tenancy-invoice",
+		contactEmail,
+		{
+			venue_name: venue?.name ?? "",
+			first_name: contactFirstName ?? "",
+			organisation_name: tenancy.organisation_name ?? "",
+			reference: invoice.reference ?? "",
+			period: periodLabel(invoice.period_ym),
+			amount: gbp.format((invoice.total_cents ?? 0) / 100),
+			due_label: invoice.issued_at
+				? `Issued ${dateFmt.format(new Date(invoice.issued_at))}`
+				: "on receipt",
+			auto_billed: autoBilled,
+		},
+		attachments ? { attachments } : undefined,
+	);
+}
+
 export async function sendTenancyAgreementCancelledEmail({ tenancy, agreement, contactEmail, contactFirstName }) {
 	const venue = await getVenueById(tenancy.venue_id);
 	await safeSend("tenancy-agreement-cancelled", contactEmail, {

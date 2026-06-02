@@ -229,7 +229,7 @@ async function run() {
 	const venues = await listActiveVenues();
 	const summary = [];
 	const today = new Date();
-	const materialiseUntil = new Date(today.getTime() + 90 * ONE_DAY_MS);
+	const materialiseUntil = new Date(today.getTime() + 365 * ONE_DAY_MS);
 
 	for (const venue of venues) {
 		try {

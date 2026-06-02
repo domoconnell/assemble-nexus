@@ -140,6 +140,72 @@ export async function getBankInOutBetween(venueId, fromDate, toDate, { accountId
 }
 
 /**
+ * Inbound bank transactions for a venue that haven't been matched to
+ * anything yet (matched_to_id is NULL). Used by the tenancy-invoice
+ * "Reconcile" dialog so admins can pick the bank line that paid the
+ * invoice. Newest-first, capped at `limit`.
+ */
+export async function listUnmatchedInboundTransactions(venueId, { limit = 50 } = {}) {
+	return db
+		.select()
+		.from(bank_transaction)
+		.where(
+			and(
+				eq(bank_transaction.venue_id, venueId),
+				eq(bank_transaction.direction, "IN"),
+				eq(bank_transaction.is_transfer, false),
+				eq(bank_transaction.is_church_transfer, false),
+				isNull(bank_transaction.matched_to_id),
+			),
+		)
+		.orderBy(
+			desc(sql`COALESCE(${bank_transaction.transaction_time}, ${bank_transaction.settled_at})`),
+		)
+		.limit(limit);
+}
+
+/**
+ * Persist the match link from a bank transaction to some other entity
+ * (currently used for `tenancy_invoice`, but the columns are typed broadly
+ * enough that bookings / ticket orders could share the same plumbing).
+ */
+export async function setBankTransactionMatch(transactionId, { matchedToId, matchedToType }) {
+	const [row] = await db
+		.update(bank_transaction)
+		.set({ matched_to_id: matchedToId, matched_to_type: matchedToType })
+		.where(eq(bank_transaction.id, transactionId))
+		.returning();
+	return row;
+}
+
+/**
+ * Reverse a reconciliation by clearing the match columns. The bank row
+ * stays — only the link is removed.
+ */
+export async function clearBankTransactionMatch(transactionId) {
+	const [row] = await db
+		.update(bank_transaction)
+		.set({ matched_to_id: null, matched_to_type: null })
+		.where(eq(bank_transaction.id, transactionId))
+		.returning();
+	return row;
+}
+
+export async function getBankTransactionMatchedTo(matchedToId, matchedToType) {
+	const [row] = await db
+		.select()
+		.from(bank_transaction)
+		.where(
+			and(
+				eq(bank_transaction.matched_to_id, matchedToId),
+				eq(bank_transaction.matched_to_type, matchedToType),
+			),
+		)
+		.limit(1);
+	return row ?? null;
+}
+
+/**
  * Paginated transaction list, newest first by settled_at (falls back to
  * transaction_time for items that haven't settled).
  */

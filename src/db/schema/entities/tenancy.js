@@ -285,6 +285,15 @@ export const tenancy_invoice = pgTable(
 		issued_at: timestamp("issued_at", { withTimezone: true }).defaultNow().notNull(),
 		paid_at: timestamp("paid_at", { withTimezone: true }),
 
+		// When we submit a Stripe Bacs PaymentIntent against the org's DD
+		// mandate, the resulting `pi_...` id + its status snapshot live
+		// here so the UI can show whether a charge has been initiated, is
+		// processing, succeeded or failed. dd_charged_at = the moment we
+		// submitted (not when it settled — Bacs takes 3 working days).
+		stripe_payment_intent_id: text("stripe_payment_intent_id"),
+		dd_charge_status: text("dd_charge_status"), // pending|processing|succeeded|failed|null
+		dd_charged_at: timestamp("dd_charged_at", { withTimezone: true }),
+
 		notes: text("notes"),
 
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

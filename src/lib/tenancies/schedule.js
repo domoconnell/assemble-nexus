@@ -39,10 +39,39 @@ function parseHm(s) {
 	return { h, m };
 }
 
+/**
+ * Offset (in ms) of Europe/London at the given moment. Positive in BST
+ * (summer = UTC+1), zero in GMT. Uses Intl so we don't bring in a TZ
+ * library just to handle DST.
+ */
+function londonOffsetMs(at) {
+	const parts = new Intl.DateTimeFormat("en", {
+		timeZone: "Europe/London",
+		timeZoneName: "longOffset",
+	}).formatToParts(at);
+	const offsetPart = parts.find((p) => p.type === "timeZoneName")?.value ?? "GMT";
+	const m = offsetPart.match(/GMT([+-])(\d{2}):(\d{2})/);
+	if (!m) return 0;
+	const sign = m[1] === "+" ? 1 : -1;
+	const hours = parseInt(m[2], 10);
+	const minutes = parseInt(m[3], 10);
+	return sign * (hours * 60 + minutes) * 60 * 1000;
+}
+
+/**
+ * Build a UTC `Date` whose wall-clock representation in Europe/London is
+ * the supplied year/month/day/hour/minute. DST-safe — we look up the
+ * London offset at the candidate moment and back-correct. Used so admins
+ * who type "08:45" on the schedule editor see "08:45" on the calendar
+ * regardless of whether the session falls in BST or GMT.
+ */
 function setTime(date, hm) {
-	const out = new Date(date);
-	out.setUTCHours(hm.h, hm.m, 0, 0);
-	return out;
+	const year = date.getUTCFullYear();
+	const month = date.getUTCMonth();
+	const day = date.getUTCDate();
+	const guess = Date.UTC(year, month, day, hm.h, hm.m, 0);
+	const offset = londonOffsetMs(new Date(guess));
+	return new Date(guess - offset);
 }
 
 function startOfUtcDay(date) {

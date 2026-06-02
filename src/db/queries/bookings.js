@@ -10,6 +10,7 @@ import { customer } from "@/db/schema/entities/customer.js";
 import { room } from "@/db/schema/entities/room.js";
 import { room_blockout } from "@/db/schema/entities/room_blockout.js";
 import { room_blockout_room } from "@/db/schema/entities/room_blockout_room.js";
+import { tenancy, tenancy_session } from "@/db/schema/entities/tenancy.js";
 import { capacity_layout } from "@/db/schema/entities/capacity_layout.js";
 import { deposit_policy } from "@/db/schema/entities/deposit_policy.js";
 import { event } from "@/db/schema/entities/event.js";
@@ -497,10 +498,27 @@ export async function listBlockoutsInRange(venueId, start, end) {
 export async function listDayActivityForMonth(venueId, monthStartDate, monthEndDate) {
 	const start = monthStartDate;
 	const end = monthEndDate;
-	const [segments, events, blockoutRows] = await Promise.all([
+	const [segments, events, blockoutRows, tenancySessions] = await Promise.all([
 		listSegmentsInRange(venueId, start, end),
 		listEventsInRange(venueId, start, end),
 		listBlockoutsInRange(venueId, start, end),
+		// Tenancy sessions go on the heatmap too — they're real bookings
+		// against the calendar even though they were materialised from a
+		// tenancy schedule rather than a one-off booking row.
+		db
+			.select({ starts_at: tenancy_session.starts_at })
+			.from(tenancy_session)
+			.innerJoin(tenancy, eq(tenancy_session.tenancy_id, tenancy.id))
+			.where(
+				and(
+					eq(tenancy.venue_id, venueId),
+					isNull(tenancy.deletedAt),
+					isNull(tenancy_session.deletedAt),
+					eq(tenancy_session.status, "scheduled"),
+					lt(tenancy_session.starts_at, end),
+					gt(tenancy_session.ends_at, start),
+				),
+			),
 	]);
 	const blockouts = blockoutRows;
 
@@ -521,6 +539,9 @@ export async function listDayActivityForMonth(venueId, monthStartDate, monthEndD
 
 	for (const s of segments) {
 		touch(dayKey(new Date(s.starts_at)), "bookings");
+	}
+	for (const ts of tenancySessions) {
+		touch(dayKey(new Date(ts.starts_at)), "bookings");
 	}
 	for (const ev of events) {
 		if (ev.starts_at) touch(dayKey(new Date(ev.starts_at)), "events");

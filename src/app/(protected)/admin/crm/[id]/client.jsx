@@ -32,6 +32,7 @@ import {
 	sendOrganisationDdSetupEmailAction,
 	removeOrganisationDdMandateAction,
 } from "../actions";
+import OrganisationInvoices from "./_components/organisation-invoices";
 
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 const fmt = (c) => gbp.format((c ?? 0) / 100);
@@ -73,6 +74,7 @@ export default function OrganisationDetailClient({
 	ticketOrders,
 	expenses,
 	tenancies = [],
+	tenancyInvoices = [],
 }) {
 	const router = useRouter();
 	const [pending, startTransition] = useTransition();
@@ -87,17 +89,27 @@ export default function OrganisationDetailClient({
 			name: organisation.name,
 			kind: organisation.kind,
 			notes: organisation.notes ?? "",
+			address_text: Array.isArray(organisation.address_lines)
+				? organisation.address_lines.join("\n")
+				: "",
+			vat_number: organisation.vat_number ?? "",
 		});
 	}
 	function saveOrg(e) {
 		e?.preventDefault();
 		startTransition(async () => {
 			try {
+				const address_lines = (editingOrg.address_text ?? "")
+					.split("\n")
+					.map((l) => l.trim())
+					.filter(Boolean);
 				await saveOrganisationAction({
 					id: editingOrg.id,
 					name: editingOrg.name,
 					kind: editingOrg.kind,
 					notes: editingOrg.notes || null,
+					address_lines: address_lines.length > 0 ? address_lines : null,
+					vat_number: editingOrg.vat_number || null,
 				});
 				toast.success("Saved");
 				setEditingOrg(false);
@@ -211,6 +223,7 @@ export default function OrganisationDetailClient({
 					<TabsTrigger value="events">Events ({events.length})</TabsTrigger>
 					<TabsTrigger value="tickets">Ticket orders ({ticketOrders.length})</TabsTrigger>
 					<TabsTrigger value="tenancies">Tenancies ({tenancies.length})</TabsTrigger>
+					<TabsTrigger value="invoices">Invoices ({tenancyInvoices.length})</TabsTrigger>
 					<TabsTrigger value="expenses">Expenses ({expenses.length})</TabsTrigger>
 				</TabsList>
 
@@ -218,13 +231,44 @@ export default function OrganisationDetailClient({
 					<section className="rounded-lg border bg-card p-6 space-y-3">
 						<div className="flex items-baseline justify-between">
 							<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
-								Notes
+								Billing details
 							</h2>
 							<Button size="sm" variant="ghost" onClick={openEditOrg}>Edit</Button>
 						</div>
-						<p className="text-sm whitespace-pre-line">
-							{organisation.notes || <span className="text-muted-foreground italic">No notes yet.</span>}
-						</p>
+						<div className="grid gap-4 sm:grid-cols-2 text-sm">
+							<div className="space-y-1">
+								<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+									Billing address
+								</div>
+								{Array.isArray(organisation.address_lines) && organisation.address_lines.length > 0 ? (
+									<address className="not-italic whitespace-pre-line text-foreground">
+										{organisation.address_lines.join("\n")}
+									</address>
+								) : (
+									<span className="text-muted-foreground italic">No address on file.</span>
+								)}
+							</div>
+							<div className="space-y-1">
+								<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+									VAT number
+								</div>
+								<div>
+									{organisation.vat_number ? (
+										<span className="font-mono">{organisation.vat_number}</span>
+									) : (
+										<span className="text-muted-foreground italic">Not registered / not provided.</span>
+									)}
+								</div>
+							</div>
+						</div>
+						<div className="pt-3 border-t border-foreground/10 space-y-1">
+							<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+								Notes
+							</div>
+							<p className="text-sm whitespace-pre-line">
+								{organisation.notes || <span className="text-muted-foreground italic">No notes yet.</span>}
+							</p>
+						</div>
 					</section>
 
 					<DirectDebitWidget organisation={organisation} tenancies={tenancies} />
@@ -358,6 +402,13 @@ export default function OrganisationDetailClient({
 					)}
 				</TabsContent>
 
+				<TabsContent value="invoices">
+					<OrganisationInvoices
+						invoices={tenancyInvoices}
+						ddReady={!!organisation.direct_debit_ready_at}
+					/>
+				</TabsContent>
+
 				<TabsContent value="expenses">
 					<ListTable
 						emptyMessage="No expenses paid to this organisation yet."
@@ -405,6 +456,29 @@ export default function OrganisationDetailClient({
 										<SelectItem value="other">Other</SelectItem>
 									</SelectContent>
 								</Select>
+							</div>
+							<div className="space-y-1.5">
+								<Label htmlFor="o-address">Billing address</Label>
+								<Textarea
+									id="o-address"
+									rows={4}
+									value={editingOrg.address_text}
+									onChange={(e) => setEditingOrg({ ...editingOrg, address_text: e.target.value })}
+									placeholder="One line per address line — e.g. 123 High Street\nNewark NG24 1AA"
+								/>
+								<p className="text-[11px] text-muted-foreground">
+									Shown on tenancy invoices alongside the organisation name.
+								</p>
+							</div>
+							<div className="space-y-1.5">
+								<Label htmlFor="o-vat">VAT number (optional)</Label>
+								<Input
+									id="o-vat"
+									value={editingOrg.vat_number}
+									onChange={(e) => setEditingOrg({ ...editingOrg, vat_number: e.target.value })}
+									placeholder="e.g. GB123456789"
+									maxLength={40}
+								/>
 							</div>
 							<div className="space-y-1.5">
 								<Label htmlFor="o-notes">Notes</Label>
