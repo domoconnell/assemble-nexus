@@ -21,6 +21,16 @@ function rateLabel(t) {
 	if (t.monthly_override_cents != null) {
 		return `${fmtGbp(t.monthly_override_cents)} / month (fixed)`;
 	}
+	const fixed = t.fixed_monthly_cents ?? 0;
+	if (fixed > 0 && !t.has_variable_lines) {
+		return `${fmtGbp(fixed)} / month`;
+	}
+	if (fixed > 0 && t.has_variable_lines) {
+		return `${fmtGbp(fixed)} / month + usage`;
+	}
+	if (t.has_variable_lines) {
+		return "Varies with usage";
+	}
 	return null;
 }
 

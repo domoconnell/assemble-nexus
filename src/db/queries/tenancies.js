@@ -98,6 +98,28 @@ export async function listTenancies(venueId, { status, includeEnded = false } = 
 				SELECT COUNT(*)::int FROM tenancy_line
 				WHERE tenancy_id = ${tenancy.id} AND deleted_at IS NULL
 			)`.as("line_count"),
+			// Sum the predictable per-month components of this tenancy:
+			// occupancy lines (always monthly) + scheduled lines on
+			// fixed_monthly billing. Per-session / per-hour lines vary
+			// month-to-month so they don't contribute to a headline figure.
+			fixed_monthly_cents: sql`(
+				SELECT COALESCE(SUM(
+					COALESCE(monthly_rate_cents, 0)
+					+ CASE WHEN billing_mode = 'fixed_monthly'
+						THEN COALESCE(fixed_monthly_rate_cents, 0)
+						ELSE 0 END
+				), 0)::int
+				FROM tenancy_line
+				WHERE tenancy_id = ${tenancy.id} AND deleted_at IS NULL
+			)`.as("fixed_monthly_cents"),
+			// True if any line bills per-session or per-hour, i.e. the
+			// monthly total will vary.
+			has_variable_lines: sql`EXISTS (
+				SELECT 1 FROM tenancy_line
+				WHERE tenancy_id = ${tenancy.id} AND deleted_at IS NULL
+					AND kind = 'scheduled'
+					AND billing_mode IN ('per_session', 'per_hour')
+			)`.as("has_variable_lines"),
 			agreement_signed_at: sql`(
 				SELECT MAX(signed_at) FROM tenancy_agreement
 				WHERE tenancy_id = ${tenancy.id}
