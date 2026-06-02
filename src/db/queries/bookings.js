@@ -5,6 +5,7 @@ import { booking } from "@/db/schema/entities/booking.js";
 import { booking_segment } from "@/db/schema/entities/booking_segment.js";
 import { booking_facility_selection } from "@/db/schema/entities/booking_facility_selection.js";
 import { booking_status_event } from "@/db/schema/entities/booking_status_event.js";
+import { booking_payment } from "@/db/schema/entities/booking_payment.js";
 import { booking_type } from "@/db/schema/entities/booking_type.js";
 import { customer } from "@/db/schema/entities/customer.js";
 import { room } from "@/db/schema/entities/room.js";
@@ -80,6 +81,8 @@ export async function getBookingById(id) {
 			venue_id: booking.venue_id,
 			reference: booking.reference,
 			status: booking.status,
+			organisation_id: booking.organisation_id,
+			recurrence_rule: booking.recurrence_rule,
 			subtotal_cents: booking.subtotal_cents,
 			vat_cents: booking.vat_cents,
 			total_cents: booking.total_cents,
@@ -94,6 +97,8 @@ export async function getBookingById(id) {
 			deposit_non_refundable_cents: booking.deposit_non_refundable_cents,
 			deposit_paid_cents: booking.deposit_paid_cents,
 			balance_paid_cents: booking.balance_paid_cents,
+			balance_invoice_issued_at: booking.balance_invoice_issued_at,
+			balance_paid_at: booking.balance_paid_at,
 			customer_notes: booking.customer_notes,
 			internal_notes: booking.internal_notes,
 			submitted_at: booking.submitted_at,
@@ -173,7 +178,7 @@ export async function listBookingStatusEvents(bookingId) {
 		.orderBy(asc(booking_status_event.at));
 }
 
-export async function listBookingsForAdmin(venueId, { tab = "pending" } = {}) {
+export async function listBookingsForAdmin(venueId, { tab = "all" } = {}) {
 	const conditions = [eq(booking.venue_id, venueId), isNull(booking.deletedAt)];
 	if (tab === "pending") {
 		conditions.push(inArray(booking.status, ["pending"]));
@@ -781,4 +786,84 @@ export async function findConflictingSegments({
 		.innerJoin(booking, eq(booking_segment.booking_id, booking.id))
 		.where(and(...conditions))
 		.orderBy(asc(booking_segment.starts_at));
+}
+
+/* ---------------- booking instalments ---------------- */
+
+export async function listBookingPayments(bookingId) {
+	return db
+		.select()
+		.from(booking_payment)
+		.where(
+			and(
+				eq(booking_payment.booking_id, bookingId),
+				isNull(booking_payment.deletedAt),
+			),
+		)
+		.orderBy(asc(booking_payment.sort_order), asc(booking_payment.createdAt));
+}
+
+export async function getBookingPaymentByToken(token) {
+	if (!token) return null;
+	const [row] = await db
+		.select({
+			payment: booking_payment,
+			booking_id: booking.id,
+			booking_reference: booking.reference,
+			booking_status: booking.status,
+			booking_total_cents: booking.total_cents,
+			venue_id: booking.venue_id,
+			customer_first_name: customer.first_name,
+			customer_last_name: customer.last_name,
+			customer_email: customer.email,
+		})
+		.from(booking_payment)
+		.innerJoin(booking, eq(booking.id, booking_payment.booking_id))
+		.innerJoin(customer, eq(customer.id, booking.customer_id))
+		.where(
+			and(
+				eq(booking_payment.pay_token, token),
+				isNull(booking_payment.deletedAt),
+				isNull(booking.deletedAt),
+			),
+		)
+		.limit(1);
+	if (!row) return null;
+	return { ...row.payment, ...row, payment: undefined };
+}
+
+export async function getBookingPaymentByStripeIntent(paymentIntentId) {
+	if (!paymentIntentId) return null;
+	const [row] = await db
+		.select()
+		.from(booking_payment)
+		.where(
+			and(
+				eq(booking_payment.stripe_payment_intent_id, paymentIntentId),
+				isNull(booking_payment.deletedAt),
+			),
+		)
+		.limit(1);
+	return row ?? null;
+}
+
+export async function insertBookingPayments(rows) {
+	if (!rows?.length) return [];
+	return db.insert(booking_payment).values(rows).returning();
+}
+
+export async function updateBookingPayment(id, patch) {
+	const [row] = await db
+		.update(booking_payment)
+		.set(patch)
+		.where(eq(booking_payment.id, id))
+		.returning();
+	return row;
+}
+
+export async function softDeleteBookingPayment(id) {
+	await db
+		.update(booking_payment)
+		.set({ deletedAt: new Date() })
+		.where(eq(booking_payment.id, id));
 }

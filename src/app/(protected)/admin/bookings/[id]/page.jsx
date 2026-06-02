@@ -5,11 +5,13 @@ import {
 	listBookingSegments,
 	listBookingFacilitySelections,
 	listBookingStatusEvents,
+	listBookingPayments,
 } from "@/db/queries/bookings";
 import { getEventByBookingId } from "@/db/queries/events";
 import BookingDetailActions from "../_components/booking-detail-actions";
 import RecurrencePanel from "../_components/recurrence-panel";
 import BookingOrganisationPicker from "../_components/booking-organisation-picker";
+import InstallmentsEditor from "../_components/installments-editor";
 import { listOrganisations } from "@/db/queries/crm";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import InternalNotesEditor from "../_components/internal-notes-editor";
@@ -61,7 +63,7 @@ export default async function AdminBookingDetailPage({ params }) {
 	if (!booking) notFound();
 
 	const venue = await requireCurrentVenue();
-	const [segments, facilities, statusEvents, organisations, linkedEvent] =
+	const [segments, facilities, statusEvents, organisations, linkedEvent, payments] =
 		await Promise.all([
 			listBookingSegments(booking.id),
 			listBookingFacilitySelections(booking.id),
@@ -70,10 +72,18 @@ export default async function AdminBookingDetailPage({ params }) {
 			booking.ticketing_enabled
 				? getEventByBookingId(booking.id)
 				: Promise.resolve(null),
+			listBookingPayments(booking.id),
 		]);
 	const currentOrg = booking.organisation_id
 		? organisations.find((o) => o.id === booking.organisation_id) ?? null
 		: null;
+	// The initial status event (status null → pending) carries an
+	// actor_user_id when an admin created the booking on the customer's
+	// behalf — public submissions don't have one. We use this to flip the
+	// UI from "Approve" to "Confirm" so the admin isn't approving their
+	// own work.
+	const initialEvent = statusEvents.find((e) => e.from_status === null);
+	const createdByAdmin = !!initialEvent?.actor_user_id;
 
 	const segmentGroups = segments.reduce((acc, s) => {
 		const key = s.booking_type_key ?? s.booking_type_label ?? "other";
@@ -314,37 +324,31 @@ export default async function AdminBookingDetailPage({ params }) {
 									<dd className="font-mono">{formatGbp(booking.ticketing_setup_fee_cents)}</dd>
 								</div>
 							)}
-							{booking.deposit_required_cents > 0 && (
-								<div className="flex justify-between pt-2 border-t border-foreground/10 mt-2">
-									<dt className="text-muted-foreground">Deposit required</dt>
-									<dd className="font-mono">{formatGbp(booking.deposit_required_cents)}</dd>
-								</div>
-							)}
-							{booking.deposit_paid_cents > 0 && (
-								<div className="flex justify-between text-primary">
-									<dt>Deposit paid</dt>
-									<dd className="font-mono">{formatGbp(booking.deposit_paid_cents)}</dd>
-								</div>
-							)}
-							{booking.balance_paid_cents > 0 && (
-								<div className="flex justify-between text-primary">
-									<dt>Balance paid</dt>
-									<dd className="font-mono">{formatGbp(booking.balance_paid_cents)}</dd>
-								</div>
-							)}
 							{(() => {
-								const outstanding = Math.max(
-									0,
-									(booking.total_cents ?? 0) -
-										(booking.deposit_paid_cents ?? 0) -
-										(booking.balance_paid_cents ?? 0),
+								// Roll-up of the new instalments live in the Payments
+								// panel below — show only a simple Paid / Outstanding
+								// summary here so the totals card stays focussed on
+								// the quoted breakdown.
+								const paid =
+									(booking.deposit_paid_cents ?? 0) +
+									(booking.balance_paid_cents ?? 0);
+								const outstanding = Math.max(0, (booking.total_cents ?? 0) - paid);
+								return (
+									<>
+										{paid > 0 && (
+											<div className="flex justify-between text-primary pt-2 border-t border-foreground/10 mt-2">
+												<dt>Paid so far</dt>
+												<dd className="font-mono">{formatGbp(paid)}</dd>
+											</div>
+										)}
+										{outstanding > 0 && (
+											<div className="flex justify-between">
+												<dt className="text-muted-foreground">Outstanding</dt>
+												<dd className="font-mono">{formatGbp(outstanding)}</dd>
+											</div>
+										)}
+									</>
 								);
-								return outstanding > 0 ? (
-									<div className="flex justify-between pt-2 border-t border-foreground/10 mt-2">
-										<dt className="text-muted-foreground">Outstanding</dt>
-										<dd className="font-mono">{formatGbp(outstanding)}</dd>
-									</div>
-								) : null;
 							})()}
 						</dl>
 					</section>
@@ -356,7 +360,17 @@ export default async function AdminBookingDetailPage({ params }) {
 						depositPaidCents={booking.deposit_paid_cents ?? 0}
 						balancePaidCents={booking.balance_paid_cents ?? 0}
 						totalCents={booking.total_cents ?? 0}
+						subtotalCents={booking.subtotal_cents ?? 0}
+						vatCents={booking.vat_cents ?? 0}
 						balanceInvoiceIssuedAt={booking.balance_invoice_issued_at ?? null}
+						createdByAdmin={createdByAdmin}
+					/>
+
+					<InstallmentsEditor
+						bookingId={booking.id}
+						reference={booking.reference}
+						totalCents={booking.total_cents ?? 0}
+						payments={payments}
 					/>
 
 					<RecurrencePanel

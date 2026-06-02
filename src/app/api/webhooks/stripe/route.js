@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/index.js";
+import { booking } from "@/db/schema/entities/booking.js";
 import { tenancy_invoice } from "@/db/schema/entities/tenancy.js";
 import { organisation } from "@/db/schema/entities/organisation.js";
 import { psp_intent } from "@/db/schema/entities/psp_intent.js";
@@ -214,7 +215,12 @@ async function handlePaymentIntentSucceeded(event) {
 	if (row.booking_id) {
 		const kind = row.metadata?.kind ?? "deposit";
 		try {
-			if (kind === "balance") {
+			if (kind === "instalment") {
+				await finaliseBookingInstalment({
+					paymentIntentId: pi.id,
+					settledAt: event.created ? new Date(event.created * 1000) : new Date(),
+				});
+			} else if (kind === "balance") {
 				await finaliseBookingBalance(row.booking_id, {
 					paymentRef: pi.id,
 					amountPaidCents: row.amount_cents,
@@ -230,6 +236,60 @@ async function handlePaymentIntentSucceeded(event) {
 			throw err;
 		}
 	}
+}
+
+/**
+ * Mark a booking_payment row paid via Stripe and roll the totals up onto
+ * the parent booking. Idempotent — already-paid rows are skipped.
+ *
+ * Status transitions:
+ *   - first instalment paid while booking is "approved" → flip to "confirmed"
+ *   - sum-of-paid == total                              → flip to "completed"
+ */
+async function finaliseBookingInstalment({ paymentIntentId, settledAt }) {
+	const { booking_payment } = await import("@/db/schema/entities/booking_payment.js");
+	const [pay] = await db
+		.select()
+		.from(booking_payment)
+		.where(eq(booking_payment.stripe_payment_intent_id, paymentIntentId))
+		.limit(1);
+	if (!pay) return;
+	if (pay.paid_at) return; // already finalised
+	await db
+		.update(booking_payment)
+		.set({ paid_at: settledAt, paid_via: "stripe" })
+		.where(eq(booking_payment.id, pay.id));
+
+	const allPayments = await db
+		.select()
+		.from(booking_payment)
+		.where(
+			and(
+				eq(booking_payment.booking_id, pay.booking_id),
+				isNull(booking_payment.deletedAt),
+			),
+		);
+	const paidSum = allPayments
+		.filter((p) => p.paid_at || p.id === pay.id)
+		.reduce((s, p) => s + (p.amount_cents ?? 0), 0);
+	const [b] = await db
+		.select()
+		.from(booking)
+		.where(eq(booking.id, pay.booking_id))
+		.limit(1);
+	if (!b) return;
+	const total = b.total_cents ?? 0;
+	const patch = { deposit_paid_cents: paidSum, balance_paid_cents: 0 };
+	if (paidSum > 0 && b.status === "approved") {
+		patch.status = "confirmed";
+		patch.confirmed_at = settledAt;
+	}
+	if (paidSum >= total && total > 0 && b.status !== "completed") {
+		patch.status = "completed";
+		patch.completed_at = settledAt;
+		patch.balance_paid_at = settledAt;
+	}
+	await db.update(booking).set(patch).where(eq(booking.id, b.id));
 }
 
 async function handlePaymentIntentFailed(event) {

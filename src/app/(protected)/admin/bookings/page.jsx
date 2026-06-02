@@ -6,6 +6,7 @@ import { requireCurrentVenue } from "@/db/queries/venue";
 export const dynamic = "force-dynamic";
 
 const TABS = [
+	{ key: "all", label: "All" },
 	{ key: "pending", label: "Pending" },
 	{ key: "upcoming", label: "Upcoming" },
 	{ key: "past", label: "Past" },
@@ -42,7 +43,7 @@ function statusClass(status) {
 
 export default async function AdminBookingsPage({ searchParams }) {
 	const sp = await searchParams;
-	const tab = TABS.find((t) => t.key === sp?.tab)?.key ?? "pending";
+	const tab = TABS.find((t) => t.key === sp?.tab)?.key ?? "all";
 	const venue = await requireCurrentVenue();
 	const rows = await listBookingsForAdmin(venue.id, { tab });
 

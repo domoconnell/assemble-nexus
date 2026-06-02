@@ -12,7 +12,14 @@ import {
 	findConflictingSegments,
 	findConflictingEvents,
 	listBookingSegments,
+	listBookingPayments,
+	insertBookingPayments,
+	updateBookingPayment,
+	softDeleteBookingPayment,
+	getBookingById,
 } from "@/db/queries/bookings.js";
+import { booking_payment } from "@/db/schema/entities/booking_payment.js";
+import { randomBytes } from "node:crypto";
 import { room } from "@/db/schema/entities/room.js";
 import { ensureDraftEventForBooking } from "@/lib/events/draft-event.js";
 import { expandPattern } from "@/lib/booking/recurrence.js";
@@ -111,6 +118,37 @@ export async function approveBookingAction(input) {
 		actor_user_id: session.user?.id ?? null,
 		note: parsed.note ?? null,
 	});
+
+	// Seed default instalments from the deposit policy when none exist.
+	// Public submissions land here too — they get the policy default
+	// (e.g. 10% deposit + balance) automatically. Admin can override.
+	const existingPayments = await listBookingPayments(b.id);
+	if (existingPayments.length === 0 && (b.total_cents ?? 0) > 0) {
+		const depositCents = Math.min(b.deposit_required_cents ?? 0, b.total_cents);
+		const balanceCents = (b.total_cents ?? 0) - depositCents;
+		const seedRows = [];
+		if (depositCents > 0) {
+			seedRows.push({
+				booking_id: b.id,
+				sort_order: 0,
+				label: "Deposit",
+				amount_cents: depositCents,
+				pay_token: payToken(),
+			});
+		}
+		if (balanceCents > 0) {
+			seedRows.push({
+				booking_id: b.id,
+				sort_order: seedRows.length,
+				label: "Balance",
+				amount_cents: balanceCents,
+				pay_token: payToken(),
+			});
+		}
+		if (seedRows.length > 0) {
+			await insertBookingPayments(seedRows);
+		}
+	}
 
 	const [cust] = await db.select().from(customer).where(eq(customer.id, b.customer_id)).limit(1);
 	// Safety net for older bookings that pre-date the submission-time hook -
@@ -319,6 +357,48 @@ export async function assignBookingOrganisationAction(input) {
 	revalidatePath("/admin/crm");
 	if (parsed.organisation_id) revalidatePath(`/admin/crm/${parsed.organisation_id}`);
 	return { ok: true };
+}
+
+const OverridePriceSchema = z.object({
+	booking_id: z.string().uuid(),
+	total_pounds: z.coerce.number().min(0),
+});
+
+/**
+ * Override the booking's total. Recomputes subtotal + VAT preserving the
+ * original VAT proportion so downstream reports still round correctly.
+ * Only valid while the booking is pending — once approved/confirmed the
+ * customer has been quoted a price.
+ */
+export async function overrideBookingTotalAction(input) {
+	await gateAdmin();
+	const parsed = OverridePriceSchema.parse(input);
+	const b = await getBookingById(parsed.booking_id);
+	if (!b) throw new Error("Booking not found.");
+	if (b.status !== "pending") {
+		throw new Error("Price can only be overridden while the booking is pending.");
+	}
+	const newTotal = Math.round(parsed.total_pounds * 100);
+	const prevTotal = b.total_cents ?? 0;
+	const prevVat = b.vat_cents ?? 0;
+	// Apportion VAT by the original VAT-to-total ratio. If the original
+	// had no VAT (or no total), keep VAT at zero.
+	const vatRatio = prevTotal > 0 ? prevVat / prevTotal : 0;
+	const newVat = Math.round(newTotal * vatRatio);
+	const newSubtotal = newTotal - newVat;
+	const updated = await db
+		.update(booking)
+		.set({
+			total_cents: newTotal,
+			vat_cents: newVat,
+			subtotal_cents: newSubtotal,
+		})
+		.where(eq(booking.id, parsed.booking_id))
+		.returning();
+	revalidatePath(`/admin/bookings/${parsed.booking_id}`);
+	revalidatePath("/admin/bookings");
+	if (updated[0]?.reference) revalidatePath(`/booking/${updated[0].reference}`);
+	return { ok: true, total_cents: newTotal };
 }
 
 export async function saveBookingInternalNotesAction(input) {
@@ -574,4 +654,189 @@ export async function cancelBookingSegmentAction(input) {
 
 	revalidatePath(`/admin/bookings/${parsed.booking_id}`);
 	return { ok: true };
+}
+
+/* ---------------- instalments ---------------- */
+
+function payToken() {
+	return randomBytes(18).toString("base64url");
+}
+
+const PaymentRowSchema = z.object({
+	id: z.string().uuid().optional().nullable(),
+	label: z.string().min(1).max(120),
+	amount_cents: z.coerce.number().int().min(0),
+});
+
+const ReplacePaymentsSchema = z.object({
+	booking_id: z.string().uuid(),
+	rows: z.array(PaymentRowSchema).min(1, "Add at least one payment."),
+});
+
+/**
+ * Replace the booking's payment instalments with the supplied set.
+ * Sum must equal the booking total. Refuses to touch rows that have
+ * already been paid — those stay, and only un-paid rows are reshuffled
+ * around them.
+ */
+export async function replaceBookingPaymentsAction(input) {
+	await gateAdmin();
+	const parsed = ReplacePaymentsSchema.parse(input);
+	const b = await getBookingById(parsed.booking_id);
+	if (!b) throw new Error("Booking not found.");
+
+	const existing = await listBookingPayments(parsed.booking_id);
+	const paidExisting = existing.filter((p) => p.paid_at);
+	const paidSum = paidExisting.reduce((s, p) => s + (p.amount_cents ?? 0), 0);
+
+	// Validate sum
+	const incomingSum = parsed.rows.reduce((s, r) => s + (r.amount_cents ?? 0), 0);
+	const expected = (b.total_cents ?? 0) - paidSum;
+	if (incomingSum !== expected) {
+		throw new Error(
+			`Payments must sum to ${(expected / 100).toFixed(2)} (was ${(incomingSum / 100).toFixed(2)}).`,
+		);
+	}
+
+	// Soft-delete un-paid existing rows
+	const paidIds = new Set(paidExisting.map((p) => p.id));
+	const toDelete = existing.filter((p) => !paidIds.has(p.id));
+	for (const p of toDelete) {
+		await softDeleteBookingPayment(p.id);
+	}
+
+	// Insert new un-paid rows, leaving paid rows in place at the top
+	const startOrder = paidExisting.length;
+	await insertBookingPayments(
+		parsed.rows.map((r, i) => ({
+			booking_id: parsed.booking_id,
+			sort_order: startOrder + i,
+			label: r.label.trim(),
+			amount_cents: r.amount_cents,
+			pay_token: payToken(),
+		})),
+	);
+
+	revalidatePath(`/admin/bookings/${parsed.booking_id}`);
+	return { ok: true };
+}
+
+const MarkOfflineSchema = z.object({
+	booking_payment_id: z.string().uuid(),
+	note: z.string().max(500).optional().nullable(),
+});
+
+export async function markBookingPaymentPaidOfflineAction(input) {
+	await gateAdmin();
+	const parsed = MarkOfflineSchema.parse(input);
+	const [row] = await db
+		.select()
+		.from(booking_payment)
+		.where(eq(booking_payment.id, parsed.booking_payment_id))
+		.limit(1);
+	if (!row) throw new Error("Payment not found.");
+	if (row.paid_at) return { ok: true, already: true };
+	await updateBookingPayment(parsed.booking_payment_id, {
+		paid_at: new Date(),
+		paid_via: "offline",
+		offline_note: parsed.note?.trim() || null,
+	});
+	await rollUpBookingPaidAmounts(row.booking_id);
+	revalidatePath(`/admin/bookings/${row.booking_id}`);
+	return { ok: true };
+}
+
+const UnmarkOfflineSchema = z.object({
+	booking_payment_id: z.string().uuid(),
+});
+
+export async function unmarkBookingPaymentPaidAction(input) {
+	await gateAdmin();
+	const parsed = UnmarkOfflineSchema.parse(input);
+	const [row] = await db
+		.select()
+		.from(booking_payment)
+		.where(eq(booking_payment.id, parsed.booking_payment_id))
+		.limit(1);
+	if (!row) throw new Error("Payment not found.");
+	if (row.paid_via !== "offline") {
+		throw new Error("Only offline payments can be reversed here.");
+	}
+	await updateBookingPayment(parsed.booking_payment_id, {
+		paid_at: null,
+		paid_via: null,
+		offline_note: null,
+	});
+	await rollUpBookingPaidAmounts(row.booking_id);
+	revalidatePath(`/admin/bookings/${row.booking_id}`);
+	return { ok: true };
+}
+
+const SendLinkSchema = z.object({
+	booking_payment_id: z.string().uuid(),
+});
+
+export async function sendBookingPaymentLinkAction(input) {
+	await gateAdmin();
+	const parsed = SendLinkSchema.parse(input);
+	const [row] = await db
+		.select()
+		.from(booking_payment)
+		.where(eq(booking_payment.id, parsed.booking_payment_id))
+		.limit(1);
+	if (!row) throw new Error("Payment not found.");
+	if (row.paid_at) throw new Error("That payment has already been paid.");
+	const b = await getBookingById(row.booking_id);
+	if (!b) throw new Error("Booking not found.");
+	const { sendBookingPaymentLinkEmail } = await import(
+		"@/utils/email/booking-emails.js"
+	);
+	await sendBookingPaymentLinkEmail({
+		booking: b,
+		customer: {
+			email: b.customer_email,
+			first_name: b.customer_first_name,
+		},
+		payment: row,
+	});
+	await updateBookingPayment(parsed.booking_payment_id, { sent_at: new Date() });
+	revalidatePath(`/admin/bookings/${row.booking_id}`);
+	return { ok: true };
+}
+
+/**
+ * Sum every paid instalment on a booking and roll it into the legacy
+ * `deposit_paid_cents` field so existing widgets / CRM totals keep
+ * working. `balance_paid_cents` stays at zero — once we're on
+ * instalments the deposit/balance split is just a roll-up. Also flips
+ * the booking to `confirmed` once the first instalment lands and
+ * `completed` once everything is paid.
+ */
+async function rollUpBookingPaidAmounts(bookingId) {
+	const payments = await listBookingPayments(bookingId);
+	const paidSum = payments
+		.filter((p) => p.paid_at)
+		.reduce((s, p) => s + (p.amount_cents ?? 0), 0);
+	const [b] = await db
+		.select()
+		.from(booking)
+		.where(eq(booking.id, bookingId))
+		.limit(1);
+	if (!b) return;
+	const patch = {
+		deposit_paid_cents: paidSum,
+		balance_paid_cents: 0,
+	};
+	const total = b.total_cents ?? 0;
+	const now = new Date();
+	if (paidSum > 0 && b.status === "approved") {
+		patch.status = "confirmed";
+		patch.confirmed_at = now;
+	}
+	if (paidSum >= total && total > 0 && b.status !== "completed") {
+		patch.status = "completed";
+		patch.completed_at = now;
+		patch.balance_paid_at = now;
+	}
+	await db.update(booking).set(patch).where(eq(booking.id, bookingId));
 }

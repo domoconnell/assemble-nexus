@@ -25,6 +25,7 @@ export * from "./entities/booking";
 export * from "./entities/booking_segment";
 export * from "./entities/booking_facility_selection";
 export * from "./entities/booking_status_event";
+export * from "./entities/booking_payment";
 export * from "./entities/room_blockout";
 export * from "./entities/room_blockout_room";
 export * from "./entities/setting";

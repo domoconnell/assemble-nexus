@@ -7,6 +7,8 @@ import { booking } from "@/db/schema/entities/booking.js";
 import { booking_segment } from "@/db/schema/entities/booking_segment.js";
 import { booking_status_event } from "@/db/schema/entities/booking_status_event.js";
 import { booking_facility_selection } from "@/db/schema/entities/booking_facility_selection.js";
+import { booking_payment } from "@/db/schema/entities/booking_payment.js";
+import { randomBytes } from "node:crypto";
 import { room } from "@/db/schema/entities/room.js";
 import { user } from "@/db/schema/entities/user.js";
 import { contact } from "@/db/schema/entities/contact.js";
@@ -322,12 +324,48 @@ export async function POST(request) {
 		await db.insert(booking_facility_selection).values(facilityRows);
 	}
 
+	const isAdminCreate = parsed.data.identity.mode === "admin_create";
+	const adminSession = isAdminCreate ? await getServerSession() : null;
 	await db.insert(booking_status_event).values({
 		booking_id: createdBooking.id,
 		from_status: null,
 		to_status: "pending",
-		note: "Submitted by customer.",
+		actor_user_id: adminSession?.user?.id ?? null,
+		note: isAdminCreate ? "Created by admin." : "Submitted by customer.",
 	});
+
+	// Seed the default payment splits straight away (the policy default
+	// — typically 10% deposit + balance). Public submissions can't edit
+	// these; admins can rewrite them before approving via the editor.
+	if ((createdBooking.total_cents ?? 0) > 0) {
+		const depositCents = Math.min(
+			createdBooking.deposit_required_cents ?? 0,
+			createdBooking.total_cents,
+		);
+		const balanceCents = (createdBooking.total_cents ?? 0) - depositCents;
+		const seedRows = [];
+		if (depositCents > 0) {
+			seedRows.push({
+				booking_id: createdBooking.id,
+				sort_order: 0,
+				label: "Deposit",
+				amount_cents: depositCents,
+				pay_token: randomBytes(18).toString("base64url"),
+			});
+		}
+		if (balanceCents > 0) {
+			seedRows.push({
+				booking_id: createdBooking.id,
+				sort_order: seedRows.length,
+				label: "Balance",
+				amount_cents: balanceCents,
+				pay_token: randomBytes(18).toString("base64url"),
+			});
+		}
+		if (seedRows.length > 0) {
+			await db.insert(booking_payment).values(seedRows);
+		}
+	}
 
 	const draftEvent = await ensureDraftEventForBooking({
 		booking: createdBooking,
@@ -335,10 +373,15 @@ export async function POST(request) {
 		pendingTicketTypes: parsed.data.pending_ticket_types ?? null,
 	});
 
-	await Promise.all([
-		sendEnquiryReceivedEmail({ booking: createdBooking, customer: createdCustomer }),
-		sendStaffNotificationEmail({ booking: createdBooking, customer: createdCustomer }),
-	]);
+	// Skip "new booking" notifications when an admin created the booking
+	// themselves — the admin already knows about it, and the customer
+	// will hear about it via the confirm/agreement flow downstream.
+	if (!isAdminCreate) {
+		await Promise.all([
+			sendEnquiryReceivedEmail({ booking: createdBooking, customer: createdCustomer }),
+			sendStaffNotificationEmail({ booking: createdBooking, customer: createdCustomer }),
+		]);
+	}
 
 	return json(201, {
 		reference: createdBooking.reference,

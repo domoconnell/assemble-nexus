@@ -286,3 +286,23 @@ export async function sendBookingReminderEmail({
 		pay_url: balanceDue > 0 ? `${baseUrl()}/booking/${booking.reference}/pay-balance` : "",
 	});
 }
+
+/**
+ * Send the customer the pay link for one specific instalment. The token
+ * resolves to a public page that renders a Stripe checkout for the
+ * exact instalment amount; once paid, the Stripe webhook flips the row.
+ */
+export async function sendBookingPaymentLinkEmail({ booking, customer, payment }) {
+	if (!customer?.email) return;
+	const venue_name = await venueNameFor(booking.venue_id);
+	const base = (process.env.BASE_URL || "").replace(/\/$/, "");
+	const pay_url = `${base}/booking/${booking.reference}/pay-installment/${payment.pay_token}`;
+	await safeSend("booking-payment-link", customer.email, {
+		venue_name,
+		first_name: customer.first_name ?? "",
+		reference: booking.reference,
+		label: payment.label,
+		amount: gbp(payment.amount_cents),
+		pay_url,
+	});
+}

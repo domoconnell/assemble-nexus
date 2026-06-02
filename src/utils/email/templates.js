@@ -93,6 +93,22 @@ export const EMAIL_TEMPLATES = {
 		},
 	},
 
+	"booking-payment-link": {
+		// User wires the SendGrid template id once authored. safeSend skips
+		// silently while the id is empty.
+		templateId: "",
+		description: "Sent when an admin clicks 'Send link' on a booking instalment. Contains the per-instalment pay URL with token.",
+		audience: "delegate",
+		fields: {
+			venue_name: "Public venue name.",
+			first_name: "Customer's first name (may be empty).",
+			reference: "Booking reference, e.g. BK-XXXX.",
+			label: "Instalment label, e.g. 'Deposit' or 'Final payment'.",
+			amount: "Pre-formatted amount, e.g. '£150.00'.",
+			pay_url: "Public link to pay this instalment.",
+		},
+	},
+
 	"booking-approved": {
 		templateId: "d-fa287c2caf64478ba885f9d6289cff7d",
 		description: "Sent to the hirer when an admin approves their pending booking. When the booking had ticketing enabled, a draft event is auto-created and ticketing_setup_url points the hirer at the designer.",
