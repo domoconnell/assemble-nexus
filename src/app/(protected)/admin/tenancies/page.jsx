@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import { listTenancies } from "@/db/queries/tenancies";
-import { normaliseSchedule } from "@/lib/tenancies/schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -12,36 +11,17 @@ const dateFmt = new Intl.DateTimeFormat("en-GB", {
 	day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London",
 });
 
-function kindLabel(kind) {
-	return kind === "private_rental" ? "Private rental" : "Scheduled recurring";
-}
-
-function scheduleSummary(t) {
-	if (t.kind !== "scheduled_recurring") return null;
-	const rules = normaliseSchedule(t.schedule_rule);
-	if (rules.length === 0) return null;
-	if (rules.length === 1) {
-		const r = rules[0];
-		const days = (r.by_weekday ?? []).join(", ");
-		return `${days} ${r.time_start}-${r.time_end}`;
-	}
-	return `${rules.length} schedules`;
+function linesSummary(t) {
+	const n = t.line_count ?? 0;
+	if (n === 0) return "(no lines yet)";
+	return `${n} line${n === 1 ? "" : "s"}`;
 }
 
 function rateLabel(t) {
-	if (t.kind === "private_rental") {
-		return t.monthly_rate_cents != null ? `${fmtGbp(t.monthly_rate_cents)} / month` : "-";
+	if (t.monthly_override_cents != null) {
+		return `${fmtGbp(t.monthly_override_cents)} / month (fixed)`;
 	}
-	const rules = normaliseSchedule(t.schedule_rule);
-	const rates = rules
-		.map((r) => r.per_session_rate_cents)
-		.filter((c) => c != null);
-	if (rates.length === 0) return "-";
-	const min = Math.min(...rates);
-	const max = Math.max(...rates);
-	return min === max
-		? `${fmtGbp(min)} / session`
-		: `${fmtGbp(min)}–${fmtGbp(max)} / session`;
+	return null;
 }
 
 export default async function TenanciesPage({ searchParams }) {
@@ -121,14 +101,6 @@ function TenancyGroup({ title, rows, muted }) {
 									<span className="text-sm font-medium truncate">
 										{t.label || t.organisation_name || "(unnamed)"}
 									</span>
-									<span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground border border-foreground/15 rounded-full px-1.5 py-0.5">
-										{kindLabel(t.kind)}
-									</span>
-									{!t.room_is_public && (
-										<span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-											private room
-										</span>
-									)}
 									{t.agreement_signed_at && (
 										<span className="text-[10px] uppercase tracking-[0.18em] text-primary">
 											signed
@@ -141,15 +113,14 @@ function TenancyGroup({ title, rows, muted }) {
 									)}
 								</div>
 								<div className="text-xs text-muted-foreground mt-0.5">
-									{t.organisation_name ?? "-"} · {t.room_name}
-									{scheduleSummary(t) && <> · {scheduleSummary(t)}</>}
+									{t.organisation_name ?? "-"} · {linesSummary(t)}
 									{" · "}
 									from {dateFmt.format(new Date(t.starts_on))}
 									{t.ends_on && <> → {dateFmt.format(new Date(t.ends_on))}</>}
 								</div>
 							</div>
 							<div className="text-right text-sm shrink-0">
-								<div className="font-mono">{rateLabel(t)}</div>
+								{rateLabel(t) && <div className="font-mono">{rateLabel(t)}</div>}
 								<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
 									Invoice on the {t.invoice_day_of_month}
 									{t.invoice_day_of_month === 1

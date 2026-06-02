@@ -36,7 +36,6 @@ export function emptyWeeklyRule() {
 		interval: 1,
 		time_start: "",
 		time_end: "",
-		per_session_rate_cents: null,
 		label: "",
 	};
 }
@@ -50,26 +49,13 @@ function emptyMonthlyRule() {
 		interval: 1,
 		time_start: "",
 		time_end: "",
-		per_session_rate_cents: null,
 		label: "",
 	};
 }
 
-function ratePounds(cents) {
-	if (cents == null) return "";
-	return (cents / 100).toString();
-}
-function rateCents(pounds) {
-	const n = Number(pounds);
-	if (!Number.isFinite(n) || n < 0) return null;
-	return Math.round(n * 100);
-}
-
 /**
- * Editor for `tenancy.schedule_rule[]`. Each card is one rule. Adding a
- * rule appends a fresh weekly skeleton; the kind switcher converts the
- * card between weekly and monthly_nth in place. The parent owns the
- * array state - this is purely controlled.
+ * Editor for `tenancy_line.schedule_rule[]`. Each card is one rule.
+ * Rate lives on the parent line (per billing mode), not the rule itself.
  */
 export default function SchedulesEditor({ value, onChange }) {
 	const schedules = Array.isArray(value) ? value : [];
@@ -81,8 +67,24 @@ export default function SchedulesEditor({ value, onChange }) {
 		const cur = schedules[idx];
 		const next =
 			kind === "weekly"
-				? { ...emptyWeeklyRule(), id: cur.id, by_weekday: cur.by_weekday ?? [], time_start: cur.time_start, time_end: cur.time_end, per_session_rate_cents: cur.per_session_rate_cents, label: cur.label, interval: 1 }
-				: { ...emptyMonthlyRule(), id: cur.id, by_weekday: cur.by_weekday ?? [], time_start: cur.time_start, time_end: cur.time_end, per_session_rate_cents: cur.per_session_rate_cents, label: cur.label, interval: 1 };
+				? {
+					...emptyWeeklyRule(),
+					id: cur.id,
+					by_weekday: cur.by_weekday ?? [],
+					time_start: cur.time_start,
+					time_end: cur.time_end,
+					label: cur.label,
+					interval: 1,
+				}
+				: {
+					...emptyMonthlyRule(),
+					id: cur.id,
+					by_weekday: cur.by_weekday ?? [],
+					time_start: cur.time_start,
+					time_end: cur.time_end,
+					label: cur.label,
+					interval: 1,
+				};
 		onChange(schedules.map((s, i) => (i === idx ? next : s)));
 	}
 	function toggleWeekday(idx, key) {
@@ -107,17 +109,17 @@ export default function SchedulesEditor({ value, onChange }) {
 	}
 
 	return (
-		<div className="space-y-4">
+		<div className="space-y-3">
 			{schedules.length === 0 && (
-				<div className="rounded-md border border-dashed bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-					No schedules yet. Add one to start.
+				<div className="rounded-md border border-dashed bg-muted/20 p-4 text-center text-xs text-muted-foreground">
+					No schedule rules yet. Add one.
 				</div>
 			)}
 
 			{schedules.map((rule, idx) => (
 				<div
 					key={rule.id}
-					className="rounded-lg border bg-card p-4 space-y-4"
+					className="rounded-md border bg-background p-3 space-y-3"
 				>
 					<div className="flex items-center justify-between gap-3 flex-wrap">
 						<div className="flex gap-1 rounded-md border bg-background p-0.5">
@@ -129,7 +131,7 @@ export default function SchedulesEditor({ value, onChange }) {
 									key={opt.key}
 									type="button"
 									onClick={() => changeKind(idx, opt.key)}
-									className={`px-3 py-1 text-xs rounded-sm transition ${
+									className={`px-2.5 py-1 text-[11px] rounded-sm transition ${
 										rule.kind === opt.key
 											? "bg-primary/10 text-primary"
 											: "text-muted-foreground hover:text-foreground"
@@ -144,16 +146,16 @@ export default function SchedulesEditor({ value, onChange }) {
 							variant="ghost"
 							size="sm"
 							onClick={() => remove(idx)}
-							className="text-destructive hover:text-destructive"
+							className="text-destructive hover:text-destructive text-xs"
 						>
-							Remove
+							Remove rule
 						</Button>
 					</div>
 
 					{rule.kind === "monthly_nth" && (
-						<div className="space-y-2">
-							<Label>Which weeks of the month</Label>
-							<div className="flex flex-wrap gap-2">
+						<div className="space-y-1.5">
+							<Label className="text-xs">Which weeks of the month</Label>
+							<div className="flex flex-wrap gap-1.5">
 								{MONTH_POSITIONS.map((p) => {
 									const active = rule.by_set_pos?.includes(p.value);
 									return (
@@ -161,7 +163,7 @@ export default function SchedulesEditor({ value, onChange }) {
 											key={p.value}
 											type="button"
 											onClick={() => togglePos(idx, p.value)}
-											className={`rounded-md border px-3 py-1.5 text-sm transition ${
+											className={`rounded-md border px-2.5 py-1 text-xs transition ${
 												active
 													? "border-primary bg-primary/10 text-primary"
 													: "border-foreground/15 hover:border-foreground/30"
@@ -175,9 +177,9 @@ export default function SchedulesEditor({ value, onChange }) {
 						</div>
 					)}
 
-					<div className="space-y-2">
-						<Label>Days of the week</Label>
-						<div className="flex flex-wrap gap-2">
+					<div className="space-y-1.5">
+						<Label className="text-xs">Days of the week</Label>
+						<div className="flex flex-wrap gap-1.5">
 							{WEEKDAYS.map((d) => {
 								const active = rule.by_weekday?.includes(d.key);
 								return (
@@ -185,7 +187,7 @@ export default function SchedulesEditor({ value, onChange }) {
 										key={d.key}
 										type="button"
 										onClick={() => toggleWeekday(idx, d.key)}
-										className={`rounded-md border px-3 py-1.5 text-sm transition ${
+										className={`rounded-md border px-2.5 py-1 text-xs transition ${
 											active
 												? "border-primary bg-primary/10 text-primary"
 												: "border-foreground/15 hover:border-foreground/30"
@@ -198,36 +200,25 @@ export default function SchedulesEditor({ value, onChange }) {
 						</div>
 					</div>
 
-					<div className="grid gap-4 sm:grid-cols-4 items-end">
-						<div className="space-y-2">
-							<Label>Start time</Label>
+					<div className="grid gap-3 sm:grid-cols-3 items-end">
+						<div className="space-y-1.5">
+							<Label className="text-xs">Start time</Label>
 							<TimePicker
 								value={rule.time_start ?? ""}
 								onChange={(v) => updateAt(idx, { time_start: v })}
 							/>
 						</div>
-						<div className="space-y-2">
-							<Label>End time</Label>
+						<div className="space-y-1.5">
+							<Label className="text-xs">End time</Label>
 							<TimePicker
 								value={rule.time_end ?? ""}
 								onChange={(v) => updateAt(idx, { time_end: v })}
 							/>
 						</div>
-						<div className="space-y-2">
-							<Label>Rate per session (£)</Label>
-							<Input
-								type="number"
-								min={0}
-								step="0.01"
-								value={ratePounds(rule.per_session_rate_cents)}
-								onChange={(e) =>
-									updateAt(idx, { per_session_rate_cents: rateCents(e.target.value) })
-								}
-								placeholder="e.g. 20"
-							/>
-						</div>
-						<div className="space-y-2">
-							<Label>{rule.kind === "weekly" ? "Every N weeks" : "Every N months"}</Label>
+						<div className="space-y-1.5">
+							<Label className="text-xs">
+								{rule.kind === "weekly" ? "Every N weeks" : "Every N months"}
+							</Label>
 							<Input
 								type="number"
 								min={1}
@@ -241,21 +232,11 @@ export default function SchedulesEditor({ value, onChange }) {
 							/>
 						</div>
 					</div>
-
-					<div className="space-y-2">
-						<Label>Label (optional, shown on invoice line)</Label>
-						<Input
-							value={rule.label ?? ""}
-							onChange={(e) => updateAt(idx, { label: e.target.value })}
-							maxLength={80}
-							placeholder="e.g. Monday mornings"
-						/>
-					</div>
 				</div>
 			))}
 
-			<Button type="button" variant="outline" onClick={add}>
-				+ Add schedule
+			<Button type="button" variant="outline" size="sm" onClick={add}>
+				+ Add schedule rule
 			</Button>
 		</div>
 	);

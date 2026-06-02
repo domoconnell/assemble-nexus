@@ -3,9 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
+import { inArray, eq } from "drizzle-orm";
+import { db } from "@/db/index.js";
+import { room as roomTable } from "@/db/schema/entities/room.js";
 import { requireServerSession } from "@/utils/auth/server-guard.js";
 import { requireCurrentVenue } from "@/db/queries/venue.js";
 import { getTenancyAgreementTemplate } from "@/db/queries/settings.js";
+import { listRoomRackHourlyRates } from "@/db/queries/room-rack-rates.js";
 import {
 	insertTenancy,
 	updateTenancy,
@@ -18,8 +22,10 @@ import {
 	getAgreementById,
 	getActiveAgreement,
 	listAgreementsForTenancy,
+	listLinesForTenancy,
 	getInvoiceById,
 	updateInvoice,
+	replaceLines,
 } from "@/db/queries/tenancies.js";
 import {
 	sendTenancyAgreementSendEmail,
@@ -31,9 +37,9 @@ const WeekdaySchema = z.enum(["SU", "MO", "TU", "WE", "TH", "FR", "SA"]);
 const TimeSchema = z.string().regex(/^\d{2}:\d{2}$/);
 const YmdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-// Each element in tenancy.schedule_rule[]. A discriminated union per
-// `kind`; new kinds plug in by adding another z.object + a branch in
-// generateSessionDates.
+// One entry in tenancy_line.schedule_rule[]. Same shape as before;
+// `per_session_rate_cents` has moved up to the line (only meaningful
+// when billing_mode === "per_session").
 const ScheduleRuleSchema = z.discriminatedUnion("kind", [
 	z.object({
 		id: z.string().uuid(),
@@ -42,55 +48,152 @@ const ScheduleRuleSchema = z.discriminatedUnion("kind", [
 		interval: z.coerce.number().int().min(1).max(52).default(1),
 		time_start: TimeSchema,
 		time_end: TimeSchema,
-		per_session_rate_cents: z.coerce.number().int().min(0),
 		label: z.string().max(80).optional().nullable(),
 	}),
 	z.object({
 		id: z.string().uuid(),
 		kind: z.literal("monthly_nth"),
 		by_weekday: z.array(WeekdaySchema).min(1),
-		// 1..4 = 1st..4th occurrence; -1 = last
-		by_set_pos: z.array(z.number().int().refine((n) => n === -1 || (n >= 1 && n <= 4), {
-			message: "by_set_pos values must be 1, 2, 3, 4, or -1 (last)",
-		})).min(1),
+		by_set_pos: z.array(
+			z.number().int().refine((n) => n === -1 || (n >= 1 && n <= 4), {
+				message: "by_set_pos values must be 1, 2, 3, 4, or -1 (last)",
+			}),
+		).min(1),
 		interval: z.coerce.number().int().min(1).max(12).default(1),
 		time_start: TimeSchema,
 		time_end: TimeSchema,
-		per_session_rate_cents: z.coerce.number().int().min(0),
 		label: z.string().max(80).optional().nullable(),
 	}),
 ]);
-const SchedulesSchema = z.array(ScheduleRuleSchema).min(1);
 
-const CreateSchema = z
-	.object({
-		kind: z.enum(["private_rental", "scheduled_recurring"]),
-		organisation_id: z.string().uuid(),
-		contact_id: z.string().uuid().optional().nullable(),
+const LineSchema = z.discriminatedUnion("kind", [
+	z.object({
+		kind: z.literal("occupancy"),
 		room_id: z.string().uuid(),
-		label: z.string().max(200).optional().nullable(),
-		starts_on: YmdSchema,
-		ends_on: YmdSchema.optional().nullable().or(z.literal("")),
-		invoice_day_of_month: z.coerce.number().int().min(1).max(28).default(1),
-		monthly_rate_cents: z.coerce.number().int().min(0).optional().nullable(),
-		schedule_rule: SchedulesSchema.optional().nullable(),
-		monthly_override_cents: z.coerce.number().int().min(0).optional().nullable(),
-		notes: z.string().max(2000).optional().nullable(),
-	})
-	.refine(
-		(d) =>
-			d.kind === "private_rental"
-				? d.monthly_rate_cents != null && d.monthly_rate_cents > 0
-				: true,
-		{ message: "Private rentals need a monthly rate.", path: ["monthly_rate_cents"] },
-	)
-	.refine(
-		(d) =>
-			d.kind === "scheduled_recurring"
-				? Array.isArray(d.schedule_rule) && d.schedule_rule.length > 0
-				: true,
-		{ message: "Recurring tenancies need at least one schedule.", path: ["schedule_rule"] },
+		label: z.string().max(120).optional().nullable(),
+		monthly_rate_cents: z.coerce.number().int().min(0),
+	}),
+	z.object({
+		kind: z.literal("scheduled"),
+		room_id: z.string().uuid(),
+		label: z.string().max(120).optional().nullable(),
+		schedule_rule: z.array(ScheduleRuleSchema).min(1),
+		// Rate fields are optional — when all three are null, the line bills
+		// at the room's standard hourly rate (no override). The form +
+		// `validateLinesAgainstVenue` enforce that lines on rooms without a
+		// configured rack rate must supply a rate.
+		billing_mode: z.enum(["per_session", "per_hour", "fixed_monthly"]).optional().nullable(),
+		per_session_rate_cents: z.coerce.number().int().min(0).optional().nullable(),
+		per_hour_rate_cents: z.coerce.number().int().min(0).optional().nullable(),
+		fixed_monthly_rate_cents: z.coerce.number().int().min(0).optional().nullable(),
+	}),
+]);
+
+const TenancyBaseSchema = z.object({
+	organisation_id: z.string().uuid(),
+	contact_id: z.string().uuid().optional().nullable(),
+	label: z.string().max(200).optional().nullable(),
+	starts_on: YmdSchema,
+	ends_on: YmdSchema.optional().nullable().or(z.literal("")),
+	invoice_day_of_month: z.coerce.number().int().min(1).max(28).default(1),
+	monthly_override_cents: z.coerce.number().int().min(0).optional().nullable(),
+	auto_bill_via_dd: z.boolean().optional().default(false),
+	notes: z.string().max(2000).optional().nullable(),
+	lines: z.array(LineSchema).min(1, "A tenancy needs at least one line."),
+});
+
+/**
+ * Verify every line's room belongs to the venue, and that occupancy
+ * lines target a non-public room. Public-room occupancy is illegal —
+ * occupancy means "this org has the room full-time," which would conflict
+ * with public bookings on the same calendar. Additionally, occupancy
+ * lines must have a monthly rate, and scheduled lines without an explicit
+ * rate must target a room that has a standard hourly rate configured (so
+ * the billing engine has something to fall back to).
+ */
+async function validateLinesAgainstVenue(lines, venueId) {
+	const roomIds = [...new Set(lines.map((l) => l.room_id))];
+	const rooms = await db
+		.select({ id: roomTable.id, is_public: roomTable.is_public, venue_id: roomTable.venue_id, name: roomTable.name })
+		.from(roomTable)
+		.where(inArray(roomTable.id, roomIds));
+	const byId = new Map(rooms.map((r) => [r.id, r]));
+
+	const needsRackCheck = lines.some(
+		(l) =>
+			l.kind === "scheduled" &&
+			(l.per_session_rate_cents ?? null) == null &&
+			(l.per_hour_rate_cents ?? null) == null &&
+			(l.fixed_monthly_rate_cents ?? null) == null,
 	);
+	const rackRatesByRoomId = needsRackCheck
+		? await listRoomRackHourlyRates(venueId)
+		: {};
+
+	for (const line of lines) {
+		const r = byId.get(line.room_id);
+		if (!r) throw new Error("Selected room not found.");
+		if (r.venue_id !== venueId) throw new Error(`Room "${r.name}" doesn't belong to this venue.`);
+		if (line.kind === "occupancy") {
+			if (r.is_public) {
+				throw new Error(`Room "${r.name}" is public; occupancy lines need a non-public room.`);
+			}
+			if ((line.monthly_rate_cents ?? 0) <= 0) {
+				throw new Error(`Room "${r.name}": occupancy lines need a monthly rate.`);
+			}
+			continue;
+		}
+		const noRate =
+			(line.per_session_rate_cents ?? null) == null &&
+			(line.per_hour_rate_cents ?? null) == null &&
+			(line.fixed_monthly_rate_cents ?? null) == null;
+		if (noRate) {
+			if (!rackRatesByRoomId[r.id]) {
+				throw new Error(
+					`Room "${r.name}" has no standard hourly rate configured, so a rate is required on this line.`,
+				);
+			}
+			continue;
+		}
+		if (!line.billing_mode) {
+			throw new Error(`Room "${r.name}": choose a billing mode when overriding the rate.`);
+		}
+	}
+}
+
+function buildLineRow(line, sortIndex) {
+	if (line.kind === "occupancy") {
+		return {
+			room_id: line.room_id,
+			kind: "occupancy",
+			label: line.label?.trim() || null,
+			monthly_rate_cents: line.monthly_rate_cents,
+			schedule_rule: null,
+			billing_mode: null,
+			per_session_rate_cents: null,
+			per_hour_rate_cents: null,
+			fixed_monthly_rate_cents: null,
+			sort_order: sortIndex,
+		};
+	}
+	return {
+		room_id: line.room_id,
+		kind: "scheduled",
+		label: line.label?.trim() || null,
+		monthly_rate_cents: null,
+		schedule_rule: line.schedule_rule,
+		billing_mode: line.billing_mode,
+		per_session_rate_cents:
+			line.billing_mode === "per_session" ? line.per_session_rate_cents ?? null : null,
+		per_hour_rate_cents:
+			line.billing_mode === "per_hour" ? line.per_hour_rate_cents ?? null : null,
+		fixed_monthly_rate_cents:
+			line.billing_mode === "fixed_monthly" ? line.fixed_monthly_rate_cents ?? null : null,
+		sort_order: sortIndex,
+	};
+}
+
+const CreateSchema = TenancyBaseSchema;
 
 async function gate() {
 	await requireServerSession({ redirectTo: "/auth/login" });
@@ -104,27 +207,23 @@ function newToken() {
 export async function createTenancyAction(input) {
 	const venue = await gate();
 	const parsed = CreateSchema.parse(input);
+	await validateLinesAgainstVenue(parsed.lines, venue.id);
 	const template = await getTenancyAgreementTemplate(venue.id);
 	const row = await insertTenancy({
 		venue_id: venue.id,
 		organisation_id: parsed.organisation_id,
 		contact_id: parsed.contact_id ?? null,
-		room_id: parsed.room_id,
-		kind: parsed.kind,
 		status: "active",
 		label: parsed.label?.trim() || null,
 		starts_on: parsed.starts_on,
 		ends_on: parsed.ends_on?.trim() || null,
 		invoice_day_of_month: parsed.invoice_day_of_month,
-		monthly_rate_cents: parsed.kind === "private_rental" ? parsed.monthly_rate_cents : null,
-		schedule_rule:
-			parsed.kind === "scheduled_recurring" ? parsed.schedule_rule : null,
-		monthly_override_cents:
-			parsed.kind === "scheduled_recurring" ? parsed.monthly_override_cents ?? null : null,
+		monthly_override_cents: parsed.monthly_override_cents ?? null,
+		auto_bill_via_dd: parsed.auto_bill_via_dd ?? false,
 		notes: parsed.notes?.trim() || null,
 	});
-	// Seed the first draft agreement from the venue template, so the admin
-	// can immediately review/edit/send without an extra "create draft" click.
+	await replaceLines(row.id, parsed.lines.map(buildLineRow));
+	// Seed the first draft agreement from the venue template.
 	await insertAgreement({
 		tenancy_id: row.id,
 		status: "draft",
@@ -135,29 +234,29 @@ export async function createTenancyAction(input) {
 	return { id: row.id };
 }
 
-const UpdateSchema = z.object({
+const UpdateSchema = TenancyBaseSchema.extend({
 	id: z.string().uuid(),
-	label: z.string().max(200).optional().nullable(),
-	ends_on: YmdSchema.optional().nullable().or(z.literal("")),
-	invoice_day_of_month: z.coerce.number().int().min(1).max(28).optional(),
-	monthly_rate_cents: z.coerce.number().int().min(0).optional().nullable(),
-	schedule_rule: SchedulesSchema.optional().nullable(),
-	monthly_override_cents: z.coerce.number().int().min(0).optional().nullable(),
-	notes: z.string().max(2000).optional().nullable(),
 	status: z.enum(["active", "paused", "ended"]).optional(),
 });
 
 export async function updateTenancyAction(input) {
-	await gate();
+	const venue = await gate();
 	const parsed = UpdateSchema.parse(input);
-	const { id, ...rest } = parsed;
-	const patch = { ...rest };
-	if ("ends_on" in patch) patch.ends_on = patch.ends_on?.trim() || null;
-	if ("label" in patch) patch.label = patch.label?.trim() || null;
-	if ("notes" in patch) patch.notes = patch.notes?.trim() || null;
-	const row = await updateTenancy(id, patch);
+	await validateLinesAgainstVenue(parsed.lines, venue.id);
+	const patch = {
+		label: parsed.label?.trim() || null,
+		ends_on: parsed.ends_on?.trim() || null,
+		invoice_day_of_month: parsed.invoice_day_of_month,
+		monthly_override_cents: parsed.monthly_override_cents ?? null,
+		auto_bill_via_dd: parsed.auto_bill_via_dd ?? false,
+		notes: parsed.notes?.trim() || null,
+		contact_id: parsed.contact_id ?? null,
+	};
+	if (parsed.status) patch.status = parsed.status;
+	const row = await updateTenancy(parsed.id, patch);
+	await replaceLines(parsed.id, parsed.lines.map(buildLineRow));
 	revalidatePath("/admin/tenancies");
-	revalidatePath(`/admin/tenancies/${id}`);
+	revalidatePath(`/admin/tenancies/${parsed.id}`);
 	return row;
 }
 
@@ -258,11 +357,13 @@ export async function sendAgreementAction(agreementId) {
 		// the org months later.
 		expires_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
 	});
+	const sendLines = await listLinesForTenancy(t.id);
 	await sendTenancyAgreementSendEmail({
 		tenancy: t,
 		agreement: updated,
 		contactEmail: t.contact_email,
 		contactFirstName: t.contact_first_name,
+		lines: sendLines,
 	});
 	revalidatePath(`/admin/tenancies/${ag.tenancy_id}`);
 	return { ok: true };
@@ -346,11 +447,13 @@ export async function sendWelcomeEmailAction(tenancyId) {
 		sent_at: now,
 		expires_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
 	});
+	const welcomeLines = await listLinesForTenancy(t.id);
 	await sendTenancyWelcomeEmail({
 		tenancy: t,
 		agreement: updated,
 		contactEmail: t.contact_email,
 		contactFirstName: t.contact_first_name,
+		lines: welcomeLines,
 	});
 	revalidatePath(`/admin/tenancies/${t.id}`);
 	return { ok: true };

@@ -1,0 +1,1 @@
+ALTER TABLE "tenancy" ADD COLUMN "auto_bill_via_dd" boolean DEFAULT false NOT NULL;

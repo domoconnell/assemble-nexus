@@ -8,10 +8,12 @@ import { room } from "@/db/schema/entities/room.js";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import {
 	getTenancyById,
+	listLinesForTenancy,
 	listSessionsForTenancy,
 	listInvoicesForTenancy,
 	listAgreementsForTenancy,
 } from "@/db/queries/tenancies";
+import { listRoomRackHourlyRates } from "@/db/queries/room-rack-rates.js";
 import TenancyForm from "../_components/tenancy-form";
 import SessionRow from "../_components/session-row";
 import JourneyHeader from "../_components/journey-header";
@@ -34,7 +36,8 @@ export default async function TenancyDetailPage({ params }) {
 	const t = await getTenancyById(id, { venueId: venue.id });
 	if (!t) notFound();
 
-	const [sessions, invoices, agreements, organisations, rooms] = await Promise.all([
+	const [lines, sessions, invoices, agreements, organisations, rooms, roomRackRates] = await Promise.all([
+		listLinesForTenancy(id),
 		listSessionsForTenancy(id),
 		listInvoicesForTenancy(id),
 		listAgreementsForTenancy(id),
@@ -44,6 +47,9 @@ export default async function TenancyDetailPage({ params }) {
 				name: organisation.name,
 				primary_contact_id: organisation.primary_contact_id,
 				primary_contact_name: contact.first_name,
+				primary_contact_email: contact.email,
+				dd_token: organisation.dd_token,
+				direct_debit_ready_at: organisation.direct_debit_ready_at,
 			})
 			.from(organisation)
 			.leftJoin(contact, eq(contact.id, organisation.primary_contact_id))
@@ -59,11 +65,13 @@ export default async function TenancyDetailPage({ params }) {
 			.from(room)
 			.where(and(eq(room.venue_id, venue.id), isNull(room.deletedAt)))
 			.orderBy(asc(room.sort_order), asc(room.name)),
+		listRoomRackHourlyRates(venue.id),
 	]);
 
 	const now = new Date();
 	const futureSessions = sessions.filter((s) => new Date(s.starts_at) >= now);
 	const pastSessions = sessions.filter((s) => new Date(s.starts_at) < now).slice(-12).reverse();
+	const hasScheduledLines = lines.some((l) => l.kind === "scheduled");
 
 	return (
 		<div className="mx-auto p-6 lg:p-10 max-w-5xl space-y-8">
@@ -77,7 +85,6 @@ export default async function TenancyDetailPage({ params }) {
 							{t.label || t.organisation_name || "(unnamed tenancy)"}
 						</h1>
 						<p className="text-sm text-muted-foreground mt-1">
-							{t.kind === "private_rental" ? "Private rental" : "Scheduled recurring"} ·{" "}
 							{t.organisation_id ? (
 								<Link
 									href={`/admin/crm/${t.organisation_id}`}
@@ -87,8 +94,10 @@ export default async function TenancyDetailPage({ params }) {
 								</Link>
 							) : (
 								t.organisation_name ?? "-"
-							)}{" "}
-							· {t.room_name}
+							)}
+							{" · "}
+							{lines.length} line{lines.length === 1 ? "" : "s"} ·{" "}
+							{lines.map((l) => l.room_name).filter(Boolean).join(", ") || "no rooms yet"}
 						</p>
 					</div>
 					<span
@@ -111,7 +120,7 @@ export default async function TenancyDetailPage({ params }) {
 
 			<AgreementsSection tenancy={t} agreements={agreements} />
 
-			{t.kind === "scheduled_recurring" && (
+			{hasScheduledLines && (
 				<section className="space-y-3">
 					<div className="flex items-baseline justify-between gap-3">
 						<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
@@ -155,7 +164,12 @@ export default async function TenancyDetailPage({ params }) {
 				<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
 					Edit
 				</h2>
-				<TenancyForm organisations={organisations} rooms={rooms} initial={t} />
+				<TenancyForm
+					organisations={organisations}
+					rooms={rooms}
+					roomRackRates={roomRackRates}
+					initial={{ ...t, lines }}
+				/>
 			</section>
 
 			<DangerZone tenancy={t} />

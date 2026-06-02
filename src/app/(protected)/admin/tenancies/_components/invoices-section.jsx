@@ -53,34 +53,61 @@ function dayOfMonthLabel(d) {
 }
 
 /**
- * When `uncapped_subtotal_cents` is set, the invoice was capped (or
- * topped-up) by the tenancy's fixed monthly override. Show the math so
- * the customer can see the implied discount/surcharge.
+ * Compact summary that mirrors the bottom of the invoice preview table:
+ *   Standard Rate Total → Reduced Total → Fixed Fee Adjustment →
+ *   Grand Total → Total Reduction.
+ *
+ * Full per-line table lives on the downloadable PDF.
  */
-function OverrideBreakdown({ invoice }) {
+function InvoiceBreakdown({ invoice }) {
+	const standardRateTotal = invoice.rack_subtotal_cents ?? invoice.subtotal_cents ?? 0;
+	const grandTotal = invoice.subtotal_cents ?? 0;
 	const uncapped = invoice.uncapped_subtotal_cents;
-	if (uncapped == null) return null;
-	const billed = invoice.subtotal_cents ?? 0;
-	const delta = uncapped - billed;
-	const direction = delta > 0 ? "discount" : delta < 0 ? "surcharge" : null;
+	const reducedTotal = uncapped != null ? uncapped : grandTotal;
+	const hasFixedFeeAdjustment = uncapped != null;
+	const fixedFeeAdjustment = reducedTotal - grandTotal;
+	const totalReduction = standardRateTotal - grandTotal;
+	const hasReduction = totalReduction !== 0;
+	const hasLineDiscount = standardRateTotal !== reducedTotal;
+
+	if (!hasLineDiscount && !hasFixedFeeAdjustment && !hasReduction) return null;
+
 	return (
 		<div className="rounded-md border border-foreground/10 bg-muted/20 p-3 text-xs space-y-1 max-w-md">
 			<div className="flex items-baseline justify-between gap-2">
-				<span className="text-muted-foreground">Sessions this month</span>
-				<span className="font-mono tabular-nums">{fmtGbp(uncapped)}</span>
+				<span className="text-muted-foreground">Standard rate total</span>
+				<span className="font-mono tabular-nums">{fmtGbp(standardRateTotal)}</span>
 			</div>
-			{direction && (
+			<div className="flex items-baseline justify-between gap-2">
+				<span className="text-muted-foreground">Reduced total</span>
+				<span className="font-mono tabular-nums">{fmtGbp(reducedTotal)}</span>
+			</div>
+			{hasFixedFeeAdjustment && (
 				<div className="flex items-baseline justify-between gap-2">
-					<span className="text-muted-foreground capitalize">{direction} (fixed-fee adjustment)</span>
-					<span className={`font-mono tabular-nums ${delta > 0 ? "text-primary" : "text-destructive"}`}>
-						{delta > 0 ? "−" : "+"}{fmtGbp(Math.abs(delta))}
+					<span className="text-muted-foreground">Fixed fee adjustment</span>
+					<span
+						className={`font-mono tabular-nums ${fixedFeeAdjustment > 0 ? "text-primary" : fixedFeeAdjustment < 0 ? "text-destructive" : ""}`}
+					>
+						{fixedFeeAdjustment > 0 ? "+" : fixedFeeAdjustment < 0 ? "−" : ""}
+						{fmtGbp(Math.abs(fixedFeeAdjustment))}
 					</span>
 				</div>
 			)}
 			<div className="flex items-baseline justify-between gap-2 pt-1 border-t border-foreground/10">
-				<span className="font-medium">Charged</span>
-				<span className="font-mono tabular-nums font-medium">{fmtGbp(billed)}</span>
+				<span className="font-medium">Grand total</span>
+				<span className="font-mono tabular-nums font-medium">{fmtGbp(grandTotal)}</span>
 			</div>
+			{hasReduction && (
+				<div className="flex items-baseline justify-between gap-2">
+					<span className="text-muted-foreground font-medium">Total reduction</span>
+					<span
+						className={`font-mono tabular-nums font-medium ${totalReduction > 0 ? "text-primary" : "text-destructive"}`}
+					>
+						{totalReduction > 0 ? "−" : "+"}
+						{fmtGbp(Math.abs(totalReduction))}
+					</span>
+				</div>
+			)}
 		</div>
 	);
 }
@@ -159,11 +186,19 @@ export default function InvoicesSection({ invoices, invoiceDayOfMonth }) {
 										</span>
 									</div>
 									<div className="flex items-center gap-2">
+										<a
+											href={`/api/admin/tenancy-invoices/${inv.id}/pdf`}
+											target="_blank"
+											rel="noreferrer"
+											className="text-xs text-primary hover:underline"
+										>
+											Download PDF →
+										</a>
 										<span className="text-sm font-mono">{fmtGbp(inv.total_cents)}</span>
 									</div>
 								</div>
 
-								<OverrideBreakdown invoice={inv} />
+								<InvoiceBreakdown invoice={inv} />
 
 								{inv.status === "paid" && inv.paid_at && (
 									<div className="text-xs text-muted-foreground">

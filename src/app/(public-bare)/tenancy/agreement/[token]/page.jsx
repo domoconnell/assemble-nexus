@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getAgreementByToken } from "@/db/queries/tenancies";
+import { getAgreementByToken, listLinesForTenancy } from "@/db/queries/tenancies";
 import { getVenueById } from "@/db/queries/venue";
 import { buildAgreementVars, renderAgreementHtml } from "@/lib/tenancies/agreement";
 import SignButton from "./_sign-button";
@@ -28,10 +28,14 @@ export default async function AgreementPage({ params }) {
 	if (!result) notFound();
 	const { agreement, tenancy } = result;
 	const venue = await getVenueById(tenancy.venue_id);
+	const lines = await listLinesForTenancy(tenancy.id);
 	const renderedHtml = renderAgreementHtml(
 		agreement.html ?? "",
-		buildAgreementVars({ tenancy, venue }),
+		buildAgreementVars({ tenancy, venue, lines }),
 	);
+	const roomNames = Array.from(
+		new Set(lines.map((l) => l.room_name).filter(Boolean)),
+	).join(", ");
 	const signed = !!agreement.signed_at;
 	const cancelled = agreement.status === "cancelled";
 	const expired =
@@ -50,7 +54,8 @@ export default async function AgreementPage({ params }) {
 					</div>
 					<h1 className="text-2xl font-semibold mt-2">{venue?.name ?? ""}</h1>
 					<p className="text-sm text-muted-foreground mt-1">
-						{tenancy.organisation_name} · {tenancy.room_name}
+						{tenancy.organisation_name}
+						{roomNames && <> · {roomNames}</>}
 					</p>
 				</div>
 

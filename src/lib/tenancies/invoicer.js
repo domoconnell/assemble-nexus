@@ -1,17 +1,17 @@
 import { and, eq, gte, isNull, lt } from "drizzle-orm";
 import { db } from "@/db/index.js";
+import { tenancy_session } from "@/db/schema/entities/tenancy.js";
 import {
-	tenancy_session,
-	tenancy_invoice,
-} from "@/db/schema/entities/tenancy.js";
-import {
-	listActivePrivateRentals,
-	listActiveScheduledTenancies,
+	listActiveTenancies,
+	listLinesForTenancy,
 	getInvoiceForPeriod,
 	insertInvoice,
+	insertInvoiceLines,
 	attachSessionsToInvoice,
 } from "@/db/queries/tenancies.js";
+import { computeInvoiceForMonth } from "./billing.js";
 import { getActiveDdDriver } from "./dd-driver.js";
+import { listRoomRackHourlyRates } from "@/db/queries/room-rack-rates.js";
 
 function pad(n) {
 	return String(n).padStart(2, "0");
@@ -38,7 +38,9 @@ async function findSessionsForMonth(tenancyId, periodYm) {
 	return db
 		.select({
 			id: tenancy_session.id,
+			tenancy_line_id: tenancy_session.tenancy_line_id,
 			starts_at: tenancy_session.starts_at,
+			ends_at: tenancy_session.ends_at,
 			status: tenancy_session.status,
 			rate_cents_snapshot: tenancy_session.rate_cents_snapshot,
 			invoice_id: tenancy_session.invoice_id,
@@ -59,27 +61,28 @@ async function findSessionsForMonth(tenancyId, periodYm) {
  * when today's date-of-month matches its `invoice_day_of_month` and no
  * invoice exists yet for the current period.
  *
- * Today's date is taken from `today` (Date or null = now). Each call is
- * idempotent per (tenancy, period) - we look up by period_ym first.
+ * Walk each line:
+ *   - occupancy line → bill `monthly_rate_cents` as-is.
+ *   - scheduled line → fetch sessions for the line in the period;
+ *     billing_mode decides whether it's `count × per_session_rate`,
+ *     `hours × per_hour_rate`, or a flat `fixed_monthly_rate`.
  *
- * Private rentals bill the flat monthly rate.
- * Scheduled-recurring bills the sum of completed/scheduled sessions in
- * the period at each session's snapshotted rate.
+ * Then optionally apply the tenancy-level `monthly_override_cents` and
+ * persist `tenancy_invoice_line` rows so the invoice always renders
+ * with the same itemisation. Sessions get attached to the invoice so
+ * they can't be re-billed.
  *
- * The session-attach step ties session rows to the invoice so they can't
- * be billed again (and changes status to `completed`).
+ * Idempotent per (tenancy, period).
  */
 export async function issueTenancyInvoicesForToday(venueId, today = new Date()) {
 	const dayOfMonth = today.getUTCDate();
 	const periodYm = periodYmFor(today);
 	const results = [];
 
-	const [privateTenancies, scheduledTenancies] = await Promise.all([
-		listActivePrivateRentals(venueId),
-		listActiveScheduledTenancies(venueId),
-	]);
+	const tenancies = await listActiveTenancies(venueId);
+	const rackRatesByRoomId = await listRoomRackHourlyRates(venueId);
 
-	for (const t of [...privateTenancies, ...scheduledTenancies]) {
+	for (const t of tenancies) {
 		if (t.invoice_day_of_month !== dayOfMonth) continue;
 		try {
 			const existing = await getInvoiceForPeriod(t.id, periodYm);
@@ -88,34 +91,29 @@ export async function issueTenancyInvoicesForToday(venueId, today = new Date()) 
 				continue;
 			}
 
-			let subtotal_cents = 0;
-			let uncapped_subtotal_cents = null;
-			let sessionIds = [];
-
-			if (t.kind === "private_rental") {
-				subtotal_cents = t.monthly_rate_cents ?? 0;
-			} else {
-				const sessions = await findSessionsForMonth(t.id, periodYm);
-				const billable = sessions.filter(
-					(s) => s.status !== "cancelled" && !s.invoice_id,
-				);
-				const summed = billable.reduce(
-					(sum, s) => sum + (s.rate_cents_snapshot ?? 0),
-					0,
-				);
-				sessionIds = billable.map((s) => s.id);
-				if (t.monthly_override_cents != null) {
-					// Fixed monthly fee: bill the override every month and
-					// stash the would-have-been sum so the invoice can show
-					// the effective adjustment.
-					subtotal_cents = t.monthly_override_cents;
-					uncapped_subtotal_cents = summed;
-				} else {
-					subtotal_cents = summed;
-				}
+			const lines = await listLinesForTenancy(t.id);
+			if (lines.length === 0) {
+				results.push({ tenancy_id: t.id, period: periodYm, skipped: "no_lines" });
+				continue;
 			}
 
-			if (subtotal_cents <= 0) {
+			const sessions = await findSessionsForMonth(t.id, periodYm);
+			const sessionsByLine = new Map();
+			for (const s of sessions) {
+				if (!s.tenancy_line_id) continue;
+				const arr = sessionsByLine.get(s.tenancy_line_id) ?? [];
+				arr.push(s);
+				sessionsByLine.set(s.tenancy_line_id, arr);
+			}
+
+			const computed = computeInvoiceForMonth({
+				tenancy: t,
+				lines,
+				sessionsByLine,
+				rackRatesByRoomId,
+			});
+
+			if (computed.billed_cents <= 0) {
 				results.push({ tenancy_id: t.id, period: periodYm, skipped: "zero_amount" });
 				continue;
 			}
@@ -126,37 +124,59 @@ export async function issueTenancyInvoicesForToday(venueId, today = new Date()) 
 				reference: generateReference(periodYm),
 				period_ym: periodYm,
 				status: "issued",
-				subtotal_cents,
-				uncapped_subtotal_cents,
+				subtotal_cents: computed.billed_cents,
+				uncapped_subtotal_cents: computed.uncapped_subtotal_cents,
+				rack_subtotal_cents: computed.rack_subtotal_cents ?? null,
+				line_discount_total_cents: computed.line_discount_total_cents ?? 0,
 				vat_cents: 0,
-				total_cents: subtotal_cents,
+				total_cents: computed.billed_cents,
 				issued_at: new Date(),
 			});
 
+			await insertInvoiceLines(
+				computed.lines.map((l, i) => ({
+					invoice_id: inv.id,
+					tenancy_line_id: l.tenancy_line_id,
+					description: l.description,
+					kind: l.kind,
+					billing_mode: l.billing_mode,
+					quantity: l.quantity,
+					unit_cents: l.unit_cents,
+					amount_cents: l.amount_cents,
+					rack_hourly_rate_cents: l.rack_hourly_rate_cents ?? null,
+					rack_cents: l.rack_cents ?? null,
+					discount_cents: l.discount_cents ?? null,
+					sort_order: i,
+				})),
+			);
+
+			// Lock in every billable session against the invoice so they
+			// can't be re-billed next month. Cancelled / already-invoiced
+			// rows are skipped.
+			const sessionIds = sessions
+				.filter((s) => s.status !== "cancelled" && !s.invoice_id)
+				.map((s) => s.id);
 			if (sessionIds.length > 0) {
 				await attachSessionsToInvoice(sessionIds, inv.id);
 			}
 
-			// If the parent organisation has a Direct Debit mandate on file,
-			// auto-charge it. The mandate lives on the org so one captured
-			// mandate covers every tenancy belonging to that org. Bacs takes
-			// a few business days to clear; the resulting PaymentIntent
-			// starts as `processing`.
 			let charge = null;
 			let chargeError = null;
-			if (t.org_direct_debit_mandate_id && t.org_stripe_customer_id) {
+			if (
+				t.auto_bill_via_dd &&
+				t.org_direct_debit_mandate_id &&
+				t.org_stripe_customer_id
+			) {
 				try {
 					const driver = await getActiveDdDriver(t.venue_id);
 					const pi = await driver.chargeMandate({
 						customerId: t.org_stripe_customer_id,
 						paymentMethodId: t.org_direct_debit_mandate_id,
-						amountCents: subtotal_cents,
+						amountCents: computed.billed_cents,
 						description: `${inv.reference} · ${periodYm}`,
 						metadata: {
 							tenancy_id: t.id,
 							tenancy_invoice_id: inv.id,
-							// Human-readable reference so the bank-tx ledger
-							// surfaces `TI-2026-XXXX` instead of the UUID.
 							tenancy_invoice_reference: inv.reference,
 							organisation_id: t.organisation_id,
 							period_ym: periodYm,
@@ -173,7 +193,8 @@ export async function issueTenancyInvoicesForToday(venueId, today = new Date()) 
 				tenancy_id: t.id,
 				period: periodYm,
 				invoice_id: inv.id,
-				total_cents: subtotal_cents,
+				total_cents: computed.billed_cents,
+				lines: computed.lines.length,
 				sessions: sessionIds.length,
 				charge,
 				charge_error: chargeError,

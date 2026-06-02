@@ -42,6 +42,7 @@ export default function JourneyHeader({ tenancy, agreements }) {
 		}
 	}
 
+	const autoBill = !!tenancy.auto_bill_via_dd;
 	const steps = [
 		{
 			label: "Agreement created",
@@ -61,6 +62,15 @@ export default function JourneyHeader({ tenancy, agreements }) {
 			detail: ddReady
 				? `Mandate ${tenancy.org_direct_debit_mandate_id?.slice(0, 12)}…`
 				: null,
+		},
+		{
+			label: "Auto-billing",
+			done: autoBill && ddReady,
+			detail: autoBill
+				? ddReady
+					? "Invoices auto-charged via DD"
+					: "Enabled, but DD not active yet"
+				: "Manual — invoices issued only",
 		},
 	];
 
@@ -84,7 +94,7 @@ export default function JourneyHeader({ tenancy, agreements }) {
 				</Button>
 			</div>
 
-			<ol className="grid gap-3 sm:grid-cols-3">
+			<ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				{steps.map((s, i) => (
 					<li
 						key={s.label}

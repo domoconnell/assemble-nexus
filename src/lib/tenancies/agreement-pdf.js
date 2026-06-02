@@ -305,11 +305,14 @@ function renderSignatureBlock(agreement) {
 	);
 }
 
-export async function buildTenancyAgreementPdfBuffer({ html, venue, tenancy, agreement }) {
+export async function buildTenancyAgreementPdfBuffer({ html, venue, tenancy, agreement, lines }) {
 	ensureFonts();
 	const tree = parse(html ?? "");
 
-	const headerSub = [tenancy?.organisation_name, tenancy?.room_name]
+	const roomNames = Array.isArray(lines)
+		? Array.from(new Set(lines.map((l) => l.room_name).filter(Boolean))).join(", ")
+		: "";
+	const headerSub = [tenancy?.organisation_name, roomNames]
 		.filter(Boolean)
 		.join(" · ");
 

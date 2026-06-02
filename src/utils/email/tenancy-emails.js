@@ -28,6 +28,11 @@ const dateTimeFmt = new Intl.DateTimeFormat("en-GB", {
 	hour: "2-digit", minute: "2-digit", timeZone: "Europe/London",
 });
 
+function deriveRoomNames(lines) {
+	if (!Array.isArray(lines)) return "";
+	return Array.from(new Set(lines.map((l) => l.room_name).filter(Boolean))).join(", ");
+}
+
 function dayOfMonthLabel(d) {
 	const n = Number(d) || 1;
 	const s = ["th", "st", "nd", "rd"];
@@ -41,13 +46,13 @@ function dayOfMonthLabel(d) {
  * no active DD. The link goes to the agreement-sign page; signing there
  * chains the tenant on to DD setup automatically.
  */
-export async function sendTenancyWelcomeEmail({ tenancy, agreement, contactEmail, contactFirstName }) {
+export async function sendTenancyWelcomeEmail({ tenancy, agreement, contactEmail, contactFirstName, lines }) {
 	const venue = await getVenueById(tenancy.venue_id);
 	await safeSend("tenancy-welcome", contactEmail, {
 		venue_name: venue?.name ?? "",
 		first_name: contactFirstName ?? "",
 		organisation_name: tenancy.organisation_name ?? "",
-		room_name: tenancy.room_name ?? "",
+		room_name: deriveRoomNames(lines),
 		agreement_url: `${baseUrl()}/tenancy/agreement/${agreement.token}`,
 	});
 }
@@ -57,13 +62,13 @@ export async function sendTenancyWelcomeEmail({ tenancy, agreement, contactEmail
  * re-issued). Always points at the agreement-sign URL; if the tenancy
  * still needs DD, signing there will chain to DD setup.
  */
-export async function sendTenancyAgreementSendEmail({ tenancy, agreement, contactEmail, contactFirstName }) {
+export async function sendTenancyAgreementSendEmail({ tenancy, agreement, contactEmail, contactFirstName, lines }) {
 	const venue = await getVenueById(tenancy.venue_id);
 	await safeSend("tenancy-agreement-send", contactEmail, {
 		venue_name: venue?.name ?? "",
 		first_name: contactFirstName ?? "",
 		organisation_name: tenancy.organisation_name ?? "",
-		room_name: tenancy.room_name ?? "",
+		room_name: deriveRoomNames(lines),
 		agreement_url: `${baseUrl()}/tenancy/agreement/${agreement.token}`,
 	});
 }

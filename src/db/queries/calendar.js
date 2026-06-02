@@ -3,7 +3,7 @@ import { db } from "@/db/index.js";
 import { room } from "@/db/schema/entities/room.js";
 import { booking } from "@/db/schema/entities/booking.js";
 import { booking_segment } from "@/db/schema/entities/booking_segment.js";
-import { tenancy, tenancy_session } from "@/db/schema/entities/tenancy.js";
+import { tenancy, tenancy_line, tenancy_session } from "@/db/schema/entities/tenancy.js";
 import { room_blockout } from "@/db/schema/entities/room_blockout.js";
 import { room_blockout_room } from "@/db/schema/entities/room_blockout_room.js";
 import { event } from "@/db/schema/entities/event.js";
@@ -108,7 +108,8 @@ export async function listPublicCalendarItemsInRange(venueId, start, end, { room
 				})
 				.from(tenancy_session)
 				.innerJoin(tenancy, eq(tenancy_session.tenancy_id, tenancy.id))
-				.innerJoin(room, eq(tenancy.room_id, room.id))
+				.innerJoin(tenancy_line, eq(tenancy_session.tenancy_line_id, tenancy_line.id))
+				.innerJoin(room, eq(tenancy_line.room_id, room.id))
 				.where(
 					and(
 						eq(tenancy.venue_id, venueId),

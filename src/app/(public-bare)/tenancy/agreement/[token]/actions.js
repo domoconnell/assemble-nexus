@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import {
 	getAgreementByToken,
+	listLinesForTenancy,
 	updateAgreement,
 } from "@/db/queries/tenancies.js";
 import { getVenueById } from "@/db/queries/venue.js";
@@ -74,15 +75,17 @@ export async function signTenancyAgreementAction(input) {
 	let pdfBuffer = null;
 	try {
 		const venue = await getVenueById(tenancy.venue_id);
+		const lines = await listLinesForTenancy(tenancy.id);
 		const renderedHtml = renderAgreementHtml(
 			signed.html ?? "",
-			buildAgreementVars({ tenancy, venue }),
+			buildAgreementVars({ tenancy, venue, lines }),
 		);
 		pdfBuffer = await buildTenancyAgreementPdfBuffer({
 			html: renderedHtml,
 			venue,
 			tenancy,
 			agreement: signed,
+			lines,
 		});
 		const orgSlug = slugify(tenancy.organisation_name) || "signed";
 		const uploaded = await uploadFile(pdfBuffer, {

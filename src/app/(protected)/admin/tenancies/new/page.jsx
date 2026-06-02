@@ -5,6 +5,7 @@ import { organisation } from "@/db/schema/entities/organisation.js";
 import { contact } from "@/db/schema/entities/contact.js";
 import { room } from "@/db/schema/entities/room.js";
 import { requireCurrentVenue } from "@/db/queries/venue";
+import { listRoomRackHourlyRates } from "@/db/queries/room-rack-rates.js";
 import TenancyForm from "../_components/tenancy-form";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,9 @@ export default async function NewTenancyPage() {
 			name: organisation.name,
 			primary_contact_id: organisation.primary_contact_id,
 			primary_contact_name: contact.first_name,
+			primary_contact_email: contact.email,
+			dd_token: organisation.dd_token,
+			direct_debit_ready_at: organisation.direct_debit_ready_at,
 		})
 		.from(organisation)
 		.leftJoin(contact, eq(contact.id, organisation.primary_contact_id))
@@ -34,6 +38,8 @@ export default async function NewTenancyPage() {
 		.from(room)
 		.where(and(eq(room.venue_id, venue.id), isNull(room.deletedAt)))
 		.orderBy(asc(room.sort_order), asc(room.name));
+
+	const roomRackRates = await listRoomRackHourlyRates(venue.id);
 
 	return (
 		<div className="mx-auto p-6 lg:p-10 max-w-3xl space-y-6">
@@ -54,7 +60,7 @@ export default async function NewTenancyPage() {
 					</p>
 				)}
 			</div>
-			<TenancyForm organisations={orgs} rooms={rooms} />
+			<TenancyForm organisations={orgs} rooms={rooms} roomRackRates={roomRackRates} />
 		</div>
 	);
 }

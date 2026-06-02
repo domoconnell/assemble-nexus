@@ -751,21 +751,15 @@ function DirectDebitWidget({ organisation, tenancies }) {
 	);
 }
 
-function scheduledRateLabel(raw) {
-	const rules = Array.isArray(raw)
-		? raw
-		: raw && typeof raw === "object" && raw.by_weekday
-			? [{ per_session_rate_cents: null }]
-			: [];
-	const rates = rules.map((r) => r.per_session_rate_cents).filter((c) => c != null);
-	if (rates.length === 0) return "-";
-	const min = Math.min(...rates);
-	const max = Math.max(...rates);
-	return min === max ? `${fmt(min)} / session` : `${fmt(min)}–${fmt(max)} / session`;
-}
-
 function TenancyRow({ tenancy: tn }) {
-	const label = tn.label || `${tn.kind === "private_rental" ? "Private rental" : "Recurring"} · ${tn.room_name}`;
+	const linesLabel =
+		(tn.line_count ?? 0) === 0
+			? "no lines yet"
+			: `${tn.line_count} line${tn.line_count === 1 ? "" : "s"}`;
+	const rateLabel =
+		tn.monthly_override_cents != null
+			? `${fmt(tn.monthly_override_cents)} / month (fixed)`
+			: null;
 	return (
 		<li className="flex items-baseline justify-between gap-3 p-4 flex-wrap">
 			<div className="min-w-0">
@@ -773,11 +767,10 @@ function TenancyRow({ tenancy: tn }) {
 					href={`/admin/tenancies/${tn.id}`}
 					className="text-sm font-medium hover:text-primary"
 				>
-					{label}
+					{tn.label || "(unnamed tenancy)"}
 				</Link>
 				<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mt-0.5">
-					{tn.status} · {tn.kind === "private_rental" ? "Private rental" : "Scheduled"} ·{" "}
-					{tn.room_name}
+					{tn.status} · {linesLabel}
 				</div>
 			</div>
 			<div className="flex items-center gap-3 text-xs">
@@ -791,11 +784,9 @@ function TenancyRow({ tenancy: tn }) {
 						Signed agreement →
 					</a>
 				)}
-				<span className="text-muted-foreground">
-					{tn.kind === "private_rental"
-						? fmt(tn.monthly_rate_cents)
-						: scheduledRateLabel(tn.schedule_rule)}
-				</span>
+				{rateLabel && (
+					<span className="text-muted-foreground">{rateLabel}</span>
+				)}
 			</div>
 		</li>
 	);

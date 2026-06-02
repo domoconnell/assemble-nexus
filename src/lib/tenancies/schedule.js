@@ -181,22 +181,25 @@ function expandRule(rule, window) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Build every session occurrence (with its source `rule_id` and snapshotted
- * `rate_cents`) that should exist for a scheduled_recurring tenancy
- * between `from` and `until`, given its `schedule_rule[]`. Tenancy-level
- * `starts_on` / `ends_on` clip the window before any rule runs.
+ * Build every session occurrence for a single scheduled tenancy_line
+ * between `from` and `until`, clipped to the tenancy's overall start/end.
  *
  * Returns: [{ rule_id, rate_cents, starts_at: Date, ends_at: Date }]
- * De-duped on (starts_at, ends_at). When two rules collide on the same
- * timeslot, the earlier rule in the array wins (caller can ordering-control).
+ * `rate_cents` is the per-session-rate snapshot when billing_mode is
+ * `per_session`, otherwise null (per-hour and fixed-monthly compute
+ * amounts at invoice time, not per session).
+ *
+ * De-duped on (starts_at, ends_at) within the same line. Earlier rule in
+ * the array wins on collision.
  */
-export function generateSessionDates(tenancy, { from, until }) {
-	const rules = normaliseSchedule(tenancy.schedule_rule);
+export function generateSessionDates(line, tenancyDates, { from, until }) {
+	if (!line || line.kind !== "scheduled") return [];
+	const rules = normaliseSchedule(line.schedule_rule);
 	if (rules.length === 0) return [];
 
-	const tenancyStart = new Date(`${tenancy.starts_on}T00:00:00Z`);
-	const tenancyEnd = tenancy.ends_on
-		? new Date(`${tenancy.ends_on}T23:59:59Z`)
+	const tenancyStart = new Date(`${tenancyDates.starts_on}T00:00:00Z`);
+	const tenancyEnd = tenancyDates.ends_on
+		? new Date(`${tenancyDates.ends_on}T23:59:59Z`)
 		: null;
 	const windowStart = from > tenancyStart ? from : tenancyStart;
 	const windowEnd = tenancyEnd && tenancyEnd < until ? tenancyEnd : until;
@@ -212,7 +215,10 @@ export function generateSessionDates(tenancy, { from, until }) {
 			seen.add(key);
 			out.push({
 				rule_id: rule.id ?? null,
-				rate_cents: rule.per_session_rate_cents ?? null,
+				rate_cents:
+					line.billing_mode === "per_session"
+						? line.per_session_rate_cents ?? null
+						: null,
 				starts_at: occ.starts_at,
 				ends_at: occ.ends_at,
 			});
