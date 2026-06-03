@@ -18,7 +18,7 @@ import { listOrganisations, getOrganisationById } from "@/db/queries/crm";
 import { listRoomsForAdmin } from "@/db/queries/rooms";
 import { listOrdersForEvent } from "@/db/queries/orders";
 import { listExpensesForEvent } from "@/db/queries/finance";
-import { getBookingById } from "@/db/queries/bookings";
+import { getBookingById, listBookingSegments } from "@/db/queries/bookings";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import { getFileRecord } from "@/utils/files/files.server";
 import EventEditor from "../_components/event-editor";
@@ -60,13 +60,25 @@ export default async function AdminEventEditPage({ params }) {
 		listRoomsForAdmin(venue.id),
 		listOrdersForEvent(ev.id),
 	]);
-	const [linkedExpenses, linkedBooking, linkedOrganisation] = await Promise.all([
+	const [linkedExpenses, linkedBooking, linkedOrganisation, bookingSegments] = await Promise.all([
 		listExpensesForEvent(ev.id),
 		ev.booking_id ? getBookingById(ev.booking_id) : Promise.resolve(null),
 		ev.organiser_organisation_id
 			? getOrganisationById(ev.organiser_organisation_id)
 			: Promise.resolve(null),
+		ev.booking_id ? listBookingSegments(ev.booking_id) : Promise.resolve([]),
 	]);
+
+	// "When" pickers in the editor must stay inside the booking's
+	// event-day windows — setup/teardown/rehearsal slots don't count.
+	// `eventDayWindows` is an array of { starts_at, ends_at } strings the
+	// client can JSON-serialise without losing precision.
+	const eventDayWindows = bookingSegments
+		.filter((s) => s.booking_type_key === "event")
+		.map((s) => ({
+			starts_at: new Date(s.starts_at).toISOString(),
+			ends_at: new Date(s.ends_at).toISOString(),
+		}));
 	const banner = ev.banner_file_id ? await getFileRecord(ev.banner_file_id) : null;
 	const galleryPhoto = ev.gallery_photo_file_id ? await getFileRecord(ev.gallery_photo_file_id) : null;
 	const evWithExtras = { ...ev, gallery_photo_url: galleryPhoto?.public_url ?? null };
@@ -96,6 +108,7 @@ export default async function AdminEventEditPage({ params }) {
 			initialLinkedExpenses={linkedExpenses}
 			linkedBooking={linkedBooking}
 			linkedOrganisation={linkedOrganisation}
+			eventDayWindows={eventDayWindows}
 			rooms={rooms}
 			vatRates={vatRates}
 			organisers={organisers}

@@ -1,4 +1,4 @@
-import { syncAllBankAccounts } from "@/lib/banking/sync.js";
+import { runBankSync } from "@/lib/banking/sync.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ function authorized(req) {
 }
 
 async function run() {
-	const results = await syncAllBankAccounts();
+	const results = await runBankSync();
 	return { ran_at: new Date().toISOString(), results };
 }
 

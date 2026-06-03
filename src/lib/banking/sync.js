@@ -5,6 +5,7 @@ import { bank_transaction } from "@/db/schema/entities/bank_transaction.js";
 import { bank_balance_snapshot } from "@/db/schema/entities/bank_balance_snapshot.js";
 import { getProvider } from "./providers/index.js";
 import { getChurchTransferSettings } from "@/db/queries/settings.js";
+import { autoMatchInboundTransactions } from "./auto-match.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_BACKFILL_DAYS = 400;
@@ -444,4 +445,43 @@ function endOfUtcDay(d) {
 }
 function utcDayKey(d) {
 	return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Single entry point used by BOTH the nightly cron and the admin
+ * "Sync now" button. Pulls the latest feed for every active bank
+ * account in scope, then runs the auto-match pass to reconcile inbound
+ * payments against open tenancy invoices.
+ *
+ * Pass `venueId` from the admin button so we only sync + match that
+ * venue. The cron leaves it undefined to sync every venue.
+ */
+export async function runBankSync({ venueId, force = false } = {}) {
+	const syncResults = await syncAllBankAccounts({ venueId, force });
+
+	// Group accounts by venue and run auto-match per venue. The cron
+	// iterates every venue; the admin button hits just one.
+	const venueIds = new Set();
+	if (venueId) {
+		venueIds.add(venueId);
+	} else {
+		const accounts = await listActiveBankAccounts();
+		for (const a of accounts) venueIds.add(a.venue_id);
+	}
+
+	const matchResults = [];
+	for (const v of venueIds) {
+		try {
+			const r = await autoMatchInboundTransactions(v);
+			matchResults.push({ venue_id: v, ...r });
+		} catch (err) {
+			matchResults.push({
+				venue_id: v,
+				ok: false,
+				error: err?.message || String(err),
+			});
+		}
+	}
+
+	return { sync: syncResults, match: matchResults };
 }

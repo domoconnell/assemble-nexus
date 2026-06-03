@@ -269,18 +269,43 @@ export async function userCanEditEvent(userId, eventId) {
 		.where(and(eq(event.id, eventId), notDeleted(event)))
 		.limit(1);
 	if (!ev) return false;
-	if (!ev.event_organiser_id) return false;
-	const [link] = await db
-		.select()
-		.from(user_event_organiser)
-		.where(
-			and(
-				eq(user_event_organiser.user_id, userId),
-				eq(user_event_organiser.event_organiser_id, ev.event_organiser_id),
-			),
-		)
-		.limit(1);
-	return !!link;
+
+	// Primary check: user is linked to the event's organiser (standard
+	// path for promoter-led events whose organiser matched on email
+	// domain at creation time).
+	if (ev.event_organiser_id) {
+		const [link] = await db
+			.select()
+			.from(user_event_organiser)
+			.where(
+				and(
+					eq(user_event_organiser.user_id, userId),
+					eq(user_event_organiser.event_organiser_id, ev.event_organiser_id),
+				),
+			)
+			.limit(1);
+		if (link) return true;
+	}
+
+	// Fallback: the event was spawned from a booking whose customer is
+	// this user. Covers brand-new hirers whose email domain didn't match
+	// any pre-existing organiser, so `event_organiser_id` ended up null.
+	if (ev.booking_id) {
+		const [own] = await db
+			.select({ id: booking.id })
+			.from(booking)
+			.innerJoin(customer, eq(customer.id, booking.customer_id))
+			.where(
+				and(
+					eq(booking.id, ev.booking_id),
+					eq(customer.user_id, userId),
+				),
+			)
+			.limit(1);
+		if (own) return true;
+	}
+
+	return false;
 }
 
 /**
@@ -372,8 +397,16 @@ export async function listEventRooms(eventId) {
  */
 export async function listEventRoomsResolved(eventRow) {
 	if (eventRow.booking_id) {
+		// PG: SELECT DISTINCT requires every ORDER BY column to appear in
+		// the select list. Include `sort_order` so the ordering works,
+		// callers ignore the extra field.
 		return db
-			.selectDistinct({ id: room.id, name: room.name, slug: room.slug })
+			.selectDistinct({
+				id: room.id,
+				name: room.name,
+				slug: room.slug,
+				sort_order: room.sort_order,
+			})
 			.from(booking_segment)
 			.innerJoin(room, eq(booking_segment.room_id, room.id))
 			.where(eq(booking_segment.booking_id, eventRow.booking_id))

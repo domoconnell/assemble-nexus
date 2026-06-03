@@ -4,8 +4,9 @@ import {
 	getBookingForUser,
 	listBookingSegments,
 	listBookingFacilitySelections,
+	listBookingPayments,
 } from "@/db/queries/bookings";
-import { getEventByBookingId } from "@/db/queries/events";
+import { getEventByBookingId, countEventTickets } from "@/db/queries/events";
 import { Container } from "@/site/ui/container";
 import { Hero } from "@/site/ui/hero";
 import { getServerSession } from "@/utils/auth/server-guard";
@@ -53,6 +54,23 @@ function statusClass(status) {
 	}
 }
 
+function eventStatusClass(status) {
+	switch (status) {
+		case "draft":
+			return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+		case "awaiting_approval":
+			return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+		case "published":
+		case "approved":
+			return "border-primary/30 bg-primary/10 text-primary";
+		case "cancelled":
+		case "rejected":
+			return "border-destructive/30 bg-destructive/10 text-destructive";
+		default:
+			return "border-foreground/15 text-muted-foreground";
+	}
+}
+
 export async function generateMetadata({ params }) {
 	const { id } = await params;
 	return {
@@ -87,11 +105,13 @@ export default async function MyBookingDetailPage({ params }) {
 	const b = await getBookingForUser(id, session.user.id);
 	if (!b) notFound();
 
-	const [segments, facilities, linkedEvent] = await Promise.all([
+	const [segments, facilities, linkedEvent, payments] = await Promise.all([
 		listBookingSegments(b.id),
 		listBookingFacilitySelections(b.id),
 		b.ticketing_enabled ? getEventByBookingId(b.id) : Promise.resolve(null),
+		listBookingPayments(b.id),
 	]);
+	const eventStats = linkedEvent ? await countEventTickets(linkedEvent.id) : null;
 
 	const segmentGroups = segments.reduce((acc, s) => {
 		const key = s.booking_type_key ?? "other";
@@ -100,8 +120,17 @@ export default async function MyBookingDetailPage({ params }) {
 		return acc;
 	}, new Map());
 
-	const outstandingCents =
-		(b.total_cents ?? 0) - (b.deposit_paid_cents ?? 0) - (b.balance_paid_cents ?? 0);
+	// Prefer the installments table as the source of truth when it
+	// exists (admin-configured splits or post-approval defaults). Falls
+	// back to the legacy deposit_paid_cents + balance_paid_cents on
+	// pending bookings that haven't been approved yet.
+	const paidFromPayments = payments
+		.filter((p) => p.paid_at)
+		.reduce((s, p) => s + (p.amount_cents ?? 0), 0);
+	const paidLegacy = (b.deposit_paid_cents ?? 0) + (b.balance_paid_cents ?? 0);
+	const paidCents = payments.length > 0 ? paidFromPayments : paidLegacy;
+	const outstandingCents = Math.max(0, (b.total_cents ?? 0) - paidCents);
+	const canPayNow = b.status === "approved" || b.status === "confirmed";
 
 	return (
 		<>
@@ -140,19 +169,64 @@ export default async function MyBookingDetailPage({ params }) {
 				{linkedEvent && (
 					<Link
 						href={`/my-events/${linkedEvent.id}`}
-						className="block rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 hover:bg-primary/10 transition"
+						className="block rounded-xl border border-primary/30 bg-primary/5 p-5 hover:bg-primary/10 transition"
 					>
 						<div className="flex items-baseline justify-between gap-4 flex-wrap">
-							<div>
+							<div className="min-w-0">
 								<div className="text-xs uppercase tracking-[0.22em] text-primary">
 									Ticketed event
 								</div>
-								<div className="font-medium mt-1">{linkedEvent.title}</div>
+								<div className="font-medium mt-1 truncate">{linkedEvent.title}</div>
+								<div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
+									<span
+										className={`inline-flex items-center rounded-full border px-2 py-0.5 uppercase tracking-[0.15em] ${eventStatusClass(linkedEvent.status)}`}
+									>
+										{(linkedEvent.status || "draft").replace("_", " ")}
+									</span>
+									{linkedEvent.visibility && (
+										<span className="text-muted-foreground">
+											{linkedEvent.visibility === "public" ? "Public" : "Private"}
+										</span>
+									)}
+									{linkedEvent.starts_at && (
+										<span className="text-muted-foreground">
+											· {stampFmt.format(new Date(linkedEvent.starts_at))}
+										</span>
+									)}
+								</div>
 							</div>
-							<span className="text-xs text-muted-foreground">
+							<span className="text-xs text-muted-foreground shrink-0">
 								Manage event →
 							</span>
 						</div>
+						{eventStats && (
+							<dl className="mt-4 pt-3 border-t border-primary/15 grid grid-cols-3 gap-3 text-sm">
+								<div>
+									<dt className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+										Sold
+									</dt>
+									<dd className="font-display text-xl">
+										{eventStats.total ?? 0}
+									</dd>
+								</div>
+								<div>
+									<dt className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+										Checked in
+									</dt>
+									<dd className="font-display text-xl">
+										{eventStats.used ?? 0}
+									</dd>
+								</div>
+								<div>
+									<dt className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+										Outstanding
+									</dt>
+									<dd className="font-display text-xl">
+										{(eventStats.total ?? 0) - (eventStats.used ?? 0)}
+									</dd>
+								</div>
+							</dl>
+						)}
 					</Link>
 				)}
 
@@ -269,30 +343,56 @@ export default async function MyBookingDetailPage({ params }) {
 										</dd>
 									</div>
 								)}
-								<div className="border-t border-foreground/10 pt-2 mt-2 space-y-1">
-									<div className="flex justify-between">
-										<dt className="text-muted-foreground">Deposit paid</dt>
-										<dd className="font-mono">
-											{formatGbp(b.deposit_paid_cents)}
-										</dd>
+								{payments.length > 0 ? (
+									<div className="border-t border-foreground/10 pt-2 mt-2 space-y-1.5">
+										{payments.map((p) => {
+											const isPaid = !!p.paid_at;
+											return (
+												<div
+													key={p.id}
+													className="flex items-baseline justify-between gap-3"
+												>
+													<dt className="text-muted-foreground">
+														{p.label}
+														{isPaid && (
+															<span className="ml-2 text-[10px] uppercase tracking-[0.15em] text-primary">
+																paid
+															</span>
+														)}
+													</dt>
+													<dd className="flex items-baseline gap-3">
+														<span className="font-mono">{formatGbp(p.amount_cents)}</span>
+														{!isPaid && canPayNow && (
+															<Link
+																href={`/booking/${b.reference}/pay-installment/${p.pay_token}`}
+																className="text-xs text-primary hover:underline whitespace-nowrap"
+															>
+																Pay →
+															</Link>
+														)}
+													</dd>
+												</div>
+											);
+										})}
+										<div className="flex justify-between font-medium pt-2 border-t border-foreground/10 mt-2">
+											<dt>Outstanding</dt>
+											<dd className="font-mono">{formatGbp(outstandingCents)}</dd>
+										</div>
 									</div>
-									<div className="flex justify-between">
-										<dt className="text-muted-foreground">Balance paid</dt>
-										<dd className="font-mono">
-											{formatGbp(b.balance_paid_cents)}
-										</dd>
-									</div>
-									<div className="flex justify-between font-medium">
-										<dt>Outstanding</dt>
-										<dd className="font-mono">{formatGbp(outstandingCents)}</dd>
-									</div>
-								</div>
-								{b.deposit_required_cents > 0 && b.status === "pending" && (
-									<div className="flex justify-between pt-2 border-t border-foreground/10 mt-2">
-										<dt className="text-muted-foreground">Deposit on approval</dt>
-										<dd className="font-mono">
-											{formatGbp(b.deposit_required_cents)}
-										</dd>
+								) : (
+									<div className="border-t border-foreground/10 pt-2 mt-2 space-y-1">
+										{b.deposit_required_cents > 0 && b.status === "pending" && (
+											<div className="flex justify-between">
+												<dt className="text-muted-foreground">Deposit on approval</dt>
+												<dd className="font-mono">
+													{formatGbp(b.deposit_required_cents)}
+												</dd>
+											</div>
+										)}
+										<div className="flex justify-between font-medium">
+											<dt>Outstanding</dt>
+											<dd className="font-mono">{formatGbp(outstandingCents)}</dd>
+										</div>
 									</div>
 								)}
 							</dl>

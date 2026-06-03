@@ -11,6 +11,8 @@ import { currentMonthLondon, resolveMonth, monthLabel } from "@/lib/finance/mont
 import BalanceChart from "./_components/balance-chart";
 import AccountPills from "./_components/account-pills";
 import ChurchTransferToggle from "./_components/church-transfer-toggle";
+import SyncNowButton from "./_components/sync-now-button";
+import MatchCell from "./_components/match-cell";
 
 export const dynamic = "force-dynamic";
 
@@ -83,9 +85,12 @@ export default async function BankingPage({ searchParams }) {
 				</Link>
 				<div className="mt-2 flex items-baseline justify-between gap-3 flex-wrap">
 					<h1 className="text-2xl font-semibold">Banking</h1>
-					<div className="text-xs text-muted-foreground">
-						{accounts.length} account{accounts.length === 1 ? "" : "s"} connected
-						{latestSyncedAt ? <> · Last synced {stampFmt.format(new Date(latestSyncedAt))}</> : null}
+					<div className="flex items-center gap-3 flex-wrap">
+						<div className="text-xs text-muted-foreground">
+							{accounts.length} account{accounts.length === 1 ? "" : "s"} connected
+							{latestSyncedAt ? <> · Last synced {stampFmt.format(new Date(latestSyncedAt))}</> : null}
+						</div>
+						{!noAccountsConnected && <SyncNowButton />}
 					</div>
 				</div>
 			</div>
@@ -213,6 +218,7 @@ function TransactionsTable({ rows, accountsById }) {
 						<th className="text-left px-4 py-2">Account</th>
 						<th className="text-left px-4 py-2">Counterparty</th>
 						<th className="text-left px-4 py-2">Reference</th>
+						<th className="text-left px-4 py-2">Match</th>
 						<th className="text-right px-4 py-2">Amount</th>
 					</tr>
 				</thead>
@@ -223,8 +229,14 @@ function TransactionsTable({ rows, accountsById }) {
 						// before becoming payable.
 						const when = r.transaction_time ?? r.settled_at;
 						const dateStr = when ? dateFmt.format(new Date(when)) : "-";
+						// Pending = the source hasn't filled in settled_at at all.
+						// Bank rails (Monzo, Starling) post settled_at the moment a
+						// transfer lands even if it's a few seconds ahead of "now",
+						// so a future settled_at is fine. Only Stripe genuinely sits
+						// "pending" against an `available_on` date — and there the
+						// settled_at value still represents real settlement.
 						const settledMs = r.settled_at ? new Date(r.settled_at).getTime() : null;
-						const isPending = settledMs == null || settledMs > now;
+						const isPending = settledMs == null;
 						const isIn = r.direction === "IN";
 						const accountLabel = accountsById[r.bank_account_id]?.label ?? "-";
 						// Synthetic Stripe fee rows ride along with their parent
@@ -276,6 +288,19 @@ function TransactionsTable({ rows, accountsById }) {
 								</td>
 								<td className={`px-4 py-2.5 text-muted-foreground truncate max-w-xs ${isFee ? "text-xs" : ""}`}>
 									{r.reference || ""}
+								</td>
+								<td className="px-4 py-2.5 whitespace-nowrap">
+									{isFee || r.is_transfer ? (
+										<span className="text-muted-foreground/60 text-xs">—</span>
+									) : (
+										<MatchCell
+											transactionId={r.id}
+											direction={r.direction}
+											matchedToType={r.matched_to_type}
+											matchedReference={r.matched_invoice_reference}
+											matchedInvoiceStatus={r.matched_invoice_status}
+										/>
+									)}
 								</td>
 								<td
 									className={`px-4 py-2.5 text-right font-mono tabular-nums whitespace-nowrap ${

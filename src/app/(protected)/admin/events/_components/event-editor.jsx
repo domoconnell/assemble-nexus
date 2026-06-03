@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/shadcn/components/ui/button";
@@ -71,6 +71,62 @@ function toIsoLocal(d) {
 	return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 }
 
+function msOf(v) {
+	if (!v) return null;
+	const t = new Date(v).getTime();
+	return Number.isFinite(t) ? t : null;
+}
+
+/**
+ * "When" field validation:
+ *   - Each time, if set, must fall inside one of the booking's event-day
+ *     windows. Setup, teardown, and rehearsal segments are excluded
+ *     upstream (server only feeds us `booking_type_key === "event"` rows).
+ *   - The order is enforced: doors_open_at ≤ starts_at ≤ ends_at.
+ *
+ * When `eventDayWindows` is empty (event with no linked booking, or a
+ * booking with no event-day segments yet) only the ordering applies.
+ */
+function deriveWhenErrors(draft, eventDayWindows) {
+	const doors = msOf(draft.doors_open_at);
+	const starts = msOf(draft.starts_at);
+	const ends = msOf(draft.ends_at);
+	const windows = (eventDayWindows ?? [])
+		.map((w) => ({ start: msOf(w.starts_at), end: msOf(w.ends_at) }))
+		.filter((w) => w.start != null && w.end != null);
+
+	function outOfWindow(t) {
+		if (t == null || windows.length === 0) return false;
+		return !windows.some((w) => t >= w.start && t <= w.end);
+	}
+
+	const errors = {};
+	if (outOfWindow(doors)) errors.doors_open_at = "Doors must be inside the booking's event-day window.";
+	if (outOfWindow(starts)) errors.starts_at = "Start time must be inside the booking's event-day window.";
+	if (outOfWindow(ends)) errors.ends_at = "End time must be inside the booking's event-day window.";
+
+	if (doors != null && starts != null && doors > starts) {
+		errors.doors_open_at = errors.doors_open_at || "Doors must be on or before the start time.";
+	}
+	if (starts != null && ends != null && starts > ends) {
+		errors.ends_at = errors.ends_at || "End time must be on or after the start time.";
+	}
+	if (doors != null && ends != null && doors > ends) {
+		errors.doors_open_at = errors.doors_open_at || "Doors must be on or before the end time.";
+	}
+	return errors;
+}
+
+const stampHintFmt = new Intl.DateTimeFormat("en-GB", {
+	weekday: "short",
+	day: "numeric",
+	month: "short",
+	year: "numeric",
+	hour: "2-digit",
+	minute: "2-digit",
+	timeZone: "Europe/London",
+});
+
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 const formatGbp = (c) => gbp.format((c ?? 0) / 100);
 
@@ -88,6 +144,7 @@ export default function EventEditor({
 	initialLinkedExpenses = [],
 	linkedBooking = null,
 	linkedOrganisation = null,
+	eventDayWindows = [],
 	rooms = [],
 	vatRates = [],
 	organisers = [],
@@ -169,7 +226,22 @@ export default function EventEditor({
 		event_organiser_id: initialEvent?.event_organiser_id ?? null,
 		organiser_organisation_id: initialEvent?.organiser_organisation_id ?? null,
 		external_url: initialEvent?.external_url ?? "",
+		// Carry the booking link through the draft so saves don't strip it.
+		// The field isn't user-editable from this form, but it has to be in
+		// the payload otherwise the server action nullifies it on every save.
+		booking_id: initialEvent?.booking_id ?? null,
 	}));
+	// Validate the "When" pickers against the booking's event-day window
+	// and the natural doors ≤ start ≤ end ordering. Errors render inline
+	// under each field and gate the Save button so a bad time can't
+	// reach the server.
+	const whenErrors = useMemo(
+		() => deriveWhenErrors(draft, eventDayWindows),
+		[draft.doors_open_at, draft.starts_at, draft.ends_at, eventDayWindows],
+	);
+	const hasWhenErrors =
+		!!whenErrors.doors_open_at || !!whenErrors.starts_at || !!whenErrors.ends_at;
+
 	const [banner, setBanner] = useState(initialBanner);
 	const [faqs, setFaqs] = useState(initialFaqs);
 	const [ticketTypes, setTicketTypes] = useState(initialTicketTypes);
@@ -359,7 +431,8 @@ export default function EventEditor({
 						<Button
 							variant={isHirer ? "outline" : "default"}
 							onClick={() => saveBasics()}
-							disabled={saving || !draft.title}
+							disabled={saving || !draft.title || hasWhenErrors}
+							title={hasWhenErrors ? "Fix the times in 'When' before saving." : undefined}
 						>
 							{saving ? "Saving…" : isHirer ? "Save draft" : "Save"}
 						</Button>
@@ -378,7 +451,7 @@ export default function EventEditor({
 											await saveBasics();
 											await onSubmitForReview();
 										}}
-										disabled={saving || !draft.title || bookingGated}
+										disabled={saving || !draft.title || bookingGated || hasWhenErrors}
 										title={gateMsg ?? undefined}
 									>
 										Submit for approval
@@ -767,6 +840,21 @@ export default function EventEditor({
 
 					<section className="rounded-lg border bg-card p-6 space-y-5">
 						<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">When</h2>
+						{eventDayWindows.length > 0 && (
+							<div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+								<div className="text-muted-foreground">
+									Pick times inside the booking&apos;s event-day window
+									{eventDayWindows.length > 1 ? "s" : ""}:
+								</div>
+								<ul className="mt-1 space-y-0.5">
+									{eventDayWindows.map((w, i) => (
+										<li key={i} className="font-mono">
+											{stampHintFmt.format(new Date(w.starts_at))} → {stampHintFmt.format(new Date(w.ends_at))}
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
 						<div className="space-y-4">
 							<div className="space-y-2">
 								<Label>Doors open</Label>
@@ -776,6 +864,9 @@ export default function EventEditor({
 									onDateChange={cascadeDoorsDate}
 									onTimeChange={cascadeDoorsTime}
 								/>
+								{whenErrors.doors_open_at && (
+									<p className="text-xs text-destructive">{whenErrors.doors_open_at}</p>
+								)}
 							</div>
 							<div className="space-y-2">
 								<Label>Starts at</Label>
@@ -784,6 +875,9 @@ export default function EventEditor({
 									onChange={(v) => update("starts_at", v)}
 									onTimeChange={cascadeStartsTime}
 								/>
+								{whenErrors.starts_at && (
+									<p className="text-xs text-destructive">{whenErrors.starts_at}</p>
+								)}
 							</div>
 							<div className="space-y-2">
 								<Label>Ends at</Label>
@@ -791,6 +885,9 @@ export default function EventEditor({
 									value={draft.ends_at ?? ""}
 									onChange={(v) => update("ends_at", v)}
 								/>
+								{whenErrors.ends_at && (
+									<p className="text-xs text-destructive">{whenErrors.ends_at}</p>
+								)}
 							</div>
 						</div>
 					</section>

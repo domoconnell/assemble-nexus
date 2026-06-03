@@ -265,6 +265,8 @@ export async function getBookingForUser(bookingId, userId) {
 			ticketing_enabled: booking.ticketing_enabled,
 			ticketing_setup_fee_cents: booking.ticketing_setup_fee_cents,
 			deposit_required_cents: booking.deposit_required_cents,
+			deposit_paid_cents: booking.deposit_paid_cents,
+			balance_paid_cents: booking.balance_paid_cents,
 			customer_notes: booking.customer_notes,
 			submitted_at: booking.submitted_at,
 			approved_at: booking.approved_at,

@@ -3,6 +3,7 @@ import { db } from "@/db/index.js";
 import { bank_account } from "@/db/schema/entities/bank_account.js";
 import { bank_transaction } from "@/db/schema/entities/bank_transaction.js";
 import { bank_balance_snapshot } from "@/db/schema/entities/bank_balance_snapshot.js";
+import { tenancy_invoice } from "@/db/schema/entities/tenancy.js";
 
 /**
  * Active bank accounts for a venue, ordered by sort then created.
@@ -216,8 +217,40 @@ export async function listBankTransactions(venueId, { limit = 50, offset = 0, ac
 		: eq(bank_transaction.venue_id, venueId);
 	const [rows, [{ count }]] = await Promise.all([
 		db
-			.select()
+			.select({
+				// Spread the row…
+				id: bank_transaction.id,
+				venue_id: bank_transaction.venue_id,
+				bank_account_id: bank_transaction.bank_account_id,
+				external_id: bank_transaction.external_id,
+				direction: bank_transaction.direction,
+				amount_minor: bank_transaction.amount_minor,
+				currency: bank_transaction.currency,
+				counterparty_name: bank_transaction.counterparty_name,
+				counterparty_account: bank_transaction.counterparty_account,
+				reference: bank_transaction.reference,
+				category_uid: bank_transaction.category_uid,
+				source: bank_transaction.source,
+				is_transfer: bank_transaction.is_transfer,
+				is_church_transfer: bank_transaction.is_church_transfer,
+				settled_at: bank_transaction.settled_at,
+				transaction_time: bank_transaction.transaction_time,
+				matched_to_id: bank_transaction.matched_to_id,
+				matched_to_type: bank_transaction.matched_to_type,
+				// …plus the matched invoice ref when there is one. The
+				// LEFT JOIN is keyed on type='tenancy_invoice' so a future
+				// match against another entity won't accidentally bind.
+				matched_invoice_reference: tenancy_invoice.reference,
+				matched_invoice_status: tenancy_invoice.status,
+			})
 			.from(bank_transaction)
+			.leftJoin(
+				tenancy_invoice,
+				and(
+					eq(bank_transaction.matched_to_id, tenancy_invoice.id),
+					eq(bank_transaction.matched_to_type, "tenancy_invoice"),
+				),
+			)
 			.where(where)
 			.orderBy(
 				// Sort by when the payment happened, not when it cleared.

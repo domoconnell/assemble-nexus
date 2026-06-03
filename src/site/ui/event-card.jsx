@@ -39,7 +39,7 @@ export function EventCard({ event, variant = "default" }) {
 			<div
 				className={`relative ${isCompact ? "h-44" : "h-48"} overflow-hidden bg-muted/40`}
 			>
-				{ev.banner_url && (
+				{ev.banner_url ? (
 					<Image
 						src={ev.banner_url}
 						alt={ev.title}
@@ -47,6 +47,8 @@ export function EventCard({ event, variant = "default" }) {
 						sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
 						className="object-cover grayscale-40 group-hover:grayscale-0 transition duration-500"
 					/>
+				) : (
+					<EventCardFallbackHeader seed={ev.id ?? ev.slug ?? ev.title ?? ""} />
 				)}
 				<div className="absolute inset-0 bg-linear-to-t from-card via-card/40 to-transparent" />
 			</div>
@@ -90,4 +92,41 @@ export function EventCard({ event, variant = "default" }) {
 			</div>
 		</Link>
 	);
+}
+
+/**
+ * Pure-CSS hero stand-in for events without a banner. Derives a stable
+ * hue + secondary hue from a seed string so the same event always
+ * renders the same colour, but different events get visual variety.
+ * Two radial gradients + a soft conic stripe + a subtle dot grid sit
+ * over each other to keep the panel feeling intentional rather than
+ * "missing image".
+ */
+function EventCardFallbackHeader({ seed }) {
+	const hash = simpleHash(String(seed) || "event");
+	const hue = hash % 360;
+	const hue2 = (hue + 60) % 360;
+	const hue3 = (hue + 200) % 360;
+	const style = {
+		backgroundColor: `oklch(0.32 0.07 ${hue})`,
+		backgroundImage: [
+			// Two radial blooms in mixed hues
+			`radial-gradient(circle at 20% 20%, oklch(0.62 0.16 ${hue2} / 0.55), transparent 55%)`,
+			`radial-gradient(circle at 80% 70%, oklch(0.55 0.18 ${hue3} / 0.45), transparent 60%)`,
+			// Faint angled stripe to add direction
+			`linear-gradient(135deg, oklch(1 0 0 / 0.04) 0%, transparent 40%, oklch(0 0 0 / 0.08) 100%)`,
+			// Sparse dot grid for texture
+			"radial-gradient(oklch(1 0 0 / 0.06) 1px, transparent 1.5px)",
+		].join(", "),
+		backgroundSize: "auto, auto, auto, 14px 14px",
+	};
+	return <div aria-hidden className="absolute inset-0" style={style} />;
+}
+
+function simpleHash(s) {
+	let h = 0;
+	for (let i = 0; i < s.length; i++) {
+		h = (h * 31 + s.charCodeAt(i)) >>> 0;
+	}
+	return h;
 }

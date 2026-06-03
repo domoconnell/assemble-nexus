@@ -7,6 +7,8 @@ import { db } from "@/db/index.js";
 import { event, EVENT_STATUSES } from "@/db/schema/entities/event.js";
 import { event_faq } from "@/db/schema/entities/event_faq.js";
 import { event_room } from "@/db/schema/entities/event_room.js";
+import { booking_segment } from "@/db/schema/entities/booking_segment.js";
+import { booking_type } from "@/db/schema/entities/booking_type.js";
 import { ticket_type } from "@/db/schema/entities/ticket_type.js";
 import { ticket_addon } from "@/db/schema/entities/ticket_addon.js";
 import { ticket_addon_group } from "@/db/schema/entities/ticket_addon_group.js";
@@ -97,6 +99,72 @@ export async function saveEventAction(input) {
 
 	const venue = await requireCurrentVenue();
 
+	// "When" times: the natural ordering applies always, plus a window
+	// check when the (updated) event is tied to a booking. The window
+	// list is derived from the booking's `event`-keyed segments — setup
+	// / teardown / rehearsal slots don't count. The client gates Save on
+	// the same rules; this layer stops a stale page or a direct API hit
+	// from writing nonsense.
+	const doorsTs = parsed.doors_open_at ? new Date(parsed.doors_open_at).getTime() : null;
+	const startsTs = parsed.starts_at ? new Date(parsed.starts_at).getTime() : null;
+	const endsTs = parsed.ends_at ? new Date(parsed.ends_at).getTime() : null;
+	if (doorsTs != null && startsTs != null && doorsTs > startsTs) {
+		throw new Error("Doors must be on or before the start time.");
+	}
+	if (startsTs != null && endsTs != null && startsTs > endsTs) {
+		throw new Error("End time must be on or after the start time.");
+	}
+	if (doorsTs != null && endsTs != null && doorsTs > endsTs) {
+		throw new Error("Doors must be on or before the end time.");
+	}
+
+	// Resolve the booking link for the window check: the payload's
+	// `booking_id` wins; falls back to whatever's currently on the row
+	// (in case the form omitted it).
+	let bookingIdForWindow = parsed.booking_id ?? null;
+	if (!bookingIdForWindow && parsed.id) {
+		const [existing] = await db
+			.select({ booking_id: event.booking_id })
+			.from(event)
+			.where(eq(event.id, parsed.id))
+			.limit(1);
+		bookingIdForWindow = existing?.booking_id ?? null;
+	}
+	if (bookingIdForWindow && (doorsTs != null || startsTs != null || endsTs != null)) {
+		const segs = await db
+			.select({
+				starts_at: booking_segment.starts_at,
+				ends_at: booking_segment.ends_at,
+				key: booking_type.key,
+			})
+			.from(booking_segment)
+			.innerJoin(booking_type, eq(booking_type.id, booking_segment.booking_type_id))
+			.where(
+				and(
+					eq(booking_segment.booking_id, bookingIdForWindow),
+					isNull(booking_segment.deletedAt),
+				),
+			);
+		const windows = segs
+			.filter((s) => s.key === "event")
+			.map((s) => ({
+				start: new Date(s.starts_at).getTime(),
+				end: new Date(s.ends_at).getTime(),
+			}));
+		const inWindow = (t) => windows.some((w) => t >= w.start && t <= w.end);
+		if (windows.length > 0) {
+			if (doorsTs != null && !inWindow(doorsTs)) {
+				throw new Error("Doors time is outside the booking's event-day window.");
+			}
+			if (startsTs != null && !inWindow(startsTs)) {
+				throw new Error("Start time is outside the booking's event-day window.");
+			}
+			if (endsTs != null && !inWindow(endsTs)) {
+				throw new Error("End time is outside the booking's event-day window.");
+			}
+		}
+	}
+
 	// Slug is server-owned. On insert: auto-generate. On update: keep existing.
 	let slug;
 	if (parsed.id) {
@@ -139,6 +207,14 @@ export async function saveEventAction(input) {
 
 	let result;
 	if (parsed.id) {
+		// Belt and braces: only overwrite `booking_id` on update when the
+		// payload actually included it. The admin event editor doesn't
+		// expose booking_id as a field, so when the form is saved without
+		// it (or with `undefined`), we'd otherwise nullify the link a
+		// hirer-spawned event needs to stay accessible from /my-bookings.
+		if (!Object.prototype.hasOwnProperty.call(input, "booking_id")) {
+			delete values.booking_id;
+		}
 		[result] = await db
 			.update(event)
 			.set(values)
@@ -151,11 +227,29 @@ export async function saveEventAction(input) {
 	}
 
 	if (result?.id) {
+		// When the event was spawned from a booking, the rooms are fixed:
+		// they're whatever rooms the booking's segments use. The admin
+		// editor hides the room picker in that case, but a stale payload
+		// (or a future surface that forgets to lock it) shouldn't be able
+		// to wipe the rooms — derive them from booking_segment instead.
+		let roomIds = parsed.room_ids ?? [];
+		if (result.booking_id) {
+			const segs = await db
+				.selectDistinct({ room_id: booking_segment.room_id })
+				.from(booking_segment)
+				.where(
+					and(
+						eq(booking_segment.booking_id, result.booking_id),
+						isNull(booking_segment.deletedAt),
+					),
+				);
+			roomIds = segs.map((s) => s.room_id).filter(Boolean);
+		}
 		await db.delete(event_room).where(eq(event_room.event_id, result.id));
-		if (parsed.room_ids?.length) {
+		if (roomIds.length) {
 			await db
 				.insert(event_room)
-				.values(parsed.room_ids.map((room_id) => ({ event_id: result.id, room_id })));
+				.values(roomIds.map((room_id) => ({ event_id: result.id, room_id })));
 		}
 	}
 
