@@ -342,15 +342,28 @@ export default function EventEditor({
 			// Only persist datetimes that include a time. Date-only values mean
 			// "user hasn't finished picking" - save as null so the DB doesn't end
 			// up with misleading midnight stamps.
-			const onlyComplete = (v) => (typeof v === "string" && v.includes("T") ? v : null);
+			//
+			// `datetime-local` inputs give us strings like "2026-07-01T11:00"
+			// representing the BROWSER's local wall-clock time, with no
+			// timezone marker. If we send that to the server as-is, Node's
+			// `new Date(...)` re-parses it as the SERVER's local time
+			// (UTC in prod). With a Europe/London browser and a UTC server
+			// that shifts every saved time by the BST offset and pushes
+			// values outside the booking's event-day window. Convert to a
+			// proper UTC ISO here so the wire format is unambiguous.
+			const toIsoUtc = (v) => {
+				if (typeof v !== "string" || !v.includes("T")) return null;
+				const dt = new Date(v);
+				return Number.isFinite(dt.valueOf()) ? dt.toISOString() : null;
+			};
 			const payload = {
 				...draft,
 				...extras,
 				summary: draft.summary || null,
 				external_url: draft.external_url || null,
-				starts_at: onlyComplete(draft.starts_at),
-				ends_at: onlyComplete(draft.ends_at),
-				doors_open_at: onlyComplete(draft.doors_open_at),
+				starts_at: toIsoUtc(draft.starts_at),
+				ends_at: toIsoUtc(draft.ends_at),
+				doors_open_at: toIsoUtc(draft.doors_open_at),
 				max_occupancy: draft.max_occupancy === "" ? null : draft.max_occupancy,
 				room_ids: roomIds,
 			};
