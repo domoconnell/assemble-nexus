@@ -150,7 +150,7 @@ export default async function EventPage({ params, searchParams }) {
 					__html: JSON.stringify(jsonLd, (_k, v) => (v === undefined ? undefined : v)),
 				}}
 			/>
-			{!isPublic && preview && (
+			{ev.status !== "published" && preview && (
 				<div className="bg-amber-500/10 border-b border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs px-6 py-2 text-center">
 					Preview - this event is{" "}
 					<span className="font-medium">{ev.status}</span> /{" "}
