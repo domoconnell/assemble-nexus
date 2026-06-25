@@ -23,12 +23,17 @@ export default async function BookingReceivedPage({ params }) {
 	const b = await getBookingById(id);
 	if (!b) notFound();
 
+	const firstName = b.customer_first_name?.trim();
 	return (
 		<>
 			<Hero
 				height="short"
 				kicker="Enquiry received"
-				title="Thanks - we've got your booking."
+				title={
+					firstName
+						? `Thanks ${firstName} - we've got your booking.`
+						: "Thanks - we've got your booking."
+				}
 				subtitle="We'll review it and email you back, usually within a working day. Once it's approved we'll send the booking agreement and a link to pay your deposit."
 			/>
 			<Section>
