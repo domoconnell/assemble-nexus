@@ -260,6 +260,7 @@ export async function getBookingForUser(bookingId, userId) {
 	const [b] = await db
 		.select({
 			id: booking.id,
+			venue_id: booking.venue_id,
 			reference: booking.reference,
 			status: booking.status,
 			subtotal_cents: booking.subtotal_cents,
@@ -272,6 +273,8 @@ export async function getBookingForUser(bookingId, userId) {
 			deposit_required_cents: booking.deposit_required_cents,
 			deposit_paid_cents: booking.deposit_paid_cents,
 			balance_paid_cents: booking.balance_paid_cents,
+			agreement_snapshot: booking.agreement_snapshot,
+			agreement_accepted_at: booking.agreement_accepted_at,
 			customer_notes: booking.customer_notes,
 			submitted_at: booking.submitted_at,
 			approved_at: booking.approved_at,

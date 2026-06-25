@@ -23,11 +23,11 @@ export default async function BookingInstalmentPayPage({ params }) {
 	if (!payment || payment.booking_reference !== reference) notFound();
 
 	if (payment.paid_at) {
-		// Already paid — bounce to the booking status page.
-		redirect(`/booking/${reference}`);
+		// Already paid — bounce to the booking landing page.
+		redirect(`/booking-received/${payment.booking_id}`);
 	}
 	if (payment.booking_status === "cancelled" || payment.booking_status === "rejected") {
-		redirect(`/booking/${reference}`);
+		redirect(`/booking-received/${payment.booking_id}`);
 	}
 
 	let pspKey = null;
@@ -68,10 +68,10 @@ export default async function BookingInstalmentPayPage({ params }) {
 								</div>
 								<div className="pt-3 border-t border-foreground/10 text-sm">
 									<Link
-										href={`/booking/${reference}`}
+										href={`/booking-received/${payment.booking_id}`}
 										className="text-primary hover:underline"
 									>
-										See the full booking →
+										See the booking →
 									</Link>
 								</div>
 							</section>
@@ -103,7 +103,7 @@ export default async function BookingInstalmentPayPage({ params }) {
 								pendingIntentId={payment.stripe_payment_intent_id ?? null}
 								publishableKey={publishableKey}
 								clientSecret={clientSecret}
-								bookingReference={reference}
+								redirectAfterPaid={`/booking-received/${payment.booking_id}`}
 								agreementRequired={
 									!!payment.agreement_snapshot && !payment.agreement_accepted_at
 								}

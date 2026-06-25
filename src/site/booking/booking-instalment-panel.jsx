@@ -13,7 +13,7 @@ export default function BookingInstalmentPanel({
 	pendingIntentId,
 	publishableKey,
 	clientSecret,
-	bookingReference,
+	redirectAfterPaid,
 	agreementRequired = false,
 	agreementTitle = "Booking Agreement",
 }) {
@@ -73,13 +73,13 @@ export default function BookingInstalmentPanel({
 				onSuccess={() => {
 					// The Stripe webhook stamps `paid_at` async — it usually
 					// lands within ~1–2s but isn't guaranteed. Bounce the
-					// user to the booking status page; that page reads the
-					// installments fresh, and we forced router.refresh()
-					// first so the cache is invalidated.
+					// user to whichever booking page they came from; that
+					// page reads the installments fresh, and we forced
+					// router.refresh() first so the cache is invalidated.
 					setPaid(true);
 					router.refresh();
-					if (bookingReference) {
-						setTimeout(() => router.push(`/booking/${bookingReference}`), 1500);
+					if (redirectAfterPaid) {
+						setTimeout(() => router.push(redirectAfterPaid), 1500);
 					}
 				}}
 			/>

@@ -7,11 +7,7 @@ import {
 	listBookingPayments,
 } from "@/db/queries/bookings";
 import { getEventByBookingId, countEventTickets } from "@/db/queries/events";
-import { Container } from "@/site/ui/container";
-import { Hero } from "@/site/ui/hero";
 import { getServerSession } from "@/utils/auth/server-guard";
-import MagicLinkForm from "../../_components/magic-link-form";
-import MyNav from "@/site/ui/my-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -81,27 +77,10 @@ export async function generateMetadata({ params }) {
 
 export default async function MyBookingDetailPage({ params }) {
 	const { id } = await params;
+	// Auth gate + booking-ownership lookup happen in the shared layout
+	// at /my-bookings/[id]/layout.jsx — we only fetch what this page needs
+	// to render its body.
 	const session = await getServerSession();
-
-	if (!session?.user) {
-		return (
-			<>
-				<Hero
-					height="short"
-					kicker="Your booking"
-					title="Sign in to see this booking."
-					subtitle="No password needed - we'll email you a one-click link."
-				/>
-				<Container className="pt-6 pb-12 lg:pb-16">
-					<MagicLinkForm
-						callbackURL={`/my-bookings/${id}`}
-						heading="See your booking"
-					/>
-				</Container>
-			</>
-		);
-	}
-
 	const b = await getBookingForUser(id, session.user.id);
 	if (!b) notFound();
 
@@ -131,18 +110,12 @@ export default async function MyBookingDetailPage({ params }) {
 	const paidCents = payments.length > 0 ? paidFromPayments : paidLegacy;
 	const outstandingCents = Math.max(0, (b.total_cents ?? 0) - paidCents);
 	const canPayNow = b.status === "approved" || b.status === "confirmed";
+	const nextUnpaid = canPayNow ? payments.find((p) => !p.paid_at) : null;
+	const isFullyPaid = outstandingCents === 0 && payments.length > 0;
 
 	return (
 		<>
-			<Hero height="short" kicker="Booking" title={b.reference} />
-			<Container className="pt-6 pb-12 lg:pb-16 space-y-6">
-				<MyNav
-					current="bookings"
-					email={session.user.email}
-					redirectTo="/my-bookings"
-				/>
-
-				<div className="flex items-center gap-3 flex-wrap">
+			<div className="flex items-center gap-3 flex-wrap">
 					<span
 						className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs ${statusClass(b.status)}`}
 					>
@@ -311,11 +284,31 @@ export default async function MyBookingDetailPage({ params }) {
 					</div>
 
 					<aside>
-						<section className="rounded-xl border border-primary/30 bg-primary/5 p-6 space-y-3">
-							<h2 className="text-xs uppercase tracking-[0.22em] text-primary">Total</h2>
+						<section
+							className={`rounded-xl border p-6 space-y-3 ${
+								isFullyPaid
+									? "border-primary/30 bg-primary/5"
+									: "border-amber-500/30 bg-amber-500/10"
+							}`}
+						>
+							<h2
+								className={`text-xs uppercase tracking-[0.22em] ${
+									isFullyPaid ? "text-primary" : "text-amber-600 dark:text-amber-400"
+								}`}
+							>
+								{isFullyPaid ? "Paid in full" : "Total"}
+							</h2>
 							<div className="font-display text-3xl tracking-tight">
 								{formatGbp(b.total_cents)}
 							</div>
+							{nextUnpaid && (
+								<Link
+									href={`/my-bookings/${b.id}/pay/${nextUnpaid.id}`}
+									className="block w-full rounded-md bg-primary text-primary-foreground text-center px-4 py-3 font-medium hover:opacity-90 transition"
+								>
+									Pay {formatGbp(nextUnpaid.amount_cents)} ({nextUnpaid.label}) now →
+								</Link>
+							)}
 							<dl className="space-y-1 text-sm pt-3 border-t border-foreground/10">
 								<div className="flex justify-between">
 									<dt className="text-muted-foreground">Subtotal</dt>
@@ -364,7 +357,7 @@ export default async function MyBookingDetailPage({ params }) {
 														<span className="font-mono">{formatGbp(p.amount_cents)}</span>
 														{!isPaid && canPayNow && (
 															<Link
-																href={`/booking/${b.reference}/pay-installment/${p.pay_token}`}
+																href={`/my-bookings/${b.id}/pay/${p.id}`}
 																className="text-xs text-primary hover:underline whitespace-nowrap"
 															>
 																Pay →
@@ -399,7 +392,6 @@ export default async function MyBookingDetailPage({ params }) {
 						</section>
 					</aside>
 				</div>
-			</Container>
 		</>
 	);
 }

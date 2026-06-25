@@ -54,7 +54,7 @@ export function Hero({
 				className="absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-foreground/15 to-transparent"
 			/>
 			<Container className="relative h-full flex flex-col justify-center">
-				<div className={`flex flex-col gap-6 max-w-4xl ${alignWrap}`}>
+				<div className={`flex flex-col gap-6 w-full ${alignWrap}`}>
 					{kicker && (
 						<span className="text-xs uppercase tracking-[0.24em] text-primary font-medium">
 							{kicker}

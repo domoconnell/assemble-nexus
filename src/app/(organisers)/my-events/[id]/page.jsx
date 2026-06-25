@@ -2,16 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
 	getEventById,
-	userCanEditEvent,
 	listTicketTypes,
 	countEventTickets,
 } from "@/db/queries/events";
 import { listOrdersForEvent } from "@/db/queries/orders";
-import { Container } from "@/site/ui/container";
-import { Hero } from "@/site/ui/hero";
+import { getBookingById } from "@/db/queries/bookings";
 import { getServerSession } from "@/utils/auth/server-guard";
-import MagicLinkForm from "../../_components/magic-link-form";
-import MyNav from "@/site/ui/my-nav";
+import { BackLink } from "@/site/ui/back-link";
 
 export const dynamic = "force-dynamic";
 
@@ -80,38 +77,19 @@ export async function generateMetadata({ params }) {
 
 export default async function MyEventDetailPage({ params }) {
 	const { id } = await params;
+	// Auth + ownership are gated in /my-events/[id]/layout.jsx.
 	const session = await getServerSession();
-
-	if (!session?.user) {
-		return (
-			<>
-				<Hero
-					height="short"
-					kicker="Your event"
-					title="Sign in to see this event."
-					subtitle="No password needed - we'll email you a one-click link."
-				/>
-				<Container className="pt-6 pb-12 lg:pb-16">
-					<MagicLinkForm
-						callbackURL={`/my-events/${id}`}
-						heading="See your event"
-					/>
-				</Container>
-			</>
-		);
-	}
-
 	const ev = await getEventById(id);
 	if (!ev) notFound();
 
-	const canEdit = await userCanEditEvent(session.user.id, ev.id);
-	if (!canEdit) notFound();
-
-	const [ticketCounts, ticketTypes, orders] = await Promise.all([
+	const [ticketCounts, ticketTypes, orders, linkedBooking] = await Promise.all([
 		countEventTickets(ev.id),
 		listTicketTypes(ev.id),
 		listOrdersForEvent(ev.id),
+		ev.booking_id ? getBookingById(ev.booking_id) : Promise.resolve(null),
 	]);
+	const publicEventPath =
+		ev.status === "published" && ev.slug ? `/events/${ev.slug}` : null;
 
 	const paidOrders = orders.filter(
 		(o) => o.status === "paid" || o.status === "partially_refunded",
@@ -135,36 +113,35 @@ export default async function MyEventDetailPage({ params }) {
 
 	return (
 		<>
-			<Hero
-				height="short"
-				kicker="Your event"
-				title={ev.title}
-				subtitle={
-					start
-						? `${dateFmt.format(start)}${end ? ` · ${timeFmt.format(start)}-${timeFmt.format(end)}` : ""}`
-						: undefined
-				}
-			/>
-			<Container className="pt-6 pb-12 lg:pb-16 space-y-6">
-				<MyNav
-					current="events"
-					email={session.user.email}
-					redirectTo="/my-events"
-				/>
+			{linkedBooking && (
+				<BackLink href={`/my-bookings/${linkedBooking.id}`}>
+					Back to booking <span className="font-mono">{linkedBooking.reference}</span>
+				</BackLink>
+			)}
 
-				<div className="flex items-center gap-3 flex-wrap">
-					<span
-						className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs capitalize ${statusClass(ev.status)}`}
-					>
-						{ev.status.replace("_", " ")}
-					</span>
+			<div className="flex items-center gap-3 flex-wrap">
+				<span
+					className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs capitalize ${statusClass(ev.status)}`}
+				>
+					{ev.status.replace("_", " ")}
+				</span>
+				{publicEventPath && (
 					<Link
-						href={`/my-events/${ev.id}/edit`}
-						className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-foreground/15 px-3 py-1.5 text-xs hover:border-foreground/30 hover:bg-foreground/5 transition"
+						href={publicEventPath}
+						target="_blank"
+						rel="noreferrer"
+						className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
 					>
-						Edit event
+						View public page ↗
 					</Link>
-				</div>
+				)}
+				<Link
+					href={`/my-events/${ev.id}/edit`}
+					className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-foreground/15 px-3 py-1.5 text-xs hover:border-foreground/30 hover:bg-foreground/5 transition"
+				>
+					Edit event
+				</Link>
+			</div>
 
 				<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 					<Stat label="Tickets sold" value={ticketCounts.total} sub={`${ticketCounts.used} used`} />
@@ -275,7 +252,6 @@ export default async function MyEventDetailPage({ params }) {
 						</ul>
 					)}
 				</section>
-			</Container>
 		</>
 	);
 }

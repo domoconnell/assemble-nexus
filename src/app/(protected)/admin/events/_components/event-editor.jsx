@@ -395,14 +395,25 @@ export default function EventEditor({
 	const eventId = draft.id;
 
 	return (
-		<div className="mx-auto p-6 lg:p-10 max-w-5xl">
-			<div className="sticky top-0 -mx-6 lg:-mx-10 px-6 lg:px-10 pb-4 pt-6 lg:pt-10 -mt-6 lg:-mt-10 bg-background/85 backdrop-blur z-20 border-b border-foreground/10 mb-8">
+		<div className={isHirer ? "" : "mx-auto p-6 lg:p-10 max-w-5xl"}>
+			<div
+				className={
+					isHirer
+						? "pb-4 border-b border-foreground/10 mb-8"
+						: "sticky top-0 -mx-6 lg:-mx-10 px-6 lg:px-10 pb-4 pt-6 lg:pt-10 -mt-6 lg:-mt-10 bg-background/85 backdrop-blur z-20 border-b border-foreground/10 mb-8"
+				}
+			>
 				<div className="flex items-start justify-between gap-4 flex-wrap">
 					<div className="min-w-0">
-						<Link href={backHref} className="text-sm text-muted-foreground hover:text-foreground">
-							{backLabel}
-						</Link>
-						<div className="mt-2 flex items-center gap-3 flex-wrap">
+						{!isHirer && (
+							<Link
+								href={backHref}
+								className="text-sm text-muted-foreground hover:text-foreground"
+							>
+								{backLabel}
+							</Link>
+						)}
+						<div className={`${isHirer ? "" : "mt-2 "}flex items-center gap-3 flex-wrap`}>
 							<h1 className="text-2xl font-semibold truncate">
 								{isNew ? "New event" : draft.title || "Untitled"}
 							</h1>
@@ -442,27 +453,21 @@ export default function EventEditor({
 								!!initialEvent?.booking_id &&
 								bookingStatus !== "confirmed" &&
 								bookingStatus !== "completed";
-							const gateMsg = bookingGated
-								? "Submit for approval is unlocked once your booking deposit is paid."
-								: null;
 							return (
-								<div className="flex flex-col items-end gap-1">
-									<Button
-										onClick={async () => {
-											await saveBasics();
-											await onSubmitForReview();
-										}}
-										disabled={saving || !draft.title || bookingGated || hasWhenErrors}
-										title={gateMsg ?? undefined}
-									>
-										Submit for approval
-									</Button>
-									{gateMsg && (
-										<span className="text-xs text-muted-foreground max-w-56 text-right">
-											{gateMsg}
-										</span>
-									)}
-								</div>
+								<Button
+									onClick={async () => {
+										await saveBasics();
+										await onSubmitForReview();
+									}}
+									disabled={saving || !draft.title || bookingGated || hasWhenErrors}
+									title={
+										bookingGated
+											? "Submit for approval is unlocked once your booking deposit is paid."
+											: undefined
+									}
+								>
+									Submit for approval
+								</Button>
 							);
 						})()}
 					</div>

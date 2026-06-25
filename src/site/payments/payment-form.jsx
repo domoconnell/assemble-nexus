@@ -257,7 +257,6 @@ function StripePaymentForm({
 	onSuccess,
 	onError,
 }) {
-	const formRef = useRef(null);
 	const cardNumberRef = useRef(null);
 	const cardExpiryRef = useRef(null);
 	const cardCvcRef = useRef(null);
@@ -280,7 +279,7 @@ function StripePaymentForm({
 				if (cancelled || !stripe) return;
 				stripeRef.current = stripe;
 
-				const appearance = computeStripeAppearance(formRef.current);
+				const appearance = computeStripeAppearance();
 
 				// PaymentRequest powers the wallet buttons. It lets the
 				// browser pre-flight Apple Pay / Google Pay availability,
@@ -334,13 +333,38 @@ function StripePaymentForm({
 					handleSettledIntent(paymentIntent);
 				});
 
-				// Card collection - one Elements instance bound to the
-				// real intent so confirmCardPayment finds it.
-				const cardElements = stripe.elements({ clientSecret, appearance });
+				// Card collection. The individual `cardNumber` / `cardExpiry`
+				// / `cardCvc` elements are legacy and DO NOT honour the
+				// modern `appearance` config — that one only applies to the
+				// unified Payment Element. For these we have to pass the
+				// classic `style` option on each .create() call instead.
+				const cardElements = stripe.elements({ appearance });
 				elementsRef.current = cardElements;
-				const cardNumber = cardElements.create("cardNumber", { showIcon: true });
-				const cardExpiry = cardElements.create("cardExpiry");
-				const cardCvc = cardElements.create("cardCvc");
+				const cardElementStyle = {
+					base: {
+						color: "#f8fafc",
+						backgroundColor: "transparent",
+						fontFamily:
+							"system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+						fontSize: "16px",
+						"::placeholder": {
+							color: "#94a3b8",
+						},
+					},
+					invalid: {
+						color: "#ef4444",
+					},
+				};
+				const cardNumber = cardElements.create("cardNumber", {
+					style: cardElementStyle,
+					showIcon: true,
+				});
+				const cardExpiry = cardElements.create("cardExpiry", {
+					style: cardElementStyle,
+				});
+				const cardCvc = cardElements.create("cardCvc", {
+					style: cardElementStyle,
+				});
 				let mounted = 0;
 				const onReady = () => {
 					mounted += 1;
@@ -446,7 +470,7 @@ function StripePaymentForm({
 	const hasAnyWallet = walletKinds.applePay || walletKinds.googlePay;
 
 	return (
-		<form ref={formRef} onSubmit={payByCard} className="rounded-xl border border-foreground/10 bg-card p-6 space-y-5">
+		<form onSubmit={payByCard} className="rounded-xl border border-foreground/10 bg-card p-6 space-y-5">
 			<div>
 				<h2 className="text-xs uppercase tracking-[0.22em] text-foreground/70">Pay securely</h2>
 				<p className="mt-2 text-xs text-muted-foreground">
@@ -537,6 +561,7 @@ function StripePaymentForm({
 							value={name}
 							onChange={(e) => setName(e.target.value)}
 							autoComplete="cc-name"
+							className="text-foreground"
 						/>
 					</div>
 					<div className="space-y-1.5">
@@ -545,6 +570,7 @@ function StripePaymentForm({
 							value={postcode}
 							onChange={(e) => setPostcode(e.target.value)}
 							autoComplete="postal-code"
+							className="text-foreground"
 						/>
 					</div>
 				</div>
@@ -581,68 +607,30 @@ function GoogleGlyph({ className }) {
 }
 
 /**
- * Build a Stripe Elements `appearance` config from the site's CSS
- * variables. Stripe iframes can't read our stylesheet and can't parse
- * `oklch()` directly, so we resolve each CSS var to a concrete `rgb(...)`
- * string via a hidden span before passing it in.
- *
- * The public site theme (`.theme-site`) is applied on a wrapper div, not
- * the `<html>` root, so probing from `documentElement` returns the
- * default light theme's `--foreground` (near-black). Probe from the
- * form's own DOM node so we resolve through the cascade and pick up the
- * dark-mode values.
+ * Stripe Elements appearance. Hardcoded values rather than probing CSS
+ * variables — the iframe can't read our cascade anyway, and var() in
+ * fontFamily was silently rejecting the whole config. Values match the
+ * .theme-site palette closely enough; tweak here if the palette shifts.
  */
-function computeStripeAppearance(scopeEl) {
-	if (typeof window === "undefined") return undefined;
-	const root = scopeEl ?? document.documentElement;
-	const styles = getComputedStyle(root);
-	const probe = document.createElement("span");
-	probe.style.display = "none";
-	(scopeEl ?? document.body).appendChild(probe);
-	const resolve = (cssVarName, fallback) => {
-		const raw = styles.getPropertyValue(cssVarName).trim();
-		if (!raw) return fallback;
-		// Set the colour on the probe, then read the BROWSER-computed
-		// rgb(...) form which Stripe accepts.
-		probe.style.color = "";
-		probe.style.color = raw;
-		const computed = getComputedStyle(probe).color;
-		return computed || fallback;
-	};
-	const foreground = resolve("--foreground", "rgb(15, 23, 42)");
-	const mutedForeground = resolve("--muted-foreground", "rgb(100, 116, 139)");
-	const primary = resolve("--primary", "rgb(15, 118, 110)");
-	const destructive = resolve("--destructive", "rgb(220, 38, 38)");
-	probe.remove();
+/**
+ * Modern Stripe Elements `appearance` config — applied to the unified
+ * Payment Element and the Payment Request (Apple Pay / Google Pay) sheet.
+ * The individual card elements (cardNumber/cardExpiry/cardCvc) IGNORE
+ * this entirely and are styled via the legacy `style` option at
+ * .create() time, see the StripePaymentForm component.
+ */
+function computeStripeAppearance() {
 	return {
-		theme: "none",
+		theme: "night",
 		variables: {
-			fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
+			fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
 			fontSizeBase: "14px",
-			colorText: foreground,
-			colorTextPlaceholder: mutedForeground,
-			colorPrimary: primary,
-			colorDanger: destructive,
+			colorText: "#f8fafc",
+			colorTextPlaceholder: "#94a3b8",
+			colorPrimary: "#0f766e",
+			colorDanger: "#ef4444",
+			colorBackground: "#0f172a",
 			borderRadius: "6px",
-		},
-		rules: {
-			".Input": {
-				border: "none",
-				boxShadow: "none",
-				padding: "0",
-				color: foreground,
-				backgroundColor: "transparent",
-			},
-			".Input:focus": {
-				boxShadow: "none",
-				outline: "none",
-			},
-			".Input--invalid": {
-				color: destructive,
-			},
-			".Label": {
-				display: "none", // we render our own <Label> elements
-			},
 		},
 	};
 }

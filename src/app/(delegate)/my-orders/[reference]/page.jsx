@@ -1,18 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Container } from "@/site/ui/container";
-import { Hero } from "@/site/ui/hero";
 import { getServerSession } from "@/utils/auth/server-guard";
 import {
-	getOrderByReference,
 	getOrderForUserByReference,
 	listOrderLines,
 	listOrderTickets,
 } from "@/db/queries/orders";
-import { listBookingsForUser } from "@/db/queries/bookings";
-import { listEventsForHirer } from "@/db/queries/events";
-import MagicLinkForm from "../../_components/magic-link-form";
-import MyNav from "@/site/ui/my-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -70,58 +63,16 @@ export async function generateMetadata({ params }) {
 
 export default async function MyOrderDetailPage({ params }) {
 	const { reference } = await params;
+	// Auth + ownership + sign-in-as-buyer flow are gated in
+	// /my-orders/[reference]/layout.jsx. If we render here, the user is
+	// signed in as the buyer.
 	const session = await getServerSession();
-
-	if (!session?.user) {
-		return (
-			<>
-				<Hero
-					height="short"
-					kicker="Your order"
-					title="Sign in to see this order."
-					subtitle="No password needed - we'll email you a one-click link."
-				/>
-				<Container className="pt-6 pb-12 lg:pb-16">
-					<MagicLinkForm
-						callbackURL={`/my-orders/${reference}`}
-						heading="See your order"
-					/>
-				</Container>
-			</>
-		);
-	}
-
 	const order = await getOrderForUserByReference(reference, session.user.id);
-	if (!order) {
-		// Order may exist but be tied to a different user (common right after a
-		// purchase made while signed in as someone else - admin testing,
-		// shared device, etc.). Surface a magic-link prompt rather than 404.
-		const publicOrder = await getOrderByReference(reference);
-		if (!publicOrder) notFound();
-		return (
-			<>
-				<Hero
-					height="short"
-					kicker="Your order"
-					title="Sign in as the buyer to see this order."
-					subtitle="The order is held against a different email. Sign in with the email you used to buy."
-				/>
-				<Container className="pt-6 pb-12 lg:pb-16">
-					<MagicLinkForm
-						callbackURL={`/my-orders/${reference}`}
-						heading={`Sign in as ${publicOrder.customer_email}`}
-						body="Pop the email you used at checkout in - we'll send a one-click sign-in link."
-					/>
-				</Container>
-			</>
-		);
-	}
+	if (!order) notFound();
 
-	const [lines, tickets, bookings, events] = await Promise.all([
+	const [lines, tickets] = await Promise.all([
 		listOrderLines(order.id),
 		listOrderTickets(order.id),
-		listBookingsForUser(session.user.id),
-		listEventsForHirer(session.user.id),
 	]);
 
 	const ticketLines = lines.filter((l) => l.kind === "ticket" && !l.parent_line_id);
@@ -129,32 +80,9 @@ export default async function MyOrderDetailPage({ params }) {
 	const addonLines = lines.filter((l) => l.kind === "addon");
 	const discountLines = lines.filter((l) => l.kind === "discount");
 
-	const eventDate = order.event_starts_at ? new Date(order.event_starts_at) : null;
-	const eventEnd = order.event_ends_at ? new Date(order.event_ends_at) : null;
-
 	return (
 		<>
-			<Hero
-				height="short"
-				kicker="Your order"
-				title={order.event_title}
-				subtitle={
-					eventDate
-						? `${dateFmt.format(eventDate)}${eventEnd ? ` · ${timeFmt.format(eventDate)} - ${timeFmt.format(eventEnd)}` : ""}`
-						: undefined
-				}
-			/>
-
-			<Container className="pt-6 pb-12 lg:pb-16 space-y-6 max-w-3xl">
-				<MyNav
-					current="orders"
-					email={session.user.email}
-					redirectTo="/my-orders"
-					showBookings={bookings.length > 0}
-					showEvents={events.length > 0}
-				/>
-
-				<section className="rounded-xl border border-foreground/10 bg-card p-6 space-y-4">
+			<section className="rounded-xl border border-foreground/10 bg-card p-6 space-y-4">
 					<div className="flex items-baseline justify-between gap-3 flex-wrap">
 						<div>
 							<div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
@@ -252,8 +180,6 @@ export default async function MyOrderDetailPage({ params }) {
 						))}
 					</ul>
 				</section>
-
-			</Container>
 		</>
 	);
 }

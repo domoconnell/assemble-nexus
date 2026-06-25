@@ -19,6 +19,7 @@ import { getFileRecord } from "@/utils/files/files.server";
 import { requireServerSession } from "@/utils/auth/server-guard";
 import EventEditor from "@/app/(protected)/admin/events/_components/event-editor";
 import { saveEventForHirerAction, submitEventForReviewAction } from "../../actions";
+import { BackLink } from "@/site/ui/back-link";
 
 export const dynamic = "force-dynamic";
 
@@ -92,25 +93,28 @@ export default async function HirerEventSetupPage({ params }) {
 	const submitBound = submitForReview.bind(null, ev.id);
 
 	return (
-		<EventEditor
-			initialEvent={ev}
-			initialFaqs={faqs}
-			initialTicketTypes={ticketTypes}
-			initialAddonGroups={addonGroups}
-			initialAddons={addonsWithLinks}
-			initialBundles={bundles}
-			initialDiscounts={discounts}
-			initialBanner={banner}
-			vatRates={vatRates}
-			organisers={[]}
-			eventDayWindows={eventDayWindows}
-			surface="hirer"
-			setupMode
-			onSaveBasics={saveEventForHirerAction}
-			onSubmitForReview={submitBound}
-			bookingStatus={bookingStatus}
-			backHref={`/my-events/${ev.id}`}
-			backLabel={`← ${ev.title}`}
-		/>
+		<>
+			<BackLink href={`/my-events/${ev.id}`}>Back to {ev.title}</BackLink>
+			<EventEditor
+				initialEvent={ev}
+				initialFaqs={faqs}
+				initialTicketTypes={ticketTypes}
+				initialAddonGroups={addonGroups}
+				initialAddons={addonsWithLinks}
+				initialBundles={bundles}
+				initialDiscounts={discounts}
+				initialBanner={banner}
+				vatRates={vatRates}
+				organisers={[]}
+				eventDayWindows={eventDayWindows}
+				surface="hirer"
+				setupMode
+				onSaveBasics={saveEventForHirerAction}
+				onSubmitForReview={submitBound}
+				bookingStatus={bookingStatus}
+				backHref={`/my-events/${ev.id}`}
+				backLabel={`← ${ev.title}`}
+			/>
+		</>
 	);
 }

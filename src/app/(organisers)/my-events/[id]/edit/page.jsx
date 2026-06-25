@@ -19,6 +19,7 @@ import { getFileRecord } from "@/utils/files/files.server";
 import { requireServerSession } from "@/utils/auth/server-guard";
 import EventEditor from "@/app/(protected)/admin/events/_components/event-editor";
 import { saveEventForHirerAction, submitEventForReviewAction } from "../../actions";
+import { BackLink } from "@/site/ui/back-link";
 
 export const dynamic = "force-dynamic";
 
@@ -94,8 +95,10 @@ export default async function HirerEventEditPage({ params }) {
 	const submitBound = submitForReview.bind(null, ev.id);
 
 	return (
-		<EventEditor
-			initialEvent={ev}
+		<>
+			<BackLink href={`/my-events/${ev.id}`}>Back to {ev.title}</BackLink>
+			<EventEditor
+				initialEvent={ev}
 			initialFaqs={faqs}
 			initialTicketTypes={ticketTypes}
 			initialAddonGroups={addonGroups}
@@ -110,8 +113,9 @@ export default async function HirerEventEditPage({ params }) {
 			onSaveBasics={saveEventForHirerAction}
 			onSubmitForReview={submitBound}
 			bookingStatus={bookingStatus}
-			backHref={`/my-events/${ev.id}`}
-			backLabel={`← ${ev.title}`}
-		/>
+				backHref={`/my-events/${ev.id}`}
+				backLabel={`← ${ev.title}`}
+			/>
+		</>
 	);
 }

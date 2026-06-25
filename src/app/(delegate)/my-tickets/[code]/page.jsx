@@ -1,15 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Container } from "@/site/ui/container";
-import { Hero } from "@/site/ui/hero";
 import { getServerSession } from "@/utils/auth/server-guard";
 import { getTicketForUserByCode } from "@/db/queries/orders";
-import { listBookingsForUser } from "@/db/queries/bookings";
-import { listEventsForHirer } from "@/db/queries/events";
 import { getWalletProvidersStatus } from "@/db/queries/settings";
 import { requireCurrentVenue } from "@/db/queries/venue";
-import MagicLinkForm from "../../_components/magic-link-form";
-import MyNav from "@/site/ui/my-nav";
 import TicketQrCard from "@/site/events/ticket-qr-card";
 
 export const dynamic = "force-dynamic";
@@ -37,36 +31,13 @@ export async function generateMetadata({ params }) {
 
 export default async function MyTicketDetailPage({ params }) {
 	const { code } = await params;
+	// Auth + ownership are gated in /my-tickets/[code]/layout.jsx.
 	const session = await getServerSession();
-
-	if (!session?.user) {
-		return (
-			<>
-				<Hero
-					height="short"
-					kicker="Your ticket"
-					title="Sign in to see this ticket."
-					subtitle="No password needed - we'll email you a one-click link."
-				/>
-				<Container className="pt-6 pb-12 lg:pb-16">
-					<MagicLinkForm
-						callbackURL={`/my-tickets/${code}`}
-						heading="See your ticket"
-					/>
-				</Container>
-			</>
-		);
-	}
-
 	const ticket = await getTicketForUserByCode(code, session.user.id);
 	if (!ticket) notFound();
 
 	const venue = await requireCurrentVenue();
-	const [walletStatus, bookings, events] = await Promise.all([
-		getWalletProvidersStatus(venue.id),
-		listBookingsForUser(session.user.id),
-		listEventsForHirer(session.user.id),
-	]);
+	const walletStatus = await getWalletProvidersStatus(venue.id);
 
 	const start = ticket.event_starts_at ? new Date(ticket.event_starts_at) : null;
 	const end = ticket.event_ends_at ? new Date(ticket.event_ends_at) : null;
@@ -74,22 +45,7 @@ export default async function MyTicketDetailPage({ params }) {
 
 	return (
 		<>
-			<Hero
-				height="short"
-				kicker="Your ticket"
-				title={ticket.event_title}
-				subtitle={ticket.ticket_type_label}
-			/>
-			<Container className="pt-6 pb-12 lg:pb-16 space-y-6 max-w-2xl">
-				<MyNav
-					current="tickets"
-					email={session.user.email}
-					redirectTo="/my-tickets"
-					showBookings={bookings.length > 0}
-					showEvents={events.length > 0}
-				/>
-
-				<div className="rounded-xl border border-foreground/10 bg-card p-6 space-y-4">
+			<div className="rounded-xl border border-foreground/10 bg-card p-6 space-y-4">
 					<div className="space-y-1">
 						<div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
 							When
@@ -141,7 +97,6 @@ export default async function MyTicketDetailPage({ params }) {
 					appleReady={walletStatus.apple_ready}
 					googleReady={walletStatus.google_ready}
 				/>
-			</Container>
 		</>
 	);
 }
