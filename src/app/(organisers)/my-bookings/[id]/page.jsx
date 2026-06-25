@@ -78,9 +78,12 @@ export async function generateMetadata({ params }) {
 export default async function MyBookingDetailPage({ params }) {
 	const { id } = await params;
 	// Auth gate + booking-ownership lookup happen in the shared layout
-	// at /my-bookings/[id]/layout.jsx — we only fetch what this page needs
-	// to render its body.
+	// at /my-bookings/[id]/layout.jsx — but Next renders layout and page
+	// in parallel, so a null session reaches the page even when the
+	// layout will end up showing the sign-in form. Bail early in that
+	// case to avoid the `session.user` crash.
 	const session = await getServerSession();
+	if (!session?.user) return null;
 	const b = await getBookingForUser(id, session.user.id);
 	if (!b) notFound();
 

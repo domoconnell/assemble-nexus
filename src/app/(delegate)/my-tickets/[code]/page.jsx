@@ -31,8 +31,11 @@ export async function generateMetadata({ params }) {
 
 export default async function MyTicketDetailPage({ params }) {
 	const { code } = await params;
-	// Auth + ownership are gated in /my-tickets/[code]/layout.jsx.
+	// Auth + ownership are gated in /my-tickets/[code]/layout.jsx, but
+	// Next renders layout and page in parallel — bail out cleanly when
+	// session hasn't arrived yet rather than crashing on session.user.id.
 	const session = await getServerSession();
+	if (!session?.user) return null;
 	const ticket = await getTicketForUserByCode(code, session.user.id);
 	if (!ticket) notFound();
 

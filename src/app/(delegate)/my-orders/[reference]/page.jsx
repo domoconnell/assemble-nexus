@@ -64,9 +64,11 @@ export async function generateMetadata({ params }) {
 export default async function MyOrderDetailPage({ params }) {
 	const { reference } = await params;
 	// Auth + ownership + sign-in-as-buyer flow are gated in
-	// /my-orders/[reference]/layout.jsx. If we render here, the user is
-	// signed in as the buyer.
+	// /my-orders/[reference]/layout.jsx. Layout and page render in
+	// parallel though, so bail out cleanly when session hasn't arrived
+	// yet rather than crashing on session.user.id.
 	const session = await getServerSession();
+	if (!session?.user) return null;
 	const order = await getOrderForUserByReference(reference, session.user.id);
 	if (!order) notFound();
 

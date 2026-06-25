@@ -26,9 +26,11 @@ export async function generateMetadata({ params }) {
  */
 export default async function MyBookingPayPage({ params }) {
 	const { id, paymentId } = await params;
-	// Auth + ownership are gated in the shared /my-bookings/[id]/layout.jsx.
-	// We only fetch what this page needs to render its body.
+	// Auth gate runs in /my-bookings/[id]/layout.jsx, but Next renders the
+	// layout and the page in parallel — bail out cleanly if the session
+	// hasn't arrived here so we don't crash on `session.user.id`.
 	const session = await getServerSession();
+	if (!session?.user) return null;
 	const b = await getBookingForUser(id, session.user.id);
 	if (!b) notFound();
 
