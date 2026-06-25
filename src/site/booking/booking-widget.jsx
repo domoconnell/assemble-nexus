@@ -491,9 +491,9 @@ export default function BookingWidget({
 			} else if (data.event_id && ticketSetupMode === "now") {
 				router.push(`/my-events/${data.event_id}/setup`);
 			} else {
-				// Public booker isn't signed in yet — drop them on the
-				// confirmation page that shows the reference and a
-				// magic-link gated CTA to /my-bookings/[id].
+				// Same minimal landing page the email links to — shows
+				// only the reference and a magic-link gated CTA to
+				// /my-bookings/[id] for the full picture.
 				router.push(`/booking-received/${data.id}`);
 			}
 		} catch (err) {

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { listBookingsForUser } from "@/db/queries/bookings";
-import { listOrganisationsForUser } from "@/db/queries/user-organisations";
 import { Container } from "@/site/ui/container";
 import { Hero } from "@/site/ui/hero";
 import { CtaButton } from "@/site/ui/cta-button";
@@ -59,10 +58,7 @@ export default async function MyBookingsPage() {
 	}
 
 	const user = session.user;
-	const [bookings, organisations] = await Promise.all([
-		listBookingsForUser(user.id),
-		listOrganisationsForUser(user.id),
-	]);
+	const bookings = await listBookingsForUser(user.id);
 
 	return (
 		<>
@@ -74,27 +70,6 @@ export default async function MyBookingsPage() {
 			/>
 			<Container className="pt-6 pb-12 lg:pb-16 space-y-8">
 				<MyNav current="bookings" email={user.email} redirectTo="/my-bookings" />
-
-				{organisations.length > 0 && (
-					<div className="space-y-3">
-						<h2 className="text-xs uppercase tracking-[0.22em] text-muted-foreground mb-3">
-							You&apos;re part of
-						</h2>
-						<div className="flex flex-wrap gap-2">
-							{organisations.map((o) => (
-								<span
-									key={o.id}
-									className="inline-flex items-center gap-2 rounded-full border border-foreground/10 bg-card px-3 py-1.5 text-sm"
-								>
-									<span className="font-medium">{o.name}</span>
-									<span className="text-xs text-muted-foreground capitalize">
-										{o.role.replace("_", " ")}
-									</span>
-								</span>
-							))}
-						</div>
-					</div>
-				)}
 
 				{bookings.length === 0 ? (
 					<div className="rounded-xl border border-foreground/10 bg-card p-10 text-center space-y-4">
@@ -115,11 +90,9 @@ export default async function MyBookingsPage() {
 								>
 									<div className="min-w-0 flex-1 space-y-1">
 										<div className="flex items-center gap-3 flex-wrap">
-											<span className="font-mono text-xs text-muted-foreground">
-												{b.reference}
-											</span>
+											<span className="font-mono font-medium">{b.reference}</span>
 											<span
-												className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs ${statusClass(b.status)}`}
+												className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs capitalize ${statusClass(b.status)}`}
 											>
 												{b.status}
 											</span>
@@ -129,9 +102,15 @@ export default async function MyBookingsPage() {
 												</span>
 											)}
 										</div>
-										<div className="text-sm text-muted-foreground">
-											Submitted{" "}
-											{b.submitted_at ? stampFmt.format(new Date(b.submitted_at)) : "-"}
+										<div className="text-sm text-muted-foreground line-clamp-1">
+											{[
+												b.organisation_name,
+												b.submitted_at
+													? `Submitted ${stampFmt.format(new Date(b.submitted_at))}`
+													: null,
+											]
+												.filter(Boolean)
+												.join(" · ")}
 										</div>
 									</div>
 									<div className="font-mono text-sm shrink-0 whitespace-nowrap">

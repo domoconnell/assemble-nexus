@@ -1,27 +1,37 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Hero } from "@/site/ui/hero";
 import { Section } from "@/site/ui/section";
 import { Container } from "@/site/ui/container";
 import { CtaButton } from "@/site/ui/cta-button";
 import { getBookingById } from "@/db/queries/bookings";
+import { getServerSession } from "@/utils/auth/server-guard";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-	title: "Booking received - The Assembly Rooms",
+	title: "Your booking - The Assembly Rooms",
+	robots: { index: false, follow: false },
 };
 
 /**
- * Post-submit landing page for a freshly-enquired booking. The booker
- * isn't signed in yet at this point — the booking widget redirects
- * here so they see a confirmation before we ask them to authenticate
- * to view the booking detail. The next-step link to /my-bookings/[id]
- * will magic-link them in.
+ * Customer-facing landing page for a booking. Linked to from the
+ * post-submit redirect AND every transactional email so the booker
+ * always sees the same minimal "we've got your booking" view without
+ * exposing segment / pricing detail to anyone with the URL. The
+ * "View my booking" CTA gates the full picture behind sign-in.
  */
 export default async function BookingReceivedPage({ params }) {
 	const { id } = await params;
 	const b = await getBookingById(id);
 	if (!b) notFound();
+
+	// When the signed-in user is the booker, skip the landing card and
+	// take them straight to /my-bookings/[id]. Anyone else (signed out,
+	// or signed in as a different account) sees the minimal landing.
+	const session = await getServerSession();
+	if (session?.user?.id && session.user.id === b.customer_user_id) {
+		redirect(`/my-bookings/${b.id}`);
+	}
 
 	const firstName = b.customer_first_name?.trim();
 	return (

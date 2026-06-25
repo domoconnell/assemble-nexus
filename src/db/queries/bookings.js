@@ -108,6 +108,7 @@ export async function getBookingById(id) {
 			cancelled_at: booking.cancelled_at,
 			completed_at: booking.completed_at,
 			customer_id: customer.id,
+			customer_user_id: customer.user_id,
 			customer_first_name: customer.first_name,
 			customer_last_name: customer.last_name,
 			customer_email: customer.email,
@@ -211,6 +212,7 @@ export async function listBookingsForAdmin(venueId, { tab = "all" } = {}) {
 export async function listBookingsForUser(userId) {
 	const { contact } = await import("@/db/schema/entities/contact.js");
 	const { organisation_contact } = await import("@/db/schema/entities/organisation_contact.js");
+	const { organisation } = await import("@/db/schema/entities/organisation.js");
 
 	const selectShape = {
 		id: booking.id,
@@ -219,6 +221,7 @@ export async function listBookingsForUser(userId) {
 		total_cents: booking.total_cents,
 		submitted_at: booking.submitted_at,
 		ticketing_enabled: booking.ticketing_enabled,
+		organisation_name: organisation.name,
 	};
 
 	const [viaCustomer, viaOrganisation] = await Promise.all([
@@ -226,12 +229,14 @@ export async function listBookingsForUser(userId) {
 			.select(selectShape)
 			.from(booking)
 			.innerJoin(customer, eq(booking.customer_id, customer.id))
+			.leftJoin(organisation, eq(organisation.id, booking.organisation_id))
 			.where(and(eq(customer.user_id, userId), isNull(booking.deletedAt))),
 		db
 			.select(selectShape)
 			.from(booking)
 			.innerJoin(organisation_contact, eq(organisation_contact.organisation_id, booking.organisation_id))
 			.innerJoin(contact, eq(contact.id, organisation_contact.contact_id))
+			.leftJoin(organisation, eq(organisation.id, booking.organisation_id))
 			.where(
 				and(
 					eq(contact.user_id, userId),

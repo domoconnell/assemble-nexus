@@ -59,8 +59,8 @@ function baseUrl() {
 	return (process.env.BASE_URL || "").replace(/\/$/, "");
 }
 
-function bookingPublicUrl(reference) {
-	return `${baseUrl()}/booking/${reference}`;
+function bookingPublicUrl(id) {
+	return `${baseUrl()}/booking-received/${id}`;
 }
 
 function bookingAdminUrl(id) {
@@ -119,7 +119,7 @@ export async function sendEnquiryReceivedEmail({ booking, customer }) {
 		first_name: customer.first_name,
 		reference: booking.reference,
 		total: gbp(booking.total_cents),
-		view_url: bookingPublicUrl(booking.reference),
+		view_url: bookingPublicUrl(booking.id),
 	});
 }
 
@@ -188,7 +188,7 @@ export async function sendBookingApprovedEmail({ booking, customer, note, event 
 		event?.id ? `${baseUrl()}/my-events/${event.id}/edit` : "";
 	const pay_deposit_url =
 		(booking.deposit_required_cents ?? 0) > 0
-			? bookingPublicUrl(booking.reference)
+			? bookingPublicUrl(booking.id)
 			: "";
 	const venue = await getVenueById(booking.venue_id);
 	const venue_name = venue?.name ?? "";
@@ -231,7 +231,7 @@ export async function sendBookingApprovedEmail({ booking, customer, note, event 
 			total: gbp(booking.total_cents),
 			deposit_required: gbp(booking.deposit_required_cents),
 			note: note ?? "",
-			view_url: bookingPublicUrl(booking.reference),
+			view_url: bookingPublicUrl(booking.id),
 			pay_deposit_url,
 			has_deposit: !!pay_deposit_url,
 			ticketing_setup_url,
@@ -255,7 +255,7 @@ export async function sendBookingDepositPaidEmail({ booking, customer, depositPa
 		deposit_paid: gbp(deposit),
 		total: gbp(total),
 		balance_due: gbp(balance),
-		view_url: bookingPublicUrl(booking.reference),
+		view_url: bookingPublicUrl(booking.id),
 	});
 }
 
@@ -272,7 +272,7 @@ export async function sendBookingBalanceInvoiceEmail({ booking, customer }) {
 		deposit_paid: gbp(depositPaid),
 		balance_due: gbp(balanceDue),
 		pay_url: `${baseUrl()}/booking/${booking.reference}/pay-balance`,
-		view_url: bookingPublicUrl(booking.reference),
+		view_url: bookingPublicUrl(booking.id),
 	});
 }
 
@@ -283,7 +283,7 @@ export async function sendBookingBalancePaidEmail({ booking, customer }) {
 		first_name: customer.first_name,
 		reference: booking.reference,
 		total: gbp(booking.total_cents ?? 0),
-		view_url: bookingPublicUrl(booking.reference),
+		view_url: bookingPublicUrl(booking.id),
 	});
 }
 
@@ -294,7 +294,7 @@ export async function sendBookingRejectedEmail({ booking, customer, reason }) {
 		first_name: customer.first_name,
 		reference: booking.reference,
 		reason: reason ?? "",
-		view_url: bookingPublicUrl(booking.reference),
+		view_url: bookingPublicUrl(booking.id),
 	});
 }
 
@@ -319,7 +319,7 @@ export async function sendBookingReminderEmail({
 		days_until: daysUntil,
 		balance_due: gbp(balanceDue),
 		has_balance: balanceDue > 0,
-		view_url: bookingPublicUrl(booking.reference),
+		view_url: bookingPublicUrl(booking.id),
 		pay_url: balanceDue > 0 ? `${baseUrl()}/booking/${booking.reference}/pay-balance` : "",
 	});
 }

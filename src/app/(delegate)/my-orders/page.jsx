@@ -75,7 +75,7 @@ export default async function MyOrdersPage() {
 				title="Your orders"
 				subtitle="Receipts and ticket bundles for events you've bought into."
 			/>
-			<Container className="pt-6 pb-12 lg:pb-16 space-y-6">
+			<Container className="pt-6 pb-12 lg:pb-16 space-y-8">
 				<MyNav
 					current="orders"
 					email={session.user.email}

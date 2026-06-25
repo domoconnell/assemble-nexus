@@ -93,14 +93,14 @@ export default async function MyEventsPage() {
 												{e.status.replace("_", " ")}
 											</span>
 										</div>
-										{e.summary && (
-											<div className="text-sm text-muted-foreground line-clamp-1">
-												{e.summary}
-											</div>
-										)}
-									</div>
-									<div className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
-										{e.starts_at ? stampFmt.format(new Date(e.starts_at)) : "Date TBA"}
+										<div className="text-sm text-muted-foreground line-clamp-1">
+											{[
+												e.starts_at ? stampFmt.format(new Date(e.starts_at)) : "Date TBA",
+												e.summary,
+											]
+												.filter(Boolean)
+												.join(" · ")}
+										</div>
 									</div>
 								</Link>
 							</li>
