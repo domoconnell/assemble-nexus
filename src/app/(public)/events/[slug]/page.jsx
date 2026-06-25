@@ -53,10 +53,14 @@ export default async function EventPage({ params, searchParams }) {
 	const ev = await getEventBySlug(venue.id, slug);
 	if (!ev) notFound();
 
-	const isPublic = ev.visibility === "public" && ev.status === "published";
+	// `visibility` only controls whether the event appears in public
+	// listings (home page "What's on", /whats-on, room pages). Anyone
+	// with the slug can view the event page directly — that's the whole
+	// point of giving private events a shareable URL. Drafts and other
+	// non-published statuses still 404 unless an admin/staff hits it
+	// with `?preview=1`.
 	const preview = sp?.preview === "1";
-
-	if (!isPublic) {
+	if (ev.status !== "published") {
 		const session = await getServerSession();
 		const access = session?.user ? await getUserAccess(session.user.id) : null;
 		const canPreview =

@@ -9,6 +9,7 @@ import { listOrdersForEvent } from "@/db/queries/orders";
 import { getBookingById } from "@/db/queries/bookings";
 import { getServerSession } from "@/utils/auth/server-guard";
 import { BackLink } from "@/site/ui/back-link";
+import { CopyableUrl } from "@/site/ui/copyable-url";
 
 export const dynamic = "force-dynamic";
 
@@ -88,8 +89,10 @@ export default async function MyEventDetailPage({ params }) {
 		listOrdersForEvent(ev.id),
 		ev.booking_id ? getBookingById(ev.booking_id) : Promise.resolve(null),
 	]);
-	const publicEventPath =
-		ev.status === "published" && ev.slug ? `/events/${ev.slug}` : null;
+	// Anyone with the slug can hit /events/[slug] now (visibility only
+	// controls listing in public catalogues), so show the public link
+	// for any published event regardless of visibility.
+	const publicEventPath = ev.slug && ev.status === "published" ? `/events/${ev.slug}` : null;
 
 	const paidOrders = orders.filter(
 		(o) => o.status === "paid" || o.status === "partially_refunded",
@@ -125,16 +128,6 @@ export default async function MyEventDetailPage({ params }) {
 				>
 					{ev.status.replace("_", " ")}
 				</span>
-				{publicEventPath && (
-					<Link
-						href={publicEventPath}
-						target="_blank"
-						rel="noreferrer"
-						className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-					>
-						View public page ↗
-					</Link>
-				)}
 				<Link
 					href={`/my-events/${ev.id}/edit`}
 					className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-foreground/15 px-3 py-1.5 text-xs hover:border-foreground/30 hover:bg-foreground/5 transition"
@@ -142,6 +135,10 @@ export default async function MyEventDetailPage({ params }) {
 					Edit event
 				</Link>
 			</div>
+
+			{publicEventPath && (
+				<CopyableUrl path={publicEventPath} label="Public link" />
+			)}
 
 				<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 					<Stat label="Tickets sold" value={ticketCounts.total} sub={`${ticketCounts.used} used`} />
