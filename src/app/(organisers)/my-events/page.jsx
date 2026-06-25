@@ -5,7 +5,7 @@ import { Hero } from "@/site/ui/hero";
 import { CtaButton } from "@/site/ui/cta-button";
 import { getServerSession } from "@/utils/auth/server-guard";
 import MagicLinkForm from "../_components/magic-link-form";
-import OrganiserNav from "../_components/organiser-nav";
+import MyNav from "@/site/ui/my-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -64,11 +64,7 @@ export default async function MyEventsPage() {
 				subtitle="Ticketed events you're running at The Assembly Rooms."
 			/>
 			<Container className="pt-6 pb-12 lg:pb-16 space-y-8">
-				<OrganiserNav
-					current="events"
-					email={user.email}
-					redirectTo="/my-events"
-				/>
+				<MyNav current="events" email={user.email} redirectTo="/my-events" />
 
 				{events.length === 0 ? (
 					<div className="rounded-xl border border-foreground/10 bg-card p-10 text-center space-y-4">

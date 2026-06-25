@@ -73,10 +73,10 @@ function gbp(c) {
 	);
 }
 
-async function safeSend(templateKey, to, data) {
+async function safeSend(templateKey, to, data, { attachments } = {}) {
 	if (!to) return;
 	try {
-		await sendTemplate(templateKey, to, data);
+		await sendTemplate(templateKey, to, data, attachments ? { attachments } : undefined);
 	} catch (err) {
 		console.error(`[email:${templateKey}]`, err?.message || err);
 	}
@@ -188,22 +188,59 @@ export async function sendBookingApprovedEmail({ booking, customer, note, event 
 		event?.id ? `${baseUrl()}/my-events/${event.id}/edit` : "";
 	const pay_deposit_url =
 		(booking.deposit_required_cents ?? 0) > 0
-			? `${baseUrl()}/booking/${booking.reference}/pay`
+			? bookingPublicUrl(booking.reference)
 			: "";
-	const venue_name = await venueNameFor(booking.venue_id);
-	await safeSend("booking-approved", customer.email, {
-		venue_name,
-		first_name: customer.first_name,
-		reference: booking.reference,
-		total: gbp(booking.total_cents),
-		deposit_required: gbp(booking.deposit_required_cents),
-		note: note ?? "",
-		view_url: bookingPublicUrl(booking.reference),
-		pay_deposit_url,
-		has_deposit: !!pay_deposit_url,
-		ticketing_setup_url,
-		has_ticketing_setup: !!ticketing_setup_url,
-	});
+	const venue = await getVenueById(booking.venue_id);
+	const venue_name = venue?.name ?? "";
+
+	// Render the snapshotted booking agreement as a PDF and attach it.
+	// The customer is asked to re-tick the acceptance box on the pay page
+	// before the deposit can be taken, so this is the reference copy.
+	let attachments = null;
+	if (booking.agreement_snapshot) {
+		try {
+			const { buildBookingAgreementPdfBuffer } = await import(
+				"@/lib/bookings/agreement-pdf.js"
+			);
+			const buf = await buildBookingAgreementPdfBuffer({
+				agreement: booking.agreement_snapshot,
+				venue,
+				booking,
+				customer,
+			});
+			attachments = [
+				{
+					content: buf.toString("base64"),
+					filename: `booking-agreement-${booking.reference}.pdf`,
+					type: "application/pdf",
+					disposition: "attachment",
+				},
+			];
+		} catch (err) {
+			console.error("[booking-approved] agreement PDF render failed", err?.message || err);
+		}
+	}
+
+	await safeSend(
+		"booking-approved",
+		customer.email,
+		{
+			venue_name,
+			first_name: customer.first_name,
+			reference: booking.reference,
+			total: gbp(booking.total_cents),
+			deposit_required: gbp(booking.deposit_required_cents),
+			note: note ?? "",
+			view_url: bookingPublicUrl(booking.reference),
+			pay_deposit_url,
+			has_deposit: !!pay_deposit_url,
+			ticketing_setup_url,
+			has_ticketing_setup: !!ticketing_setup_url,
+			has_agreement: !!attachments,
+			agreement_title: booking.agreement_snapshot?.title ?? "Booking Agreement",
+		},
+		attachments ? { attachments } : undefined,
+	);
 }
 
 export async function sendBookingDepositPaidEmail({ booking, customer, depositPaidCents }) {

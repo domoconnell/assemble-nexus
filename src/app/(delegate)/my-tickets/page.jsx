@@ -6,10 +6,12 @@ import { Hero } from "@/site/ui/hero";
 import { CtaButton } from "@/site/ui/cta-button";
 import { getServerSession } from "@/utils/auth/server-guard";
 import { listTicketsForUser } from "@/db/queries/orders";
+import { listBookingsForUser } from "@/db/queries/bookings";
+import { listEventsForHirer } from "@/db/queries/events";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import { getWalletProvidersStatus } from "@/db/queries/settings";
 import MagicLinkForm from "../_components/magic-link-form";
-import DelegateNav from "../_components/delegate-nav";
+import MyNav from "@/site/ui/my-nav";
 
 const appleIcon = byPrefixAndName.fab["apple"];
 const googleIcon = byPrefixAndName.fab["google-wallet"];
@@ -71,9 +73,11 @@ export default async function MyTicketsPage() {
 
 	const user = session.user;
 	const venue = await requireCurrentVenue();
-	const [allTickets, walletStatus] = await Promise.all([
+	const [allTickets, walletStatus, bookings, events] = await Promise.all([
 		listTicketsForUser(user.id),
 		getWalletProvidersStatus(venue.id),
+		listBookingsForUser(user.id),
+		listEventsForHirer(user.id),
 	]);
 
 	// Split into active (event is today or in the future) vs previous.
@@ -102,7 +106,13 @@ export default async function MyTicketsPage() {
 				subtitle="Tap any ticket for the QR code at the door."
 			/>
 			<Container className="pt-6 pb-12 lg:pb-16 space-y-8">
-				<DelegateNav current="tickets" email={user.email} redirectTo="/my-tickets" />
+				<MyNav
+					current="tickets"
+					email={user.email}
+					redirectTo="/my-tickets"
+					showBookings={bookings.length > 0}
+					showEvents={events.length > 0}
+				/>
 
 				{allTickets.length === 0 ? (
 					<div className="rounded-xl border border-foreground/10 bg-card p-10 text-center space-y-4">

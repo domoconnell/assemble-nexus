@@ -9,8 +9,10 @@ import {
 	listOrderLines,
 	listOrderTickets,
 } from "@/db/queries/orders";
+import { listBookingsForUser } from "@/db/queries/bookings";
+import { listEventsForHirer } from "@/db/queries/events";
 import MagicLinkForm from "../../_components/magic-link-form";
-import DelegateNav from "../../_components/delegate-nav";
+import MyNav from "@/site/ui/my-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -115,9 +117,11 @@ export default async function MyOrderDetailPage({ params }) {
 		);
 	}
 
-	const [lines, tickets] = await Promise.all([
+	const [lines, tickets, bookings, events] = await Promise.all([
 		listOrderLines(order.id),
 		listOrderTickets(order.id),
+		listBookingsForUser(session.user.id),
+		listEventsForHirer(session.user.id),
 	]);
 
 	const ticketLines = lines.filter((l) => l.kind === "ticket" && !l.parent_line_id);
@@ -142,7 +146,13 @@ export default async function MyOrderDetailPage({ params }) {
 			/>
 
 			<Container className="pt-6 pb-12 lg:pb-16 space-y-6 max-w-3xl">
-				<DelegateNav current="orders" email={session.user.email} redirectTo="/my-orders" />
+				<MyNav
+					current="orders"
+					email={session.user.email}
+					redirectTo="/my-orders"
+					showBookings={bookings.length > 0}
+					showEvents={events.length > 0}
+				/>
 
 				<section className="rounded-xl border border-foreground/10 bg-card p-6 space-y-4">
 					<div className="flex items-baseline justify-between gap-3 flex-wrap">

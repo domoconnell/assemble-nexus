@@ -105,32 +105,71 @@ export async function saveEventAction(input) {
 	// / teardown / rehearsal slots don't count. The client gates Save on
 	// the same rules; this layer stops a stale page or a direct API hit
 	// from writing nonsense.
+	//
+	// We only revalidate the When fields that actually CHANGED versus
+	// the row in the DB. Saving an unrelated tab (Page, Tickets, etc.)
+	// rides the unchanged times through the payload — we must not refuse
+	// those, otherwise a historical bad value would lock the whole event.
+	let existingRow = null;
+	if (parsed.id) {
+		const [r] = await db
+			.select({
+				booking_id: event.booking_id,
+				doors_open_at: event.doors_open_at,
+				starts_at: event.starts_at,
+				ends_at: event.ends_at,
+			})
+			.from(event)
+			.where(eq(event.id, parsed.id))
+			.limit(1);
+		existingRow = r ?? null;
+	}
+	const sameInstant = (a, b) => {
+		if (a == null && b == null) return true;
+		if (a == null || b == null) return false;
+		return new Date(a).getTime() === new Date(b).getTime();
+	};
+	const doorsChanged = !sameInstant(parsed.doors_open_at, existingRow?.doors_open_at);
+	const startsChanged = !sameInstant(parsed.starts_at, existingRow?.starts_at);
+	const endsChanged = !sameInstant(parsed.ends_at, existingRow?.ends_at);
+
 	const doorsTs = parsed.doors_open_at ? new Date(parsed.doors_open_at).getTime() : null;
 	const startsTs = parsed.starts_at ? new Date(parsed.starts_at).getTime() : null;
 	const endsTs = parsed.ends_at ? new Date(parsed.ends_at).getTime() : null;
-	if (doorsTs != null && startsTs != null && doorsTs > startsTs) {
+	if (
+		(doorsChanged || startsChanged) &&
+		doorsTs != null &&
+		startsTs != null &&
+		doorsTs > startsTs
+	) {
 		throw new Error("Doors must be on or before the start time.");
 	}
-	if (startsTs != null && endsTs != null && startsTs > endsTs) {
+	if (
+		(startsChanged || endsChanged) &&
+		startsTs != null &&
+		endsTs != null &&
+		startsTs > endsTs
+	) {
 		throw new Error("End time must be on or after the start time.");
 	}
-	if (doorsTs != null && endsTs != null && doorsTs > endsTs) {
+	if (
+		(doorsChanged || endsChanged) &&
+		doorsTs != null &&
+		endsTs != null &&
+		doorsTs > endsTs
+	) {
 		throw new Error("Doors must be on or before the end time.");
 	}
 
 	// Resolve the booking link for the window check: the payload's
 	// `booking_id` wins; falls back to whatever's currently on the row
 	// (in case the form omitted it).
-	let bookingIdForWindow = parsed.booking_id ?? null;
-	if (!bookingIdForWindow && parsed.id) {
-		const [existing] = await db
-			.select({ booking_id: event.booking_id })
-			.from(event)
-			.where(eq(event.id, parsed.id))
-			.limit(1);
-		bookingIdForWindow = existing?.booking_id ?? null;
-	}
-	if (bookingIdForWindow && (doorsTs != null || startsTs != null || endsTs != null)) {
+	const bookingIdForWindow = parsed.booking_id ?? existingRow?.booking_id ?? null;
+	if (
+		bookingIdForWindow &&
+		(doorsChanged || startsChanged || endsChanged) &&
+		(doorsTs != null || startsTs != null || endsTs != null)
+	) {
 		const segs = await db
 			.select({
 				starts_at: booking_segment.starts_at,
@@ -153,13 +192,13 @@ export async function saveEventAction(input) {
 			}));
 		const inWindow = (t) => windows.some((w) => t >= w.start && t <= w.end);
 		if (windows.length > 0) {
-			if (doorsTs != null && !inWindow(doorsTs)) {
+			if (doorsChanged && doorsTs != null && !inWindow(doorsTs)) {
 				throw new Error("Doors time is outside the booking's event-day window.");
 			}
-			if (startsTs != null && !inWindow(startsTs)) {
+			if (startsChanged && startsTs != null && !inWindow(startsTs)) {
 				throw new Error("Start time is outside the booking's event-day window.");
 			}
-			if (endsTs != null && !inWindow(endsTs)) {
+			if (endsChanged && endsTs != null && !inWindow(endsTs)) {
 				throw new Error("End time is outside the booking's event-day window.");
 			}
 		}

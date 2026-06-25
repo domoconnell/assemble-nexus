@@ -6,7 +6,7 @@ import { Hero } from "@/site/ui/hero";
 import { CtaButton } from "@/site/ui/cta-button";
 import { getServerSession } from "@/utils/auth/server-guard";
 import MagicLinkForm from "../_components/magic-link-form";
-import OrganiserNav from "../_components/organiser-nav";
+import MyNav from "@/site/ui/my-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -73,11 +73,7 @@ export default async function MyBookingsPage() {
 				subtitle="Enquiries and confirmed hires at The Assembly Rooms."
 			/>
 			<Container className="pt-6 pb-12 lg:pb-16 space-y-8">
-				<OrganiserNav
-					current="bookings"
-					email={user.email}
-					redirectTo="/my-bookings"
-				/>
+				<MyNav current="bookings" email={user.email} redirectTo="/my-bookings" />
 
 				{organisations.length > 0 && (
 					<div className="space-y-3">

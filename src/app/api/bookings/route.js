@@ -30,6 +30,7 @@ import {
 import { findOrCreateUserForCustomer } from "@/utils/auth/account-linking.js";
 import { getServerSession } from "@/utils/auth/server-guard.js";
 import { ensureDraftEventForBooking } from "@/lib/events/draft-event.js";
+import { buildDefaultBookingInstalments } from "@/lib/bookings/instalments.js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -335,36 +336,23 @@ export async function POST(request) {
 	});
 
 	// Seed the default payment splits straight away (the policy default
-	// — typically 10% deposit + balance). Public submissions can't edit
-	// these; admins can rewrite them before approving via the editor.
-	if ((createdBooking.total_cents ?? 0) > 0) {
-		const depositCents = Math.min(
-			createdBooking.deposit_required_cents ?? 0,
-			createdBooking.total_cents,
+	// — typically 10% deposit + balance, clamped to the Stripe 30p floor).
+	// Public submissions can't edit these; admins can rewrite them before
+	// approving via the editor.
+	const seedSplits = buildDefaultBookingInstalments({
+		totalCents: createdBooking.total_cents,
+		depositRequiredCents: createdBooking.deposit_required_cents,
+	});
+	if (seedSplits.length > 0) {
+		await db.insert(booking_payment).values(
+			seedSplits.map((s, i) => ({
+				booking_id: createdBooking.id,
+				sort_order: i,
+				label: s.label,
+				amount_cents: s.amount_cents,
+				pay_token: randomBytes(18).toString("base64url"),
+			})),
 		);
-		const balanceCents = (createdBooking.total_cents ?? 0) - depositCents;
-		const seedRows = [];
-		if (depositCents > 0) {
-			seedRows.push({
-				booking_id: createdBooking.id,
-				sort_order: 0,
-				label: "Deposit",
-				amount_cents: depositCents,
-				pay_token: randomBytes(18).toString("base64url"),
-			});
-		}
-		if (balanceCents > 0) {
-			seedRows.push({
-				booking_id: createdBooking.id,
-				sort_order: seedRows.length,
-				label: "Balance",
-				amount_cents: balanceCents,
-				pay_token: randomBytes(18).toString("base64url"),
-			});
-		}
-		if (seedRows.length > 0) {
-			await db.insert(booking_payment).values(seedRows);
-		}
 	}
 
 	const draftEvent = await ensureDraftEventForBooking({

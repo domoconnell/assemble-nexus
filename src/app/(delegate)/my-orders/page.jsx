@@ -4,8 +4,10 @@ import { Hero } from "@/site/ui/hero";
 import { CtaButton } from "@/site/ui/cta-button";
 import { getServerSession } from "@/utils/auth/server-guard";
 import { listOrdersForUser } from "@/db/queries/orders";
+import { listBookingsForUser } from "@/db/queries/bookings";
+import { listEventsForHirer } from "@/db/queries/events";
 import MagicLinkForm from "../_components/magic-link-form";
-import DelegateNav from "../_components/delegate-nav";
+import MyNav from "@/site/ui/my-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +61,11 @@ export default async function MyOrdersPage() {
 		);
 	}
 
-	const orders = await listOrdersForUser(session.user.id);
+	const [orders, bookings, events] = await Promise.all([
+		listOrdersForUser(session.user.id),
+		listBookingsForUser(session.user.id),
+		listEventsForHirer(session.user.id),
+	]);
 
 	return (
 		<>
@@ -70,7 +76,13 @@ export default async function MyOrdersPage() {
 				subtitle="Receipts and ticket bundles for events you've bought into."
 			/>
 			<Container className="pt-6 pb-12 lg:pb-16 space-y-6">
-				<DelegateNav current="orders" email={session.user.email} redirectTo="/my-orders" />
+				<MyNav
+					current="orders"
+					email={session.user.email}
+					redirectTo="/my-orders"
+					showBookings={bookings.length > 0}
+					showEvents={events.length > 0}
+				/>
 
 				{orders.length === 0 ? (
 					<div className="rounded-xl border border-foreground/10 bg-card p-10 text-center space-y-4">

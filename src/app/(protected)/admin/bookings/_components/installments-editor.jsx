@@ -15,6 +15,8 @@ import {
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 const fmt = (c) => gbp.format((c ?? 0) / 100);
 
+const STRIPE_MIN_CENTS = 30;
+
 const dateFmt = new Intl.DateTimeFormat("en-GB", {
 	day: "numeric",
 	month: "short",
@@ -66,6 +68,12 @@ export default function InstallmentsEditor({ bookingId, reference, totalCents, p
 		[drafts],
 	);
 	const draftSumValid = draftSumCents === outstandingCents;
+	const draftAmounts = useMemo(
+		() => drafts.map((d) => Math.round(Number(d.amount_pounds || 0) * 100)),
+		[drafts],
+	);
+	const undersizedIdx = draftAmounts.findIndex((c) => c < STRIPE_MIN_CENTS);
+	const hasUndersized = undersizedIdx !== -1;
 
 	function updateDraft(key, patch) {
 		setDrafts((cur) => cur.map((d) => (d.key === key ? { ...d, ...patch } : d)));
@@ -96,6 +104,12 @@ export default function InstallmentsEditor({ bookingId, reference, totalCents, p
 	async function save() {
 		if (!draftSumValid) {
 			toast.error(`Payments must sum to ${fmt(outstandingCents)}.`);
+			return;
+		}
+		if (hasUndersized) {
+			toast.error(
+				`Each split must be at least ${fmt(STRIPE_MIN_CENTS)} (Stripe minimum).`,
+			);
 			return;
 		}
 		setBusy("save");
@@ -289,36 +303,48 @@ export default function InstallmentsEditor({ bookingId, reference, totalCents, p
 						)}
 					</p>
 					<ul className="space-y-2">
-						{drafts.map((d, i) => (
-							<li
-								key={d.key}
-								className="grid gap-2 grid-cols-[1fr_120px_auto] items-center"
-							>
-								<Input
-									value={d.label}
-									onChange={(e) => updateDraft(d.key, { label: e.target.value })}
-									placeholder={`Payment ${i + 1}`}
-								/>
-								<Input
-									type="number"
-									step="0.01"
-									min={0}
-									value={d.amount_pounds}
-									onChange={(e) =>
-										updateDraft(d.key, { amount_pounds: e.target.value })
-									}
-								/>
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									className="text-destructive"
-									onClick={() => removeDraft(d.key)}
-								>
-									Remove
-								</Button>
-							</li>
-						))}
+						{drafts.map((d, i) => {
+							const cents = draftAmounts[i] ?? 0;
+							const isUndersized = cents > 0 && cents < STRIPE_MIN_CENTS;
+							return (
+								<li key={d.key} className="space-y-1">
+									<div className="grid gap-2 grid-cols-[1fr_120px_auto] items-center">
+										<Input
+											value={d.label}
+											onChange={(e) => updateDraft(d.key, { label: e.target.value })}
+											placeholder={`Payment ${i + 1}`}
+										/>
+										<Input
+											type="number"
+											step="0.01"
+											min={0}
+											value={d.amount_pounds}
+											onChange={(e) =>
+												updateDraft(d.key, { amount_pounds: e.target.value })
+											}
+											aria-invalid={isUndersized || undefined}
+											className={
+												isUndersized ? "border-destructive focus-visible:ring-destructive" : ""
+											}
+										/>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											className="text-destructive"
+											onClick={() => removeDraft(d.key)}
+										>
+											Remove
+										</Button>
+									</div>
+									{isUndersized && (
+										<div className="text-[11px] text-destructive">
+											Below Stripe's {fmt(STRIPE_MIN_CENTS)} minimum — won't be chargeable.
+										</div>
+									)}
+								</li>
+							);
+						})}
 					</ul>
 					<div className="flex items-center gap-2">
 						<Button type="button" variant="outline" size="sm" onClick={addDraft}>
@@ -337,7 +363,9 @@ export default function InstallmentsEditor({ bookingId, reference, totalCents, p
 						<Button
 							size="sm"
 							onClick={save}
-							disabled={busy === "save" || !draftSumValid || drafts.length === 0}
+							disabled={
+								busy === "save" || !draftSumValid || hasUndersized || drafts.length === 0
+							}
 						>
 							{busy === "save" ? "Saving…" : "Save splits"}
 						</Button>

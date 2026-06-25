@@ -22,6 +22,11 @@ import { booking_payment } from "@/db/schema/entities/booking_payment.js";
 import { randomBytes } from "node:crypto";
 import { room } from "@/db/schema/entities/room.js";
 import { ensureDraftEventForBooking } from "@/lib/events/draft-event.js";
+import {
+	buildDefaultBookingInstalments,
+	STRIPE_MIN_CENTS,
+} from "@/lib/bookings/instalments.js";
+import { getActiveBookingAgreementSnapshot } from "@/lib/bookings/agreement.js";
 import { expandPattern } from "@/lib/booking/recurrence.js";
 import { booking_segment } from "@/db/schema/entities/booking_segment.js";
 import { requireServerSession } from "@/utils/auth/server-guard.js";
@@ -104,10 +109,23 @@ export async function approveBookingAction(input) {
 		}
 	}
 
+	// Snapshot the venue's currently-active booking agreement onto the
+	// booking so the customer always sees / signs the wording that was
+	// live at approval time, even if the master copy later changes. The
+	// snapshot only goes on once; if the booking already has one (rare
+	// re-approval flow), leave it alone.
+	const agreementSnapshot = b.agreement_snapshot
+		? null
+		: await getActiveBookingAgreementSnapshot(b.venue_id);
+
 	const now = new Date();
 	const [updated] = await db
 		.update(booking)
-		.set({ status: "approved", approved_at: now })
+		.set({
+			status: "approved",
+			approved_at: now,
+			...(agreementSnapshot ? { agreement_snapshot: agreementSnapshot } : {}),
+		})
 		.where(eq(booking.id, b.id))
 		.returning();
 
@@ -121,32 +139,24 @@ export async function approveBookingAction(input) {
 
 	// Seed default instalments from the deposit policy when none exist.
 	// Public submissions land here too — they get the policy default
-	// (e.g. 10% deposit + balance) automatically. Admin can override.
+	// (e.g. 10% deposit + balance, clamped to Stripe's 30p floor)
+	// automatically. Admin can override.
 	const existingPayments = await listBookingPayments(b.id);
-	if (existingPayments.length === 0 && (b.total_cents ?? 0) > 0) {
-		const depositCents = Math.min(b.deposit_required_cents ?? 0, b.total_cents);
-		const balanceCents = (b.total_cents ?? 0) - depositCents;
-		const seedRows = [];
-		if (depositCents > 0) {
-			seedRows.push({
-				booking_id: b.id,
-				sort_order: 0,
-				label: "Deposit",
-				amount_cents: depositCents,
-				pay_token: payToken(),
-			});
-		}
-		if (balanceCents > 0) {
-			seedRows.push({
-				booking_id: b.id,
-				sort_order: seedRows.length,
-				label: "Balance",
-				amount_cents: balanceCents,
-				pay_token: payToken(),
-			});
-		}
-		if (seedRows.length > 0) {
-			await insertBookingPayments(seedRows);
+	if (existingPayments.length === 0) {
+		const seedSplits = buildDefaultBookingInstalments({
+			totalCents: b.total_cents,
+			depositRequiredCents: b.deposit_required_cents,
+		});
+		if (seedSplits.length > 0) {
+			await insertBookingPayments(
+				seedSplits.map((s, i) => ({
+					booking_id: b.id,
+					sort_order: i,
+					label: s.label,
+					amount_cents: s.amount_cents,
+					pay_token: payToken(),
+				})),
+			);
 		}
 	}
 
@@ -695,6 +705,16 @@ export async function replaceBookingPaymentsAction(input) {
 	if (incomingSum !== expected) {
 		throw new Error(
 			`Payments must sum to ${(expected / 100).toFixed(2)} (was ${(incomingSum / 100).toFixed(2)}).`,
+		);
+	}
+
+	// Stripe rejects PaymentIntents below 30p. If any unpaid row is below
+	// that floor it can never be charged via card, so block the save and
+	// nudge the admin to merge it into another split.
+	const undersized = parsed.rows.find((r) => (r.amount_cents ?? 0) < STRIPE_MIN_CENTS);
+	if (undersized) {
+		throw new Error(
+			`Each split must be at least £${(STRIPE_MIN_CENTS / 100).toFixed(2)} (Stripe minimum) — "${undersized.label}" is £${((undersized.amount_cents ?? 0) / 100).toFixed(2)}.`,
 		);
 	}
 

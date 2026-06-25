@@ -257,6 +257,7 @@ function StripePaymentForm({
 	onSuccess,
 	onError,
 }) {
+	const formRef = useRef(null);
 	const cardNumberRef = useRef(null);
 	const cardExpiryRef = useRef(null);
 	const cardCvcRef = useRef(null);
@@ -279,7 +280,7 @@ function StripePaymentForm({
 				if (cancelled || !stripe) return;
 				stripeRef.current = stripe;
 
-				const appearance = computeStripeAppearance();
+				const appearance = computeStripeAppearance(formRef.current);
 
 				// PaymentRequest powers the wallet buttons. It lets the
 				// browser pre-flight Apple Pay / Google Pay availability,
@@ -445,7 +446,7 @@ function StripePaymentForm({
 	const hasAnyWallet = walletKinds.applePay || walletKinds.googlePay;
 
 	return (
-		<form onSubmit={payByCard} className="rounded-xl border border-foreground/10 bg-card p-6 space-y-5">
+		<form ref={formRef} onSubmit={payByCard} className="rounded-xl border border-foreground/10 bg-card p-6 space-y-5">
 			<div>
 				<h2 className="text-xs uppercase tracking-[0.22em] text-foreground/70">Pay securely</h2>
 				<p className="mt-2 text-xs text-muted-foreground">
@@ -583,15 +584,21 @@ function GoogleGlyph({ className }) {
  * Build a Stripe Elements `appearance` config from the site's CSS
  * variables. Stripe iframes can't read our stylesheet and can't parse
  * `oklch()` directly, so we resolve each CSS var to a concrete `rgb(...)`
- * string via a hidden div before passing it in.
+ * string via a hidden span before passing it in.
+ *
+ * The public site theme (`.theme-site`) is applied on a wrapper div, not
+ * the `<html>` root, so probing from `documentElement` returns the
+ * default light theme's `--foreground` (near-black). Probe from the
+ * form's own DOM node so we resolve through the cascade and pick up the
+ * dark-mode values.
  */
-function computeStripeAppearance() {
+function computeStripeAppearance(scopeEl) {
 	if (typeof window === "undefined") return undefined;
-	const root = document.documentElement;
+	const root = scopeEl ?? document.documentElement;
 	const styles = getComputedStyle(root);
 	const probe = document.createElement("span");
 	probe.style.display = "none";
-	document.body.appendChild(probe);
+	(scopeEl ?? document.body).appendChild(probe);
 	const resolve = (cssVarName, fallback) => {
 		const raw = styles.getPropertyValue(cssVarName).trim();
 		if (!raw) return fallback;

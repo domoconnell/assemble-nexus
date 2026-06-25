@@ -1,8 +1,14 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Hero } from "@/site/ui/hero";
 import { Section } from "@/site/ui/section";
 import { CtaButton } from "@/site/ui/cta-button";
-import { getBookingByReference, listBookingSegments, listBookingFacilitySelections } from "@/db/queries/bookings";
+import {
+	getBookingByReference,
+	listBookingSegments,
+	listBookingFacilitySelections,
+	listBookingPayments,
+} from "@/db/queries/bookings";
 
 export const dynamic = "force-dynamic";
 
@@ -69,10 +75,19 @@ export default async function BookingStatusPage({ params }) {
 	const b = await getBookingByReference(reference);
 	if (!b) notFound();
 
-	const [segments, facilitySelections] = await Promise.all([
+	const [segments, facilitySelections, payments] = await Promise.all([
 		listBookingSegments(b.id),
 		listBookingFacilitySelections(b.id),
+		listBookingPayments(b.id),
 	]);
+
+	const paidFromPayments = payments
+		.filter((p) => p.paid_at)
+		.reduce((sum, p) => sum + (p.amount_cents ?? 0), 0);
+	const paidLegacy = (b.deposit_paid_cents ?? 0) + (b.balance_paid_cents ?? 0);
+	const paidCents = payments.length > 0 ? paidFromPayments : paidLegacy;
+	const outstandingCents = Math.max(0, (b.total_cents ?? 0) - paidCents);
+	const canPayNow = b.status === "approved" || b.status === "confirmed";
 
 	const copy = STATUS_COPY[b.status] ?? STATUS_COPY.pending;
 
@@ -212,64 +227,44 @@ export default async function BookingStatusPage({ params }) {
 									}
 								/>
 							</div>
-							{b.deposit_required_cents > 0 && (
-								<div className="space-y-2 text-sm border-t border-foreground/10 pt-4">
-									<Row
-										label="Deposit required"
-										value={formatGbp(b.deposit_required_cents)}
-									/>
-									{b.deposit_paid_cents > 0 && (
-										<Row
-											label="Deposit paid"
-											value={formatGbp(b.deposit_paid_cents)}
-										/>
-									)}
-									{b.balance_paid_cents > 0 && (
-										<Row
-											label="Balance paid"
-											value={formatGbp(b.balance_paid_cents)}
-										/>
-									)}
-									{(() => {
-										const outstanding = Math.max(
-											0,
-											(b.total_cents ?? 0) -
-												(b.deposit_paid_cents ?? 0) -
-												(b.balance_paid_cents ?? 0),
+							{payments.length > 0 && (
+								<div className="space-y-1.5 text-sm border-t border-foreground/10 pt-4">
+									{payments.map((p) => {
+										const isPaid = !!p.paid_at;
+										return (
+											<div
+												key={p.id}
+												className="flex items-baseline justify-between gap-3"
+											>
+												<span className="text-muted-foreground">
+													{p.label}
+													{isPaid && (
+														<span className="ml-2 text-[10px] uppercase tracking-[0.15em] text-primary">
+															paid
+														</span>
+													)}
+												</span>
+												<span className="flex items-baseline gap-3">
+													<span className="font-mono">{formatGbp(p.amount_cents)}</span>
+													{!isPaid && canPayNow && (
+														<Link
+															href={`/booking/${b.reference}/pay-installment/${p.pay_token}`}
+															className="text-xs text-primary hover:underline whitespace-nowrap"
+														>
+															Pay →
+														</Link>
+													)}
+												</span>
+											</div>
 										);
-										return outstanding > 0 && b.status === "confirmed" ? (
-											<Row
-												label={<span className="font-medium">Balance due</span>}
-												value={
-													<span className="font-display text-xl">
-														{formatGbp(outstanding)}
-													</span>
-												}
-											/>
-										) : null;
-									})()}
+									})}
+									<div className="flex justify-between font-medium pt-2 border-t border-foreground/10 mt-2">
+										<span>Outstanding</span>
+										<span className="font-mono">{formatGbp(outstandingCents)}</span>
+									</div>
 								</div>
 							)}
 							<div className="border-t border-foreground/10 pt-5 space-y-3">
-								{b.status === "approved" && b.deposit_required_cents > 0 && (
-									<CtaButton href={`/booking/${b.reference}/pay`} className="w-full">
-										Pay deposit
-									</CtaButton>
-								)}
-								{b.status === "confirmed" &&
-									Math.max(
-										0,
-										(b.total_cents ?? 0) -
-											(b.deposit_paid_cents ?? 0) -
-											(b.balance_paid_cents ?? 0),
-									) > 0 && (
-										<CtaButton
-											href={`/booking/${b.reference}/pay-balance`}
-											className="w-full"
-										>
-											Pay balance
-										</CtaButton>
-									)}
 								<CtaButton href="/contact" variant="outline" className="w-full">
 									Get in touch
 								</CtaButton>

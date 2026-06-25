@@ -160,6 +160,7 @@ export default function EventEditor({
 	const isHirer = surface === "hirer";
 	const router = useRouter();
 	const isNew = !initialEvent?.id;
+	const isPublished = initialEvent?.status === "published";
 
 	const hasOrders = (initialOrders?.length ?? 0) > 0;
 	const showOverview = !isNew;
@@ -429,14 +430,14 @@ export default function EventEditor({
 							</Button>
 						)}
 						<Button
-							variant={isHirer ? "outline" : "default"}
+							variant={isHirer && !isPublished ? "outline" : "default"}
 							onClick={() => saveBasics()}
 							disabled={saving || !draft.title || hasWhenErrors}
 							title={hasWhenErrors ? "Fix the times in 'When' before saving." : undefined}
 						>
-							{saving ? "Saving…" : isHirer ? "Save draft" : "Save"}
+							{saving ? "Saving…" : isHirer && !isPublished ? "Save draft" : "Save"}
 						</Button>
-						{isHirer && !isNew && !setupMode && onSubmitForReview && (() => {
+						{isHirer && !isNew && !setupMode && !isPublished && onSubmitForReview && (() => {
 							const bookingGated =
 								!!initialEvent?.booking_id &&
 								bookingStatus !== "confirmed" &&

@@ -111,8 +111,9 @@ export const EMAIL_TEMPLATES = {
 
 	"booking-approved": {
 		templateId: "d-fa287c2caf64478ba885f9d6289cff7d",
-		description: "Sent to the hirer when an admin approves their pending booking. When the booking had ticketing enabled, a draft event is auto-created and ticketing_setup_url points the hirer at the designer.",
+		description: "Sent to the hirer when an admin approves their pending booking. The venue's active booking agreement is snapshotted onto the booking at approval and attached as a PDF for the hirer to read. When the booking had ticketing enabled, a draft event is auto-created and ticketing_setup_url points the hirer at the designer.",
 		audience: "hirer",
+		attachments: "When the booking has an agreement snapshot: a single PDF named `booking-agreement-[reference].pdf`. The hirer must tick the in-page acceptance box on the pay-installment URL before the deposit PaymentIntent is created.",
 		fields: {
 			venue_name: "Public venue name.",
 			first_name: "Hirer's first name.",
@@ -120,9 +121,11 @@ export const EMAIL_TEMPLATES = {
 			total: "GBP-formatted total.",
 			deposit_required: "GBP-formatted deposit amount.",
 			note: "Optional note from staff (may be empty).",
-			view_url: "Public link to the booking status page.",
-			pay_deposit_url: "When a deposit is required: link to /booking/[reference]/pay. Empty when no deposit.",
+			view_url: "Public link to the booking status page. Each instalment has its own 'Pay →' link there.",
+			pay_deposit_url: "When a deposit is required: link to the booking status page so the hirer can pick which instalment to pay. Empty when no deposit.",
 			has_deposit: "Boolean - true when pay_deposit_url is present. Use to conditionally show the 'Pay deposit' CTA.",
+			has_agreement: "Boolean - true when a Booking Agreement PDF is attached. Use to surface the 'see attached agreement' line.",
+			agreement_title: "Title of the agreement PDF (e.g. 'Booking Agreement') for inline reference in the email copy.",
 			ticketing_setup_url: "When the booking had ticketing enabled: link to /my-events/[id]/edit so the hirer can design their ticketing page. Empty when ticketing was not enabled.",
 			has_ticketing_setup: "Boolean - true when ticketing_setup_url is present. Use to conditionally show the 'set up tickets' CTA in the template.",
 		},

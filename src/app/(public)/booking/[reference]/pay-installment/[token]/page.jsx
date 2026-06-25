@@ -103,11 +103,74 @@ export default async function BookingInstalmentPayPage({ params }) {
 								pendingIntentId={payment.stripe_payment_intent_id ?? null}
 								publishableKey={publishableKey}
 								clientSecret={clientSecret}
+								bookingReference={reference}
+								agreementRequired={
+									!!payment.agreement_snapshot && !payment.agreement_accepted_at
+								}
+								agreementTitle={
+									payment.agreement_snapshot?.title ?? "Booking Agreement"
+								}
 							/>
 						</aside>
 					</div>
+
+					{payment.agreement_snapshot && (
+						<div className="mt-12 max-w-3xl">
+							<BookingAgreementBody agreement={payment.agreement_snapshot} />
+							{payment.agreement_accepted_at && (
+								<p className="mt-4 text-xs text-muted-foreground">
+									Accepted on{" "}
+									{new Date(payment.agreement_accepted_at).toLocaleString("en-GB", {
+										timeZone: "Europe/London",
+									})}
+									.
+								</p>
+							)}
+						</div>
+					)}
 				</Container>
 			</Section>
 		</>
+	);
+}
+
+function BookingAgreementBody({ agreement }) {
+	const sections = Array.isArray(agreement?.sections) ? agreement.sections : [];
+	return (
+		<section className="rounded-xl border border-foreground/10 bg-card p-6 space-y-5">
+			<div>
+				<div className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+					{agreement?.version ? `${agreement.title} · ${agreement.version}` : agreement?.title}
+				</div>
+				<h2 className="mt-2 font-display text-2xl tracking-tight">
+					{agreement?.title ?? "Booking Agreement"}
+				</h2>
+			</div>
+			{agreement?.intro && (
+				<p className="text-sm leading-relaxed text-foreground/85 whitespace-pre-line">
+					{agreement.intro}
+				</p>
+			)}
+			{sections.map((s, i) => (
+				<div key={i} className="space-y-2">
+					{s.heading && (
+						<h3 className="font-medium text-foreground text-sm uppercase tracking-[0.16em]">
+							{s.heading}
+						</h3>
+					)}
+					{Array.isArray(s.paragraphs) &&
+						s.paragraphs
+							.filter((p) => p && p.trim().length > 0)
+							.map((p, j) => (
+								<p
+									key={j}
+									className="text-sm leading-relaxed text-foreground/85 whitespace-pre-line"
+								>
+									{p}
+								</p>
+							))}
+				</div>
+			))}
+		</section>
 	);
 }

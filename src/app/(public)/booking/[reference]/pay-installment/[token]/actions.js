@@ -12,6 +12,7 @@ import { getActivePsp } from "@/lib/psp/index.js";
 
 const Schema = z.object({
 	pay_token: z.string().min(8),
+	accept_agreement: z.boolean().optional(),
 });
 
 /**
@@ -34,6 +35,21 @@ export async function startBookingInstalmentPaymentAction(input) {
 	if (!b) throw new Error("Booking not found.");
 	if (b.status === "cancelled" || b.status === "rejected") {
 		throw new Error(`Booking is ${b.status}; payment can't be taken.`);
+	}
+
+	// Gate the deposit on the customer accepting the booking agreement.
+	// Already-accepted bookings sail through. If the booking has a
+	// snapshotted agreement and nobody's ticked the box yet, the panel
+	// must have set accept_agreement=true on this call — otherwise reject
+	// so a tamper-with client can't sneak past the in-page checkbox.
+	if (b.agreement_snapshot && !b.agreement_accepted_at) {
+		if (!parsed.accept_agreement) {
+			throw new Error("Please tick the box to accept the booking agreement before paying.");
+		}
+		await db
+			.update(booking)
+			.set({ agreement_accepted_at: new Date() })
+			.where(eq(booking.id, b.id));
 	}
 
 	const psp = await getActivePsp(b.venue_id);

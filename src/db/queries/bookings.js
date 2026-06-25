@@ -815,6 +815,8 @@ export async function getBookingPaymentByToken(token) {
 			booking_status: booking.status,
 			booking_total_cents: booking.total_cents,
 			venue_id: booking.venue_id,
+			agreement_snapshot: booking.agreement_snapshot,
+			agreement_accepted_at: booking.agreement_accepted_at,
 			customer_first_name: customer.first_name,
 			customer_last_name: customer.last_name,
 			customer_email: customer.email,

@@ -14,6 +14,7 @@ import {
 	listTicketDiscounts,
 	userCanEditEvent,
 } from "@/db/queries/events";
+import { listBookingSegments } from "@/db/queries/bookings";
 import { getFileRecord } from "@/utils/files/files.server";
 import { requireServerSession } from "@/utils/auth/server-guard";
 import EventEditor from "@/app/(protected)/admin/events/_components/event-editor";
@@ -60,6 +61,7 @@ export default async function HirerEventEditPage({ params }) {
 	const banner = ev.banner_file_id ? await getFileRecord(ev.banner_file_id) : null;
 
 	let bookingStatus = null;
+	let bookingSegments = [];
 	if (ev.booking_id) {
 		const [b] = await db
 			.select({ status: booking.status })
@@ -67,7 +69,17 @@ export default async function HirerEventEditPage({ params }) {
 			.where(eq(booking.id, ev.booking_id))
 			.limit(1);
 		bookingStatus = b?.status ?? null;
+		bookingSegments = await listBookingSegments(ev.booking_id);
 	}
+
+	// Same shape as the admin page — only the `event`-keyed segments
+	// count as the allowed window for doors / starts / ends.
+	const eventDayWindows = bookingSegments
+		.filter((s) => s.booking_type_key === "event")
+		.map((s) => ({
+			starts_at: new Date(s.starts_at).toISOString(),
+			ends_at: new Date(s.ends_at).toISOString(),
+		}));
 
 	const linksByAddon = new Map();
 	for (const l of typeAddonLinks) {
@@ -93,6 +105,7 @@ export default async function HirerEventEditPage({ params }) {
 			initialBanner={banner}
 			vatRates={vatRates}
 			organisers={[]}
+			eventDayWindows={eventDayWindows}
 			surface="hirer"
 			onSaveBasics={saveEventForHirerAction}
 			onSubmitForReview={submitBound}

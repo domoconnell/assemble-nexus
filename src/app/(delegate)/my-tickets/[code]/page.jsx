@@ -4,10 +4,12 @@ import { Container } from "@/site/ui/container";
 import { Hero } from "@/site/ui/hero";
 import { getServerSession } from "@/utils/auth/server-guard";
 import { getTicketForUserByCode } from "@/db/queries/orders";
+import { listBookingsForUser } from "@/db/queries/bookings";
+import { listEventsForHirer } from "@/db/queries/events";
 import { getWalletProvidersStatus } from "@/db/queries/settings";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import MagicLinkForm from "../../_components/magic-link-form";
-import DelegateNav from "../../_components/delegate-nav";
+import MyNav from "@/site/ui/my-nav";
 import TicketQrCard from "@/site/events/ticket-qr-card";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +62,11 @@ export default async function MyTicketDetailPage({ params }) {
 	if (!ticket) notFound();
 
 	const venue = await requireCurrentVenue();
-	const walletStatus = await getWalletProvidersStatus(venue.id);
+	const [walletStatus, bookings, events] = await Promise.all([
+		getWalletProvidersStatus(venue.id),
+		listBookingsForUser(session.user.id),
+		listEventsForHirer(session.user.id),
+	]);
 
 	const start = ticket.event_starts_at ? new Date(ticket.event_starts_at) : null;
 	const end = ticket.event_ends_at ? new Date(ticket.event_ends_at) : null;
@@ -75,7 +81,13 @@ export default async function MyTicketDetailPage({ params }) {
 				subtitle={ticket.ticket_type_label}
 			/>
 			<Container className="pt-6 pb-12 lg:pb-16 space-y-6 max-w-2xl">
-				<DelegateNav current="tickets" email={session.user.email} redirectTo="/my-tickets" />
+				<MyNav
+					current="tickets"
+					email={session.user.email}
+					redirectTo="/my-tickets"
+					showBookings={bookings.length > 0}
+					showEvents={events.length > 0}
+				/>
 
 				<div className="rounded-xl border border-foreground/10 bg-card p-6 space-y-4">
 					<div className="space-y-1">
