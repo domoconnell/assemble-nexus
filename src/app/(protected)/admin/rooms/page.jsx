@@ -28,7 +28,7 @@ export default async function AdminRoomsPage() {
 				</Button>
 			</div>
 
-			<div className="rounded-lg border bg-card overflow-hidden">
+			<div className="rounded-lg border bg-card overflow-x-auto">
 				<table className="w-full">
 					<thead>
 						<tr className="border-b text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">

@@ -81,6 +81,40 @@ export async function listLatestBalanceSnapshots(venueId, { accountIds } = {}) {
 }
 
 /**
+ * Sum of the latest balances sitting in PSP holding accounts (Stripe +
+ * Square). These are "money the venue has earned but hasn't received
+ * yet" — they live in the PSP account until the next automatic payout
+ * to the operating bank. Surfaced on the dashboard as a separate card
+ * so the headline "actual income" isn't lying by omission about money
+ * already collected from customers.
+ *
+ * Returns the sum in minor units, plus a per-provider breakdown.
+ */
+export async function getPspHeldBalance(venueId) {
+	const rows = await db.execute(sql`
+		SELECT DISTINCT ON (s.bank_account_id)
+			a.provider,
+			s.cleared_minor
+		FROM bank_balance_snapshot s
+		INNER JOIN bank_account a ON a.id = s.bank_account_id
+		WHERE s.venue_id = ${venueId}
+			AND a.provider IN ('stripe', 'square')
+			AND a.deleted_at IS NULL
+			AND a.is_active = true
+		ORDER BY s.bank_account_id, s.captured_at DESC
+	`);
+	const list = rows.rows ?? rows;
+	let total = 0;
+	const by_provider = { stripe: 0, square: 0 };
+	for (const r of list) {
+		const cents = Number(r.cleared_minor) || 0;
+		total += cents;
+		if (by_provider[r.provider] != null) by_provider[r.provider] += cents;
+	}
+	return { total, by_provider };
+}
+
+/**
  * Sum of the latest snapshots across (filtered) accounts - the combined
  * "cash on hand" number used by the dashboard widget and Banking page
  * cards. Returns null when no snapshots exist yet.
@@ -119,6 +153,13 @@ export async function getCombinedLatestBalance(venueId, { accountIds } = {}) {
  */
 export async function getBankInOutBetween(venueId, fromDate, toDate, { accountIds } = {}) {
 	const filter = accountFilter(accountIds);
+	// Period is keyed off the customer-facing transaction date
+	// (`transaction_time`, falling back to `settled_at`) — Monzo's
+	// next-batch settlement timing can otherwise roll a 31st-of-the-
+	// month evening payment into the wrong month, which doesn't match
+	// the user's mental model when they reconcile against their statement.
+	const fromIso = fromDate.toISOString();
+	const toIso = toDate.toISOString();
 	const rows = await db
 		.select({
 			direction: bank_transaction.direction,
@@ -128,11 +169,10 @@ export async function getBankInOutBetween(venueId, fromDate, toDate, { accountId
 		.where(
 			and(
 				eq(bank_transaction.venue_id, venueId),
-				isNotNull(bank_transaction.settled_at),
 				eq(bank_transaction.is_transfer, false),
 				eq(bank_transaction.is_church_transfer, false),
-				sql`${bank_transaction.settled_at} >= ${fromDate.toISOString()}`,
-				sql`${bank_transaction.settled_at} < ${toDate.toISOString()}`,
+				sql`COALESCE(${bank_transaction.transaction_time}, ${bank_transaction.settled_at}) >= ${fromIso}`,
+				sql`COALESCE(${bank_transaction.transaction_time}, ${bank_transaction.settled_at}) < ${toIso}`,
 				...(filter ? [filter] : []),
 			),
 		)

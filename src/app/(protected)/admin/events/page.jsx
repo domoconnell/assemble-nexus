@@ -69,7 +69,7 @@ export default async function AdminEventsPage({ searchParams }) {
 				</TabsList>
 			</Tabs>
 
-			<div className="rounded-lg border bg-card overflow-hidden">
+			<div className="rounded-lg border bg-card overflow-x-auto">
 				{rows.length === 0 ? (
 					<p className="p-6 text-sm text-muted-foreground">Nothing here yet.</p>
 				) : (

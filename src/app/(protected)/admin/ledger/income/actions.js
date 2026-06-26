@@ -22,6 +22,9 @@ const IncomeSchema = z.object({
 	kind: z.enum(MANUAL_INCOME_KINDS),
 	description: z.string().min(1).max(500),
 	amount_pounds: z.coerce.number().min(0),
+	// Output VAT portion of `amount_pounds` (gross-inclusive). Defaults
+	// to 0 for donations / outside-the-scope rows.
+	vat_pounds: z.coerce.number().min(0).optional().default(0),
 	notes: z.string().max(2000).optional().nullable(),
 });
 
@@ -39,6 +42,7 @@ export async function saveManualIncomeAction(input) {
 		kind: parsed.kind,
 		description: parsed.description,
 		amount_cents: Math.round(parsed.amount_pounds * 100),
+		vat_cents: Math.round((parsed.vat_pounds ?? 0) * 100),
 		notes: parsed.notes,
 	};
 

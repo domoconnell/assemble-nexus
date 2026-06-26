@@ -61,6 +61,7 @@ function emptyDraft() {
 		kind: "donation",
 		description: "",
 		amount_pounds: "",
+		vat_pounds: "",
 		notes: "",
 	};
 }
@@ -86,6 +87,7 @@ export default function ManualIncomeClient({ ym, monthLabel, items }) {
 			kind: row.kind,
 			description: row.description,
 			amount_pounds: ((row.amount_cents ?? 0) / 100).toFixed(2),
+			vat_pounds: ((row.vat_cents ?? 0) / 100).toFixed(2),
 			notes: row.notes ?? "",
 		});
 	}
@@ -101,6 +103,7 @@ export default function ManualIncomeClient({ ym, monthLabel, items }) {
 					kind: editing.kind,
 					description: editing.description,
 					amount_pounds: Number(editing.amount_pounds || 0),
+					vat_pounds: Number(editing.vat_pounds || 0),
 					notes: editing.notes || null,
 				});
 				toast.success(editing.id ? "Income updated" : "Income added");
@@ -150,7 +153,7 @@ export default function ManualIncomeClient({ ym, monthLabel, items }) {
 					No manual income recorded for {monthLabel}.
 				</div>
 			) : (
-				<div className="rounded-lg border bg-card overflow-hidden">
+				<div className="rounded-lg border bg-card overflow-x-auto">
 					<table className="w-full text-sm">
 						<thead className="bg-muted/40">
 							<tr className="text-left">
@@ -240,20 +243,41 @@ export default function ManualIncomeClient({ ym, monthLabel, items }) {
 									required
 								/>
 							</div>
-							<div className="space-y-1.5">
-								<Label htmlFor="inc-amount">Amount (£)</Label>
-								<Input
-									id="inc-amount"
-									type="number"
-									inputMode="decimal"
-									min="0"
-									step="0.01"
-									value={editing.amount_pounds}
-									onChange={(e) =>
-										setEditing({ ...editing, amount_pounds: e.target.value })
-									}
-									required
-								/>
+							<div className="grid gap-3 sm:grid-cols-2">
+								<div className="space-y-1.5">
+									<Label htmlFor="inc-amount">Amount (£, gross)</Label>
+									<Input
+										id="inc-amount"
+										type="number"
+										inputMode="decimal"
+										min="0"
+										step="0.01"
+										value={editing.amount_pounds}
+										onChange={(e) =>
+											setEditing({ ...editing, amount_pounds: e.target.value })
+										}
+										required
+									/>
+								</div>
+								<div className="space-y-1.5">
+									<Label htmlFor="inc-vat">
+										VAT (£, optional)
+										<span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground ml-1">
+											portion of the gross
+										</span>
+									</Label>
+									<Input
+										id="inc-vat"
+										type="number"
+										inputMode="decimal"
+										min="0"
+										step="0.01"
+										value={editing.vat_pounds}
+										onChange={(e) =>
+											setEditing({ ...editing, vat_pounds: e.target.value })
+										}
+									/>
+								</div>
 							</div>
 							<div className="space-y-1.5">
 								<Label htmlFor="inc-notes">Notes (optional)</Label>

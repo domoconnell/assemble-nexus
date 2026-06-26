@@ -28,7 +28,14 @@ export default function PnlTrendChart({ months }) {
 	const data = months.map((m) => ({
 		ym: m.ym,
 		label: monthLabel(m.ym),
-		income: m.income.total,
+		// Trend chart uses the bank-actual cash-in number (same as
+		// the headline waterfall + the banking page). Previously this
+		// used `m.income.total` which is the per-entity paid_at view
+		// — that diverges from the bank by 100s of £ due to PSP payout
+		// lag, so the chart contradicted the headline for the same
+		// month. Falling back to the entity total for historical months
+		// that pre-date the cash_in_net column.
+		income: m.cash_in_net ?? m.income.total,
 		cost_of_delivery: m.cost_of_delivery,
 		utilities_staff: m.fixed.utilities + m.fixed.staff,
 		mortgage: m.fixed.mortgage,

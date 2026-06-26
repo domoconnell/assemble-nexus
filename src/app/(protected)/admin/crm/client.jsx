@@ -80,7 +80,7 @@ export default function CrmListClient({ organisations }) {
 					their bookings, events, and balances together.
 				</div>
 			) : (
-				<div className="rounded-lg border bg-card overflow-hidden">
+				<div className="rounded-lg border bg-card overflow-x-auto">
 					<table className="w-full text-sm">
 						<thead className="bg-muted/40">
 							<tr className="text-left">

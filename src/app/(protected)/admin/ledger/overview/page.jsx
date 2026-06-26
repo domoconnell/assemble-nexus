@@ -280,11 +280,21 @@ export default async function LedgerDashboardPage({ searchParams }) {
 						<Row label="POS (net)" value={fmt(pnl.income.pos_net)} />
 						<Row label="Manual income" value={fmt(pnl.income.manual)} />
 						<Row
-							label="Rental income (tenancies)"
+							label="Manual invoices (net of VAT)"
+							value={fmt(pnl.income.manual_invoices ?? 0)}
+							sub={
+								(pnl.income.manual_invoices_vat ?? 0) > 0
+									? `${fmt(pnl.income.manual_invoices_vat ?? 0)} output VAT`
+									: null
+							}
+						/>
+						<Row
+							label="Rental income (tenancies, paid)"
 							value={fmt(pnl.income.tenancy)}
 							sub={
-								pnl.income.tenancy !== pnl.income.tenancy_paid
-									? `${fmt(pnl.income.tenancy_paid ?? 0)} paid`
+								(pnl.income.tenancy_issued ?? pnl.income.tenancy) !==
+								pnl.income.tenancy_paid
+									? `${fmt(pnl.income.tenancy_issued ?? pnl.income.tenancy ?? 0)} issued`
 									: null
 							}
 						/>

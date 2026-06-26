@@ -256,7 +256,7 @@ export default function BlockoutsClient({ blockouts, rooms }) {
 					No active blockouts. Add one when a room is unavailable.
 				</div>
 			) : (
-				<div className="rounded-lg border bg-card overflow-hidden">
+				<div className="rounded-lg border bg-card overflow-x-auto">
 					<table className="w-full text-sm">
 						<thead className="bg-muted/40">
 							<tr className="text-left">

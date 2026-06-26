@@ -1,0 +1,1 @@
+ALTER TABLE "manual_income" ADD COLUMN "vat_cents" integer DEFAULT 0 NOT NULL;

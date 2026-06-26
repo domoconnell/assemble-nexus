@@ -216,6 +216,13 @@ export default function InvoicesSection({
 		}
 	}
 
+	// Failed-DD callout: the Bacs collection on these invoices errored
+	// (Stripe rejected, mandate inactive, customer cancelled etc).
+	// Previously the only signal was a small "DD · failed" pill on the
+	// row; easy to miss when there are many invoices. Surface them at
+	// the top of the section so an admin can't miss the action needed.
+	const failedDd = invoices.filter((inv) => inv.dd_charge_status === "failed");
+
 	return (
 		<section className="space-y-3">
 			<div className="flex items-baseline justify-between gap-3 flex-wrap">
@@ -228,6 +235,25 @@ export default function InvoicesSection({
 					</Button>
 				)}
 			</div>
+
+			{failedDd.length > 0 && (
+				<div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm space-y-1">
+					<div className="font-medium text-destructive">
+						{failedDd.length === 1
+							? "A Direct Debit collection failed."
+							: `${failedDd.length} Direct Debit collections failed.`}
+					</div>
+					<div className="text-xs text-muted-foreground">
+						The bank rejected the charge (cancelled mandate, insufficient
+						funds, etc). Use Reconcile to record an alternative payment, or
+						retry once the mandate is fixed. Affected:{" "}
+						<span className="font-mono">
+							{failedDd.map((f) => f.reference).join(", ")}
+						</span>
+						.
+					</div>
+				</div>
+			)}
 
 			{creating && (
 				<div className="rounded-lg border bg-card p-4 space-y-3">
@@ -282,7 +308,7 @@ export default function InvoicesSection({
 					{dayOfMonthLabel(invoiceDayOfMonth)} of each month.
 				</div>
 			) : (
-				<div className="rounded-lg border bg-card overflow-hidden">
+				<div className="rounded-lg border bg-card overflow-x-auto">
 					<table className="w-full text-sm">
 						<thead className="bg-muted/30 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
 							<tr>

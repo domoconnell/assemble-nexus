@@ -1,20 +1,25 @@
-import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/db/index.js";
 import { booking } from "@/db/schema/entities/booking.js";
 import { ticket_order } from "@/db/schema/entities/ticket_order.js";
 import { event } from "@/db/schema/entities/event.js";
 import { pos_daily_takings } from "@/db/schema/entities/pos_daily_takings.js";
 import { expense } from "@/db/schema/entities/expense.js";
+import { manual_invoice } from "@/db/schema/entities/manual_invoice.js";
+import { manual_income } from "@/db/schema/entities/manual_income.js";
+import { tenancy_invoice } from "@/db/schema/entities/tenancy.js";
 
 /**
  * VAT return rollup for a date range. Cash-basis: each output stream is
  * keyed off the natural "money received" timestamp; input VAT keys off
  * the expense's date.
  *
- *   bookings    → confirmed_at  (booking firm, deposit paid)
- *   tickets     → paid_at       (delegate paid)
- *   POS         → date          (each day's takings)
- *   expenses    → date          (when the expense was incurred)
+ *   bookings        → confirmed_at  (booking firm, deposit paid)
+ *   tickets         → paid_at       (delegate paid)
+ *   POS             → date          (each day's takings)
+ *   manual invoices → paid_at       (matched against a bank receipt)
+ *   tenancy invoices→ paid_at       (matched against a bank receipt)
+ *   expenses        → date          (when the expense was incurred)
  *
  * Returns gross/vat/net per output stream plus a totals row, and a
  * separate `inputs` block for the Box 4 side. Net VAT due (Box 5) is
@@ -26,7 +31,15 @@ export async function getVatReturnRollup(venueId, { fromDate, toDate }) {
 	const fromYmd = fromDate.toISOString().slice(0, 10);
 	const toYmd = toDate.toISOString().slice(0, 10);
 
-	const [[bookingsRow], [ticketsRow], [posRow], [expensesRow]] = await Promise.all([
+	const [
+		[bookingsRow],
+		[ticketsRow],
+		[posRow],
+		[manualIncomeRow],
+		[manualInvoicesRow],
+		[tenancyInvoicesRow],
+		[expensesRow],
+	] = await Promise.all([
 		db
 			.select({
 				gross_cents: sql`COALESCE(SUM(${booking.total_cents}), 0)::bigint`.as("gross"),
@@ -73,6 +86,65 @@ export async function getVatReturnRollup(venueId, { fromDate, toDate }) {
 					sql`${pos_daily_takings.date} < ${toYmd}`,
 				),
 			),
+		// Manual income — donations + equipment hire + other ad-hoc
+		// receipts. Cash basis on the row's `date` field. Most rows
+		// have vat=0 (donations are outside the scope), but VATable
+		// rows (equipment hire) carry it.
+		db
+			.select({
+				gross_cents: sql`COALESCE(SUM(${manual_income.amount_cents}), 0)::bigint`.as("gross"),
+				vat_cents: sql`COALESCE(SUM(${manual_income.vat_cents}), 0)::bigint`.as("vat"),
+				count: sql`COUNT(*)::int`.as("count"),
+			})
+			.from(manual_income)
+			.where(
+				and(
+					eq(manual_income.venue_id, venueId),
+					isNull(manual_income.deletedAt),
+					sql`${manual_income.date} >= ${fromYmd}`,
+					sql`${manual_income.date} < ${toYmd}`,
+				),
+			),
+		// Manual ad-hoc invoices raised against incoming bank receipts.
+		// Cash basis: paid_at is when the bank matched the receipt to
+		// the invoice.
+		db
+			.select({
+				gross_cents: sql`COALESCE(SUM(${manual_invoice.total_cents}), 0)::bigint`.as("gross"),
+				vat_cents: sql`COALESCE(SUM(${manual_invoice.vat_cents}), 0)::bigint`.as("vat"),
+				count: sql`COUNT(*)::int`.as("count"),
+			})
+			.from(manual_invoice)
+			.where(
+				and(
+					eq(manual_invoice.venue_id, venueId),
+					isNull(manual_invoice.deletedAt),
+					isNotNull(manual_invoice.paid_at),
+					gte(manual_invoice.paid_at, fromDate),
+					lt(manual_invoice.paid_at, toDate),
+				),
+			),
+		// Tenancy invoices (monthly rent etc). Cash basis on paid_at.
+		// Previously this was on the P&L's accrual basis (period_ym),
+		// but VAT has always been cash-basis — keeping the two consistent
+		// matters for HMRC.
+		db
+			.select({
+				gross_cents: sql`COALESCE(SUM(${tenancy_invoice.total_cents}), 0)::bigint`.as("gross"),
+				vat_cents: sql`COALESCE(SUM(${tenancy_invoice.vat_cents}), 0)::bigint`.as("vat"),
+				count: sql`COUNT(*)::int`.as("count"),
+			})
+			.from(tenancy_invoice)
+			.where(
+				and(
+					eq(tenancy_invoice.venue_id, venueId),
+					isNull(tenancy_invoice.deletedAt),
+					eq(tenancy_invoice.status, "paid"),
+					isNotNull(tenancy_invoice.paid_at),
+					gte(tenancy_invoice.paid_at, fromDate),
+					lt(tenancy_invoice.paid_at, toDate),
+				),
+			),
 		db
 			.select({
 				gross_cents: sql`COALESCE(SUM(CASE WHEN ${expense.kind} = 'refund' THEN -${expense.amount_cents} ELSE ${expense.amount_cents} END), 0)::bigint`.as("gross"),
@@ -114,6 +186,30 @@ export async function getVatReturnRollup(venueId, { fromDate, toDate }) {
 			gross_cents: Number(posRow?.gross_cents) || 0,
 			vat_cents: Number(posRow?.vat_cents) || 0,
 			count: Number(posRow?.count) || 0,
+		},
+		{
+			key: "manual_income",
+			label: "Manual income (donations, hire, etc)",
+			date_basis: "date",
+			gross_cents: Number(manualIncomeRow?.gross_cents) || 0,
+			vat_cents: Number(manualIncomeRow?.vat_cents) || 0,
+			count: Number(manualIncomeRow?.count) || 0,
+		},
+		{
+			key: "manual_invoices",
+			label: "Manual invoices",
+			date_basis: "paid_at",
+			gross_cents: Number(manualInvoicesRow?.gross_cents) || 0,
+			vat_cents: Number(manualInvoicesRow?.vat_cents) || 0,
+			count: Number(manualInvoicesRow?.count) || 0,
+		},
+		{
+			key: "tenancy_invoices",
+			label: "Tenancy invoices",
+			date_basis: "paid_at",
+			gross_cents: Number(tenancyInvoicesRow?.gross_cents) || 0,
+			vat_cents: Number(tenancyInvoicesRow?.vat_cents) || 0,
+			count: Number(tenancyInvoicesRow?.count) || 0,
 		},
 	];
 

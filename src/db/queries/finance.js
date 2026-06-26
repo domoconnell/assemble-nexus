@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db/index.js";
 import { recurring_cost_schedule, RECURRING_COST_TYPES } from "@/db/schema/entities/recurring_cost_schedule.js";
 import { expense_category } from "@/db/schema/entities/expense_category.js";
@@ -10,7 +10,9 @@ import { ticket_order } from "@/db/schema/entities/ticket_order.js";
 import { event } from "@/db/schema/entities/event.js";
 import { recurring_cost_item } from "@/db/schema/entities/recurring_cost_item.js";
 import { bank_transaction } from "@/db/schema/entities/bank_transaction.js";
-import { sumChurchTransfers } from "@/db/queries/bank.js";
+import { manual_invoice } from "@/db/schema/entities/manual_invoice.js";
+import { tenancy_invoice } from "@/db/schema/entities/tenancy.js";
+import { sumChurchTransfers, getPspHeldBalance } from "@/db/queries/bank.js";
 import { sumTenancyRentalForMonth } from "@/db/queries/tenancies.js";
 
 export async function listEventsForExpenseLinking(venueId) {
@@ -49,6 +51,254 @@ export async function getMonthlyRecurringAmount(venueId, type, ymdFirstOfMonth) 
 		.orderBy(desc(recurring_cost_schedule.effective_from))
 		.limit(1);
 	return row?.amount ?? 0;
+}
+
+/**
+ * P&L-grade recurring cost totals: prefer the actual sum of bank
+ * transactions matched to each recurring_cost_item this month, falling
+ * back to the item's scheduled monthly amount when nothing's landed
+ * yet. The pattern is:
+ *
+ *   - early in the month → no bank actuals yet → use schedule
+ *   - bills land mid-month → actual takes over, P&L reflects reality
+ *   - end of month → actuals are everything; schedule is silent
+ *
+ * Returns the same shape as `getAllMonthlyRecurringAmounts` — one
+ * total per recurring cost type — so it's a drop-in replacement.
+ */
+export async function getEffectiveMonthlyRecurringAmounts(
+	venueId,
+	ymdFirstOfMonth,
+	ymdFirstOfNextMonth,
+) {
+	const [scheduled, actualsByItem] = await Promise.all([
+		// Same per-item scheduled lookup as `getAllMonthlyRecurringAmounts`,
+		// but we keep the per-item resolution this time so we can swap
+		// individual items for their actuals below.
+		db.execute(sql`
+			SELECT DISTINCT ON (s.item_id)
+				s.item_id,
+				i.type,
+				s.monthly_amount_cents
+			FROM recurring_cost_schedule s
+			JOIN recurring_cost_item i ON i.id = s.item_id
+			WHERE s.venue_id = ${venueId}
+				AND s.effective_from <= ${ymdFirstOfMonth}
+				AND i.deleted_at IS NULL
+			ORDER BY s.item_id, s.effective_from DESC
+		`),
+		getRecurringActualsForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth),
+	]);
+	const scheduledRows = scheduled.rows ?? scheduled;
+	const byType = new Map();
+	for (const r of scheduledRows) {
+		const actual = actualsByItem.get(r.item_id);
+		const effective =
+			actual && actual.actual_cents !== 0
+				? actual.actual_cents
+				: Number(r.monthly_amount_cents ?? 0);
+		byType.set(r.type, (byType.get(r.type) ?? 0) + effective);
+	}
+	const out = {};
+	for (const type of RECURRING_COST_TYPES) {
+		out[type] = byType.get(type) ?? 0;
+	}
+	return out;
+}
+
+/**
+ * Cash income that has actually landed in the bank in the given period.
+ * This is the canonical "money in" number — the same one the banking
+ * page surfaces — so the dashboard headline finally agrees with reality.
+ *
+ * What it sums:
+ *   - All `bank_transaction.direction = 'IN'` rows in the period (by
+ *     `settled_at`).
+ *   - Excludes `is_transfer` rows (inter-account moves) and
+ *     `is_church_transfer` rows (donations to the church).
+ *
+ * What it explicitly subtracts:
+ *   - Incoming receipts categorised as a SUPPLIER REFUND (matched to
+ *     an `expense` row with `kind = 'refund'`). Those aren't revenue —
+ *     they offset prior spend.
+ *
+ * Returns `{ gross, refunds, net }` so the UI can show "Income £X
+ * (£Y of supplier refunds netted out)" if that detail is useful.
+ */
+export async function getCashIncomeForMonth(venueId, monthStartDate, monthEndDate) {
+	const startIso = monthStartDate.toISOString();
+	const endIso = monthEndDate.toISOString();
+	// Count income at the OPERATING bank account level (Monzo /
+	// Starling), not at the PSP intermediary level. PSP accounts
+	// (Stripe / Square) are holding accounts — the same money is
+	// represented twice as it flows:
+	//
+	//   1. Customer charges Stripe £20  (Stripe IN, gross)
+	//   2. Stripe takes its £0.80 fee   (Stripe OUT, synthetic)
+	//   3. Stripe pays out £19.20       (Stripe OUT, is_transfer=true)
+	//   4. £19.20 arrives in Monzo      (Monzo IN,  is_transfer=true)
+	//
+	// The user's mental model is "what landed in my spending account",
+	// i.e. step 4. Steps 1–3 are the same money in transit and would
+	// double-count if included.
+	//
+	// To capture step 4 we have to KEEP is_transfer=true rows (the
+	// existing filter excluded them) but only on non-PSP accounts. The
+	// non-PSP filter then excludes step 1 (Stripe gross IN) entirely.
+	//
+	// Edge case: internal Monzo→Monzo transfers would double-count
+	// under this rule, but the venue doesn't run multi-Monzo so we
+	// accept that. If it ever does, we can filter on a real
+	// `is_internal_transfer` flag at that point.
+	const rows = await db.execute(sql`
+		SELECT
+			COALESCE(SUM(${bank_transaction.amount_minor}), 0)::bigint AS gross,
+			COALESCE(SUM(
+				CASE
+					-- Supplier refunds against a variable expense category
+					-- (e.g. "refund from Supplies"). Already shipped.
+					WHEN ${bank_transaction.matched_to_type} = 'expense'
+						AND e.kind = 'refund'
+						THEN ${bank_transaction.amount_minor}
+					-- Refunds from a utility / mortgage / staff provider land
+					-- matched to a recurring_cost_item. The direction is
+					-- IN but they're NOT income — they reduce that month's
+					-- recurring spend. Olilo's £13.90 credit is the canonical
+					-- example.
+					WHEN ${bank_transaction.matched_to_type} = 'recurring_cost_item'
+						THEN ${bank_transaction.amount_minor}
+					ELSE 0
+				END
+			), 0)::bigint AS refunds,
+			COALESCE(SUM(
+				CASE WHEN ${bank_transaction.matched_to_type} = 'booking_payment'
+					THEN ${bank_transaction.amount_minor} ELSE 0 END
+			), 0)::bigint AS bookings,
+			COALESCE(SUM(
+				CASE WHEN ${bank_transaction.matched_to_type} = 'ticket_order'
+					THEN ${bank_transaction.amount_minor} ELSE 0 END
+			), 0)::bigint AS tickets,
+			COALESCE(SUM(
+				CASE WHEN ${bank_transaction.matched_to_type} = 'tenancy_invoice'
+					THEN ${bank_transaction.amount_minor} ELSE 0 END
+			), 0)::bigint AS tenancies,
+			COALESCE(SUM(
+				CASE WHEN ${bank_transaction.matched_to_type} = 'manual_invoice'
+					THEN ${bank_transaction.amount_minor} ELSE 0 END
+			), 0)::bigint AS manual_invoices,
+			COALESCE(SUM(
+				CASE WHEN ${bank_transaction.matched_to_type} = 'stripe_orphan'
+					THEN ${bank_transaction.amount_minor} ELSE 0 END
+			), 0)::bigint AS orphans,
+			COALESCE(SUM(
+				CASE WHEN ${bank_transaction.is_transfer} = true
+					THEN ${bank_transaction.amount_minor} ELSE 0 END
+			), 0)::bigint AS psp_payouts,
+			COALESCE(SUM(
+				CASE WHEN ${bank_transaction.matched_to_type} IS NULL
+					AND ${bank_transaction.is_transfer} = false
+					THEN ${bank_transaction.amount_minor} ELSE 0 END
+			), 0)::bigint AS unmatched
+		FROM ${bank_transaction}
+		LEFT JOIN ${expense} e
+			ON e.id = ${bank_transaction.matched_to_id}
+			AND ${bank_transaction.matched_to_type} = 'expense'
+		WHERE ${bank_transaction.venue_id} = ${venueId}
+			AND ${bank_transaction.direction} = 'IN'
+			AND ${bank_transaction.source} NOT IN ('stripe', 'square')
+			AND ${bank_transaction.is_church_transfer} = false
+			-- Period uses transaction_time (when the customer paid)
+			-- falling back to settled_at. Monzo records settled_at as
+			-- the next-batch processing time, which can roll a 31st-of-
+			-- the-month evening payment into the following month — not
+			-- what the admin reading the dashboard expects.
+			AND COALESCE(${bank_transaction.transaction_time}, ${bank_transaction.settled_at}) >= ${startIso}
+			AND COALESCE(${bank_transaction.transaction_time}, ${bank_transaction.settled_at}) < ${endIso}
+	`);
+	const r = (rows.rows ?? rows)[0] ?? {};
+	const gross = Number(r.gross ?? 0);
+	const refunds = Number(r.refunds ?? 0);
+	const by_type = {
+		bookings: Number(r.bookings ?? 0),
+		tickets: Number(r.tickets ?? 0),
+		tenancies: Number(r.tenancies ?? 0),
+		manual_invoices: Number(r.manual_invoices ?? 0),
+		// PSP payouts (Stripe / Square → Monzo). The matcher works on
+		// the per-charge level inside the PSP accounts, but those are
+		// excluded from the income query above to avoid double-counting,
+		// so the per-payout aggregate lands here as an unattributed
+		// lump-sum. Click-through to the banking page filtered to
+		// is_transfer=true would let an admin see what's in the bundle.
+		psp_payouts: Number(r.psp_payouts ?? 0),
+		// Anything else — direct bank IN that hasn't been matched to an
+		// entity yet. Includes manual bank-transfer payments from
+		// customers that the auto-matcher hasn't picked up yet, plus
+		// donations etc.
+		unmatched: Number(r.unmatched ?? 0),
+		// Refunds — supplier credits + recurring-cost refunds. Stored as
+		// a NEGATIVE so the breakdown rows sum to `net`.
+		refunds: -refunds,
+	};
+	return { gross, refunds, net: gross - refunds, by_type };
+}
+
+/**
+ * Outstanding receivables across the system — what the customers /
+ * tenants STILL owe us:
+ *
+ *   - Tenancy invoices in `issued` status (not yet `paid` or `void`).
+ *   - Manual invoices with no `paid_at`.
+ *   - Confirmed bookings where `total_cents > deposit_paid + balance_paid`.
+ *
+ * Returns the four amounts + the combined total. Drives the dashboard
+ * "Due to come in" card so the headline cash-in number isn't lying by
+ * omission about what we're still expecting.
+ */
+export async function getOutstandingReceivables(venueId) {
+	const [tenancyRow, manualRow, bookingRow] = await Promise.all([
+		db
+			.select({
+				total: sql`COALESCE(SUM(${tenancy_invoice.total_cents}), 0)::bigint`,
+			})
+			.from(tenancy_invoice)
+			.where(
+				and(
+					eq(tenancy_invoice.venue_id, venueId),
+					eq(tenancy_invoice.status, "issued"),
+					isNull(tenancy_invoice.deletedAt),
+				),
+			),
+		db
+			.select({
+				total: sql`COALESCE(SUM(${manual_invoice.total_cents}), 0)::bigint`,
+			})
+			.from(manual_invoice)
+			.where(
+				and(
+					eq(manual_invoice.venue_id, venueId),
+					isNull(manual_invoice.paid_at),
+					isNull(manual_invoice.deletedAt),
+				),
+			),
+		db.execute(sql`
+			SELECT COALESCE(SUM(
+				GREATEST(
+					COALESCE(total_cents, 0)
+						- COALESCE(deposit_paid_cents, 0)
+						- COALESCE(balance_paid_cents, 0),
+					0
+				)
+			), 0)::bigint AS total
+			FROM booking
+			WHERE venue_id = ${venueId}
+				AND deleted_at IS NULL
+				AND status IN ('approved', 'confirmed')
+		`),
+	]);
+	const tenancy = Number(tenancyRow[0]?.total ?? 0);
+	const manual = Number(manualRow[0]?.total ?? 0);
+	const bookings = Number((bookingRow.rows ?? bookingRow)[0]?.total ?? 0);
+	return { tenancy, manual, bookings, total: tenancy + manual + bookings };
 }
 
 export async function getAllMonthlyRecurringAmounts(venueId, ymdFirstOfMonth) {
@@ -458,7 +708,10 @@ export async function listManualIncomeForMonth(venueId, ymdFirstOfMonth, ymdFirs
 
 export async function sumManualIncomeForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth) {
 	const [r] = await db
-		.select({ total: sql`coalesce(sum(${manual_income.amount_cents}), 0)` })
+		.select({
+			gross: sql`coalesce(sum(${manual_income.amount_cents}), 0)`,
+			vat: sql`coalesce(sum(${manual_income.vat_cents}), 0)`,
+		})
 		.from(manual_income)
 		.where(
 			and(
@@ -468,7 +721,46 @@ export async function sumManualIncomeForMonth(venueId, ymdFirstOfMonth, ymdFirst
 				sql`${manual_income.date} < ${ymdFirstOfNextMonth}`,
 			),
 		);
-	return Number(r?.total ?? 0);
+	const gross = Number(r?.gross ?? 0);
+	const vat = Number(r?.vat ?? 0);
+	return { gross, vat, net: gross - vat };
+}
+
+/**
+ * Manual ad-hoc invoices (raised from the banking page against
+ * incoming bank receipts). Cash basis — we recognise revenue when the
+ * invoice was matched to a bank transaction (`paid_at` set).
+ *
+ * Returns `{ net, vat }` so the VAT return can split output VAT off
+ * the gross. Pre-`manual_invoice` rows don't exist yet but the schema
+ * carries a `vat_cents` field for forward compatibility — we read it
+ * here, defaulting to 0 in the meantime.
+ */
+export async function sumManualInvoicesForMonth(
+	venueId,
+	monthStartDate,
+	monthEndDate,
+) {
+	const startIso = monthStartDate.toISOString();
+	const endIso = monthEndDate.toISOString();
+	const [r] = await db
+		.select({
+			total: sql`coalesce(sum(${manual_invoice.total_cents}), 0)`,
+			vat: sql`coalesce(sum(${manual_invoice.vat_cents}), 0)`,
+		})
+		.from(manual_invoice)
+		.where(
+			and(
+				eq(manual_invoice.venue_id, venueId),
+				isNull(manual_invoice.deletedAt),
+				isNotNull(manual_invoice.paid_at),
+				sql`${manual_invoice.paid_at} >= ${startIso}`,
+				sql`${manual_invoice.paid_at} < ${endIso}`,
+			),
+		);
+	const gross = Number(r?.total ?? 0);
+	const vat = Number(r?.vat ?? 0);
+	return { net: gross - vat, vat, gross };
 }
 
 /* ------------------------------------------------------------------------ */
@@ -739,21 +1031,47 @@ export async function getMonthlyPnl(venueId, {
 		booking_income,
 		pos,
 		manual,
+		manual_invoices,
 		tenancy_rental,
 		expenses_delivery,
 		recurring,
 		organiser_payouts,
 		stripe_fees,
+		cash_in,
+		outstanding,
+		psp_held,
 	] = await Promise.all([
 		sumTicketIncomeForMonth(venueId, monthStartDate, monthEndDate),
 		sumBookingIncomeForMonth(venueId, monthStartDate, monthEndDate),
 		sumPosForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth),
 		sumManualIncomeForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth),
+		sumManualInvoicesForMonth(venueId, monthStartDate, monthEndDate),
 		sumTenancyRentalForMonth(venueId, monthStartDate, monthEndDate, periodYm),
 		sumExpensesForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth),
+		// Recurring costs in the P&L use the SCHEDULE (theoretical /
+		// accrual basis). The actuals query exists (see the recurring
+		// costs page) but isn't used here because many of these bills
+		// (utilities, mortgage) come out of the church's bank account,
+		// not ours — we'd never see them, and the P&L would understate
+		// the real cost of running the building. The recurring page
+		// shows the schedule-vs-actual gap so admins can investigate
+		// any drift independently.
 		getAllMonthlyRecurringAmounts(venueId, ymdFirstOfMonth),
 		sumOrganiserPayoutsForMonth(venueId, monthStartDate, monthEndDate),
 		sumStripeFeesForMonth(venueId, monthStartDate, monthEndDate),
+		// Headline cash-in for the dashboard. This is the canonical
+		// "money actually in the bank this month" figure — matches
+		// what the banking page shows.
+		getCashIncomeForMonth(venueId, monthStartDate, monthEndDate),
+		// Standing receivables — unpaid tenancy invoices + unpaid
+		// manual invoices + outstanding booking balances. Surfaced
+		// next to cash-in so the dashboard doesn't lie by omission
+		// about what's still expected to land.
+		getOutstandingReceivables(venueId),
+		// Money sitting in PSP holding accounts (Stripe / Square)
+		// waiting for the next payout. Customers have already paid;
+		// the cash just hasn't reached the operating bank yet.
+		getPspHeldBalance(venueId),
 	]);
 
 	// Stripe takes its processing fee at the source - we net it out of
@@ -761,29 +1079,40 @@ export async function getMonthlyPnl(venueId, {
 	// delivery" line, so the displayed income figure reflects what the
 	// venue actually keeps.
 	const tickets_net_of_stripe = ticket_income - stripe_fees;
-	// Tenancy rental: headline number is the *issued* total for the month
-	// (accrual basis) - that's what was agreed/billed and what the
-	// dashboard surfaces as the rental income. `tenancy_paid` is exposed
-	// alongside so the UI can show "£2,400 issued (£1,800 paid)" without
-	// distorting the waterfall maths. Recurring monthly invoices are
-	// generally already paid via Direct Debit by month-end so the two
-	// numbers will usually match - the split matters mid-month and when
-	// a tenant defers.
+	// Tenancy rental: cash basis — headline number is the PAID total
+	// for the month. Previously this was on the issued (accrual) basis,
+	// which contradicted the VAT return's cash basis and overstated the
+	// month's income whenever a tenant deferred payment. `tenancy_issued`
+	// is exposed alongside so the board pack can still show "£X issued
+	// (£Y paid)" when the two differ.
 	const income = {
 		tickets: tickets_net_of_stripe,
 		tickets_gross: ticket_income,
 		stripe_fees,
 		bookings: booking_income,
 		pos_net: pos.net,
-		manual,
-		tenancy: tenancy_rental.issued,
+		// Manual income: net of any output VAT collected (matches the way
+		// every other VAT-bearing source is reported in the P&L). Gross
+		// and VAT exposed alongside for the board pack + VAT return.
+		manual: manual.net,
+		manual_gross: manual.gross,
+		manual_vat: manual.vat,
+		// Manual ad-hoc invoices raised from the banking page. Net of VAT
+		// in the P&L (VAT is a liability, not income) — gross + vat
+		// exposed alongside for tooltip / audit consumers.
+		manual_invoices: manual_invoices.net,
+		manual_invoices_gross: manual_invoices.gross,
+		manual_invoices_vat: manual_invoices.vat,
+		tenancy: tenancy_rental.paid,
+		tenancy_issued: tenancy_rental.issued,
 		tenancy_paid: tenancy_rental.paid,
 		total:
 			tickets_net_of_stripe +
 			booking_income +
 			pos.net +
-			manual +
-			tenancy_rental.issued,
+			manual.net +
+			manual_invoices.net +
+			tenancy_rental.paid,
 	};
 
 	const cost_of_delivery_breakdown = {
@@ -820,6 +1149,27 @@ export async function getMonthlyPnl(venueId, {
 
 	return {
 		income,
+		// Cash-in is the headline "money actually landed this month" — the
+		// number the dashboard should lead with. Differs from `income.total`
+		// because the latter is built from per-entity timestamps (Stripe
+		// paid_at, tenancy paid_at, …) which lag the bank by days for
+		// PSP-routed receipts; this number is the bank's view.
+		cash_in_gross: cash_in.gross,
+		cash_in_refunds: cash_in.refunds,
+		cash_in_net: cash_in.net,
+		// Bank-matched breakdown of the cash-in number. Sums exactly to
+		// cash_in_net (minus the supplier-refund line, which is netted
+		// off the headline rather than shown as a breakdown row).
+		cash_in_by_type: cash_in.by_type,
+		// Outstanding receivables across the system — invoices issued
+		// but not yet paid, and confirmed booking balances. Shown as
+		// "due to come in" alongside cash-in.
+		outstanding,
+		// Money already paid by customers but still sitting in PSP
+		// holding accounts (Stripe / Square), awaiting the next payout
+		// to the operating bank. `psp_held.total` is the combined
+		// balance; `psp_held.by_provider` splits by Stripe / Square.
+		psp_held,
 		cost_of_delivery,
 		cost_of_delivery_breakdown,
 		expenses_delivery,

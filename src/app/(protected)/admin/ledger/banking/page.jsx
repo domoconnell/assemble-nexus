@@ -163,6 +163,8 @@ export default async function BankingPage({ searchParams }) {
 				<>
 					<AccountPills accounts={accounts} selectedIds={accountIds} />
 
+					<SyncErrorBanner accounts={accounts} />
+
 					<HeadlineCards
 						combined={combined}
 						inOut={inOut}
@@ -206,6 +208,38 @@ export default async function BankingPage({ searchParams }) {
 					</section>
 				</>
 			)}
+		</div>
+	);
+}
+
+/**
+ * Top-of-page alert when any active bank account is in an error state.
+ * Provider syncs used to fail silently — the cron logged the failure
+ * to `bank_account.last_sync_error` and that was it. Now an admin
+ * landing on the banking page can see it at a glance and act.
+ */
+function SyncErrorBanner({ accounts }) {
+	const failed = accounts.filter((a) => a.last_sync_error);
+	if (failed.length === 0) return null;
+	return (
+		<div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm space-y-2">
+			<div className="font-medium text-destructive">
+				{failed.length === 1
+					? "Bank sync error"
+					: `${failed.length} bank sync errors`}
+			</div>
+			<ul className="space-y-1 text-xs text-muted-foreground">
+				{failed.map((a) => (
+					<li key={a.id} className="flex items-baseline gap-2">
+						<span className="font-medium text-foreground">{a.label}</span>
+						<span className="font-mono text-[11px] truncate">{a.last_sync_error}</span>
+					</li>
+				))}
+			</ul>
+			<div className="text-xs text-muted-foreground">
+				Re-run with Sync now. If it persists, the credentials probably need
+				refreshing — Settings → Bank accounts.
+			</div>
 		</div>
 	);
 }

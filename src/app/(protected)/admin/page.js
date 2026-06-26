@@ -160,6 +160,12 @@ export default async function HomePage() {
 				<BankBalanceWidget snapshot={bankSnapshot} inOut={bankInOut} monthName={monthLabel(month.year, month.month1)} />
 			)}
 
+			<ProjectedPosition
+				bankSnapshot={bankSnapshot}
+				pnl={pnl}
+				monthName={monthLabel(month.year, month.month1)}
+			/>
+
 			<section className="rounded-xl border bg-card p-6 space-y-4">
 				<div className="flex items-baseline justify-between gap-3 flex-wrap">
 					<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
@@ -276,6 +282,60 @@ function PendingBookingsWidget({ bookings }) {
 					)}
 				</ul>
 			)}
+		</div>
+	);
+}
+
+/**
+ * Two derived numbers the headline bank balance doesn't tell you:
+ *
+ *   - Recognised income this month = actual cash-in PLUS everything
+ *     pending (outstanding invoices + booking balances + PSP held
+ *     balances). The "what we've actually earned in/towards June" figure
+ *     even though some of it hasn't physically arrived yet.
+ *
+ *   - Projected bank balance = current cleared balance PLUS the same
+ *     pending pile. The number the balance will hit once invoices are
+ *     paid and PSP payouts settle.
+ *
+ * Renders as a thin two-stat strip directly under the BankBalanceWidget
+ * so both views (now vs once-everything-settles) are visible without
+ * having to scroll or open the ledger.
+ */
+function ProjectedPosition({ bankSnapshot, pnl, monthName }) {
+	const cashIn = pnl?.cash_in_net ?? 0;
+	const outstandingTotal = pnl?.outstanding?.total ?? 0;
+	const pspHeld = pnl?.psp_held?.total ?? 0;
+	const expectedTotal = outstandingTotal + pspHeld;
+	if (expectedTotal === 0) return null;
+	const recognised = cashIn + expectedTotal;
+	const currentCleared = bankSnapshot?.cleared_minor ?? 0;
+	const projectedBalance = currentCleared + expectedTotal;
+	return (
+		<div className="grid gap-3 sm:grid-cols-2">
+			<div className="rounded-xl border border-foreground/10 bg-card p-4">
+				<div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+					Recognised income · {monthName}
+				</div>
+				<div className="font-mono tabular-nums text-2xl mt-1">
+					{formatGbp(recognised)}
+				</div>
+				<div className="text-[11px] text-muted-foreground mt-0.5">
+					{formatGbp(cashIn)} in bank + {formatGbp(expectedTotal)} pending
+				</div>
+			</div>
+			<div className="rounded-xl border border-foreground/10 bg-card p-4">
+				<div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+					Projected bank balance
+				</div>
+				<div className="font-mono tabular-nums text-2xl mt-1">
+					{formatGbp(projectedBalance)}
+				</div>
+				<div className="text-[11px] text-muted-foreground mt-0.5">
+					{formatGbp(currentCleared)} now + {formatGbp(expectedTotal)} once pending
+					lands
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -502,7 +562,7 @@ function TopOrganisersCard({ organisations }) {
 				<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
 					Per-organiser revenue
 				</h2>
-				<Link href="/admin/contacts/organisations" className="text-xs text-muted-foreground hover:text-foreground">
+				<Link href="/admin/crm" className="text-xs text-muted-foreground hover:text-foreground">
 					All organisations →
 				</Link>
 			</div>
@@ -513,7 +573,7 @@ function TopOrganisersCard({ organisations }) {
 					{organisations.map((o, i) => (
 						<li key={o.id}>
 							<Link
-								href={`/admin/contacts/organisations/${o.id}`}
+								href={`/admin/crm/${o.id}`}
 								className="flex items-baseline justify-between gap-3 rounded-md border border-foreground/10 bg-background px-3 py-2 hover:border-foreground/30 transition"
 							>
 								<div className="flex items-baseline gap-3 min-w-0 flex-1">
@@ -713,21 +773,36 @@ function StatCard({ label, value, sub, tone = "default", href }) {
 }
 
 function WaterfallSection({ pnl }) {
-	const tenancyHasSplit =
-		pnl.income.tenancy !== pnl.income.tenancy_paid &&
-		pnl.income.tenancy_paid !== undefined;
+	// Headline INCOME is the cash actually landed in the bank this
+	// month (the same number the banking page surfaces). The waterfall
+	// flows from there so the rest of the figures are anchored to a
+	// physical reality the admin can verify against their bank
+	// statement. Per-source breakdown lines come from the entity
+	// timestamps and may not sum exactly to this headline due to PSP
+	// payout lag — that's a feature, not a bug; the breakdown answers
+	// "where did it come from" while the headline answers "how much
+	// actually arrived".
+	const cashIn = pnl.cash_in_net ?? 0;
+	const cashInGross = pnl.cash_in_gross ?? cashIn;
+	const cashInRefunds = pnl.cash_in_refunds ?? 0;
+	// Breakdown is built from BANK matches so the rows sum exactly to
+	// the headline cash-in number. The old entity-timestamp breakdown
+	// (paid_at / confirmed_at) diverged from the bank view by 100s of £
+	// because PSP payouts lag by days; the bank-matched view always
+	// reconciles to what actually arrived.
+	const byType = pnl.cash_in_by_type ?? {};
 	const incomeBreakdown = [
-		{ label: "Tickets", value: pnl.income.tickets },
-		{ label: "Bookings", value: pnl.income.bookings },
-		{ label: "POS (net)", value: pnl.income.pos_net },
-		{ label: "Manual / other", value: pnl.income.manual },
-		{
-			label: "Rental (tenancies)",
-			value: pnl.income.tenancy,
-			sub: tenancyHasSplit
-				? `${formatGbp(pnl.income.tenancy_paid ?? 0)} paid`
-				: null,
-		},
+		{ label: "Bookings", value: byType.bookings ?? 0 },
+		{ label: "Tickets", value: byType.tickets ?? 0 },
+		{ label: "Tenancies", value: byType.tenancies ?? 0 },
+		{ label: "Manual invoices", value: byType.manual_invoices ?? 0 },
+		// PSP payouts arrive as one bundled IN per payout cycle, so the
+		// matcher can't attribute them per-customer. Surfaced here as
+		// the consolidated amount.
+		{ label: "PSP payouts (Stripe / Square)", value: byType.psp_payouts ?? 0 },
+		{ label: "Other / unmatched", value: byType.unmatched ?? 0 },
+		// Stored negative on purpose — refunds reduce the headline.
+		{ label: "Refunds (netted)", value: byType.refunds ?? 0 },
 	].filter((r) => r.value !== 0);
 
 	const codBreakdown = [
@@ -736,7 +811,7 @@ function WaterfallSection({ pnl }) {
 		{ label: "Owed to organisers", value: pnl.cost_of_delivery_breakdown.organiser_payouts },
 	].filter((r) => r.value !== 0);
 
-	const afterCod = pnl.income.total - pnl.cost_of_delivery;
+	const afterCod = cashIn - pnl.cost_of_delivery;
 	const businessNet = afterCod - pnl.fixed.staff;
 	const buildingNet = businessNet - pnl.cost_of_building;
 	const ministryNet = buildingNet - pnl.fixed.mortgage_extra;
@@ -756,10 +831,14 @@ function WaterfallSection({ pnl }) {
 
 	const steps = [
 		{
-			label: "Income",
-			running: pnl.income.total,
+			label: "Income (actual in bank)",
+			running: cashIn,
 			breakdown: incomeBreakdown,
-			tone: toneFor(pnl.income.total),
+			tone: toneFor(cashIn),
+			sub:
+				cashInRefunds > 0
+					? `${formatGbp(cashInGross)} gross · ${formatGbp(cashInRefunds)} supplier refunds netted`
+					: null,
 		},
 		{
 			label: "Business Net",
@@ -797,6 +876,31 @@ function WaterfallSection({ pnl }) {
 		},
 	];
 
+	const outstanding = pnl.outstanding ?? null;
+	const pspHeld = pnl.psp_held ?? null;
+	const expectedTotal =
+		(outstanding?.total ?? 0) + (pspHeld?.total ?? 0);
+	// "Due to come in" mixes two flavours of expected cash:
+	//   - Receivables (unpaid invoices + booking balances). Could
+	//     take weeks if a tenant defers.
+	//   - PSP held balance — money customers HAVE paid, just sitting in
+	//     Stripe / Square until the next automatic payout (1–7 days).
+	// Splitting the rows lets the admin see at a glance which slice is
+	// "definitely landing this week" vs "we still need to chase".
+	const expectedBreakdown = [
+		{ label: "Tenancy invoices issued", value: outstanding?.tenancy ?? 0 },
+		{ label: "Manual invoices issued", value: outstanding?.manual ?? 0 },
+		{ label: "Booking balances", value: outstanding?.bookings ?? 0 },
+		{
+			label: "Held in Stripe (awaiting payout)",
+			value: pspHeld?.by_provider?.stripe ?? 0,
+		},
+		{
+			label: "Held in Square (awaiting payout)",
+			value: pspHeld?.by_provider?.square ?? 0,
+		},
+	].filter((r) => r.value !== 0);
+
 	return (
 		<section className="space-y-3">
 			<div className="flex items-baseline justify-between gap-3 flex-wrap">
@@ -815,6 +919,35 @@ function WaterfallSection({ pnl }) {
 					<WaterfallBox key={s.label} step={s} index={i} />
 				))}
 			</div>
+			{expectedTotal > 0 && (
+				<div className="rounded-xl border border-foreground/10 bg-card p-4 space-y-2">
+					<div className="flex items-baseline justify-between gap-3">
+						<div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+							Due to come in
+						</div>
+						<div className="font-mono tabular-nums text-xl">
+							{formatGbp(expectedTotal)}
+						</div>
+					</div>
+					{expectedBreakdown.length > 0 && (
+						<ul className="text-[11px] text-muted-foreground space-y-0.5">
+							{expectedBreakdown.map((b) => (
+								<li
+									key={b.label}
+									className="flex items-baseline justify-between gap-2"
+								>
+									<span>{b.label}</span>
+									<span className="font-mono">{formatGbp(b.value)}</span>
+								</li>
+							))}
+						</ul>
+					)}
+					<p className="text-[10px] text-muted-foreground">
+						Money already collected in Stripe / Square (lands automatically) plus
+						invoices issued but unpaid.
+					</p>
+				</div>
+			)}
 		</section>
 	);
 }

@@ -13,6 +13,12 @@ export const manual_income = pgTable(
 		kind: text("kind").notNull(),
 		description: text("description").notNull(),
 		amount_cents: integer("amount_cents").notNull(),
+		// Output VAT collected on this income (gross VAT-inclusive
+		// `amount_cents` includes this). Defaults to 0 for donation /
+		// outside-the-scope rows; populated on equipment hire / other
+		// VATable income so the VAT return picks it up. The net (cell)
+		// shown in reports is `amount_cents - vat_cents`.
+		vat_cents: integer("vat_cents").default(0).notNull(),
 		notes: text("notes"),
 		attachment_file_id: uuid("attachment_file_id").references(() => file.id, { onDelete: "set null" }),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

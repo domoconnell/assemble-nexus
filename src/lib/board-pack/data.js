@@ -90,7 +90,10 @@ export async function gatherBoardPackData({ venueId, ym, venueName }) {
 			: null,
 	].filter(Boolean);
 
-	const tenancyIssued = pnl.income.tenancy ?? 0;
+	// `pnl.income.tenancy` is now the PAID figure (cash basis). The
+	// board pack still wants to show the accrued / issued amount as a
+	// sub-line when there's a deferral gap.
+	const tenancyIssued = pnl.income.tenancy_issued ?? pnl.income.tenancy ?? 0;
 	const tenancyPaid = pnl.income.tenancy_paid ?? 0;
 	const incomeItems = [
 		{ label: "Hire fees", value: pnl.income.bookings },
@@ -98,11 +101,22 @@ export async function gatherBoardPackData({ venueId, ym, venueName }) {
 		{ label: "Cafe POS", value: pnl.income.pos_net },
 		{ label: "Manual income", value: pnl.income.manual },
 		{
+			label: "Manual invoices (net of VAT)",
+			value: pnl.income.manual_invoices ?? 0,
+			sub:
+				(pnl.income.manual_invoices_vat ?? 0) > 0
+					? `${gbpForBoardSub(pnl.income.manual_invoices_vat)} VAT`
+					: null,
+		},
+		{
+			// Cash-basis: only counts what landed this month. When the
+			// issued figure differs (i.e. a tenant deferred), show the
+			// gap as a sub-line so the directors can see it.
 			label: "Rental income (tenancies)",
-			value: tenancyIssued,
+			value: tenancyPaid,
 			sub:
 				tenancyIssued !== tenancyPaid
-					? `${gbpForBoardSub(tenancyPaid)} paid`
+					? `${gbpForBoardSub(tenancyIssued)} issued`
 					: null,
 		},
 	].filter((it) => it.value !== 0);

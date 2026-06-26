@@ -1,0 +1,86 @@
+<!--
+  Template: tenancy-invoice
+  Audience: tenant contact (admin has issued the monthly tenancy invoice)
+  Variables:
+    {{venue_name}}        Public venue name.
+    {{first_name}}        Tenant contact's first name (may be empty).
+    {{organisation_name}} Tenant organisation name.
+    {{reference}}         Invoice reference, e.g. TI-2026-FKIK.
+    {{period}}            Human-readable period, e.g. 'June 2026'.
+    {{amount}}            Pre-formatted amount, e.g. '£515.00'.
+    {{due_label}}         Pre-formatted due date or 'on receipt'.
+    {{auto_billed}}       Boolean — when true the invoice will be auto-charged
+                          via the org's Direct Debit; we tell the tenant
+                          they don't need to do anything. Use with {{#if}}.
+  Notes:
+    Rendered tenancy-invoice PDF is attached. Body just frames it.
+-->
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#0f172a;font-size:14px;line-height:1.55;">
+  <tr>
+    <td style="padding:0 24px;">
+      <p style="margin:0 0 14px;">Hi {{first_name}},</p>
+      <p style="margin:0 0 14px;color:#334155;">
+        Here's the invoice for {{organisation_name}}'s
+        <strong>{{period}}</strong>
+        hire at {{venue_name}}.
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:14px 24px 0;">
+      <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin:0 0 12px;">
+        Invoice summary
+      </div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tr>
+          <td style="padding:5px 0;color:#64748b;width:160px;">Reference</td>
+          <td style="padding:5px 0;font-family:'SF Mono','Menlo',monospace;font-size:13px;">{{reference}}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:#64748b;">Period</td>
+          <td style="padding:5px 0;">{{period}}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:#64748b;">Due</td>
+          <td style="padding:5px 0;">{{due_label}}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-top:1px solid #e2e8f0;">Amount due</td>
+          <td style="padding:8px 0;font-weight:600;font-size:16px;border-top:1px solid #e2e8f0;">{{amount}}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:14px 24px 0;">
+      <div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;color:#334155;font-size:13px;">
+        <span style="font-weight:600;color:#0f172a;">PDF attached.</span>
+        The attached invoice shows the full breakdown of rooms, hours and
+        any reductions for the period.
+      </div>
+    </td>
+  </tr>
+
+  {{#if auto_billed}}
+  <tr>
+    <td style="padding:14px 24px 0;">
+      <div style="border:1px solid #0f766e33;background:#0f766e0a;border-radius:6px;padding:12px 14px;color:#0f766e;font-size:13px;">
+        <span style="font-weight:600;">No action needed.</span>
+        We'll collect {{amount}} from your nominated bank account via
+        Direct Debit shortly. Bacs takes three working days to clear.
+      </div>
+    </td>
+  </tr>
+  {{/if}}
+
+  <tr>
+    <td style="padding:18px 24px 12px;">
+      <p style="margin:0;color:#0f172a;">
+        Thanks,<br />
+        {{venue_name}}
+      </p>
+    </td>
+  </tr>
+</table>

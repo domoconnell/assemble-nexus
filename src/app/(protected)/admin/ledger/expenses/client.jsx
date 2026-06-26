@@ -176,7 +176,7 @@ export default function ExpensesClient({ ym, monthLabel, categories, expenses, e
 					No expenses recorded for {monthLabel}.
 				</div>
 			) : (
-				<div className="rounded-lg border bg-card overflow-hidden">
+				<div className="rounded-lg border bg-card overflow-x-auto">
 					<table className="w-full text-sm">
 						<thead className="bg-muted/40">
 							<tr className="text-left">

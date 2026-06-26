@@ -159,7 +159,7 @@ export default async function VatPage({ searchParams }) {
 				<HeadlineCard label="Box 6 · Sales ex VAT" value={fmtCents(rollup.totals.net_cents)} />
 			</div>
 
-			<section className="rounded-xl border bg-card overflow-hidden">
+			<section className="rounded-xl border bg-card overflow-x-auto">
 				<div className="px-5 py-3 border-b border-foreground/10 flex items-baseline justify-between gap-3 flex-wrap">
 					<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
 						Output VAT · sales
@@ -205,7 +205,7 @@ export default async function VatPage({ searchParams }) {
 				</table>
 			</section>
 
-			<section className="rounded-xl border bg-card overflow-hidden">
+			<section className="rounded-xl border bg-card overflow-x-auto">
 				<div className="px-5 py-3 border-b border-foreground/10">
 					<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
 						Input VAT · purchases

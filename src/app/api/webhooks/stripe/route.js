@@ -194,15 +194,18 @@ async function handlePaymentIntentSucceeded(event) {
 		.limit(1);
 	if (!row) return;
 
-	// Mark the psp_intent as succeeded so other code paths reading the
-	// row see the right state without having to consult Stripe.
-	if (row.status !== "succeeded") {
-		await db
-			.update(psp_intent)
-			.set({ status: "succeeded" })
-			.where(eq(psp_intent.id, row.id));
-	}
-
+	// IMPORTANT: finalise BEFORE marking `psp_intent.status='succeeded'`.
+	// The previous order marked succeeded first, then ran the finaliser
+	// — if the finaliser threw, other readers (admin UI, retries) saw a
+	// "succeeded" intent against a booking/order still in its pending
+	// state, with no obvious way to recover. By only flipping the
+	// status after the finaliser completes, the intent's state is a
+	// truthful reflection of the system's actual state: either
+	// everything is done or nothing has changed yet.
+	//
+	// All finalisers are already idempotent (they no-op when the row is
+	// already in its terminal state), so Stripe's retry on 5xx will
+	// converge correctly.
 	if (row.ticket_order_id) {
 		try {
 			await finaliseTicketOrder(row.ticket_order_id, { paymentRef: pi.id });
@@ -210,9 +213,7 @@ async function handlePaymentIntentSucceeded(event) {
 			console.error("[stripe-webhook] finaliseTicketOrder", err);
 			throw err;
 		}
-		return;
-	}
-	if (row.booking_id) {
+	} else if (row.booking_id) {
 		const kind = row.metadata?.kind ?? "deposit";
 		try {
 			if (kind === "instalment") {
@@ -235,6 +236,15 @@ async function handlePaymentIntentSucceeded(event) {
 			console.error("[stripe-webhook] finaliseBooking", err);
 			throw err;
 		}
+	}
+
+	// Finaliser completed successfully — now safe to mark the intent
+	// itself as succeeded.
+	if (row.status !== "succeeded") {
+		await db
+			.update(psp_intent)
+			.set({ status: "succeeded" })
+			.where(eq(psp_intent.id, row.id));
 	}
 }
 

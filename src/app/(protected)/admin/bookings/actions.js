@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db/index.js";
@@ -247,6 +247,22 @@ export async function cancelBookingAction(input) {
 		.update(booking)
 		.set({ status: "cancelled", cancelled_at: new Date() })
 		.where(eq(booking.id, b.id));
+
+	// Cascade: soft-delete every UNPAID booking_payment row. Paid rows
+	// stay (their `paid_at` is part of the audit trail and the money
+	// has already changed hands). Without this, the auto-matcher would
+	// keep treating the unpaid rows as live candidates and could match
+	// a stray bank receipt to a dead booking.
+	await db
+		.update(booking_payment)
+		.set({ deletedAt: new Date() })
+		.where(
+			and(
+				eq(booking_payment.booking_id, b.id),
+				isNull(booking_payment.paid_at),
+				isNull(booking_payment.deletedAt),
+			),
+		);
 
 	await db.insert(booking_status_event).values({
 		booking_id: b.id,
