@@ -311,57 +311,62 @@ export default function InstallmentsEditor({ bookingId, reference, totalCents, p
 										{p.offline_note ? ` · ${p.offline_note}` : ""}
 									</div>
 								)}
-								{!isPaid && (
-									<div className="flex flex-wrap items-center gap-2">
-										{/* Pay link: copy or email. The dropdown trigger is the
-										 * primary outline button — clicking it opens the menu
-										 * which has the two flavours. */}
-										<DropdownMenu>
-											<DropdownMenuTrigger asChild>
-												<Button
-													size="sm"
-													variant="outline"
-													disabled={busy === `send-${p.id}`}
-												>
-													{busy === `send-${p.id}` ? "Sending…" : "Pay link"}
-													<ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
-												</Button>
-											</DropdownMenuTrigger>
-											<DropdownMenuContent align="start" className="w-44">
-												<DropdownMenuItem onClick={() => copyLink(p.pay_token)}>
-													Copy link
-												</DropdownMenuItem>
-												<DropdownMenuItem onClick={() => sendLink(p.id)}>
-													Email link to customer
-												</DropdownMenuItem>
-											</DropdownMenuContent>
-										</DropdownMenu>
+								<div className="flex flex-wrap items-center gap-2">
+									{!isPaid && (
+										<>
+											{/* Pay link: copy or email. The dropdown trigger is the
+											 * primary outline button — clicking it opens the menu
+											 * which has the two flavours. */}
+											<DropdownMenu>
+												<DropdownMenuTrigger asChild>
+													<Button
+														size="sm"
+														variant="outline"
+														disabled={busy === `send-${p.id}`}
+													>
+														{busy === `send-${p.id}` ? "Sending…" : "Pay link"}
+														<ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
+													</Button>
+												</DropdownMenuTrigger>
+												<DropdownMenuContent align="start" className="w-44">
+													<DropdownMenuItem onClick={() => copyLink(p.pay_token)}>
+														Copy link
+													</DropdownMenuItem>
+													<DropdownMenuItem onClick={() => sendLink(p.id)}>
+														Email link to customer
+													</DropdownMenuItem>
+												</DropdownMenuContent>
+											</DropdownMenu>
+										</>
+									)}
 
-										{/* Invoice: download or email. Same pattern as Pay link
-										 * so the action surface feels consistent. */}
-										<DropdownMenu>
-											<DropdownMenuTrigger asChild>
-												<Button
-													size="sm"
-													variant="ghost"
-													disabled={busy === `inv-${p.id}`}
-												>
-													{busy === `inv-${p.id}` ? "Sending…" : "Invoice"}
-													<ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
-												</Button>
-											</DropdownMenuTrigger>
-											<DropdownMenuContent align="start" className="w-44">
-												<DropdownMenuItem
-													onClick={() => downloadInvoice({ paymentId: p.id })}
-												>
-													Download PDF
-												</DropdownMenuItem>
-												<DropdownMenuItem onClick={() => sendInvoice({ paymentId: p.id })}>
-													Email to customer
-												</DropdownMenuItem>
-											</DropdownMenuContent>
-										</DropdownMenu>
+									{/* Invoice: download or email. Always available — even on
+									 * paid / completed bookings the customer (or admin)
+									 * often needs to re-download the receipt later. */}
+									<DropdownMenu>
+										<DropdownMenuTrigger asChild>
+											<Button
+												size="sm"
+												variant={isPaid ? "outline" : "ghost"}
+												disabled={busy === `inv-${p.id}`}
+											>
+												{busy === `inv-${p.id}` ? "Sending…" : "Invoice"}
+												<ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
+											</Button>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent align="start" className="w-44">
+											<DropdownMenuItem
+												onClick={() => downloadInvoice({ paymentId: p.id })}
+											>
+												Download PDF
+											</DropdownMenuItem>
+											<DropdownMenuItem onClick={() => sendInvoice({ paymentId: p.id })}>
+												Email to customer
+											</DropdownMenuItem>
+										</DropdownMenuContent>
+									</DropdownMenu>
 
+									{!isPaid && (
 										<Button
 											size="sm"
 											variant="ghost"
@@ -370,21 +375,20 @@ export default function InstallmentsEditor({ bookingId, reference, totalCents, p
 										>
 											{busy === `paid-${p.id}` ? "…" : "Mark paid"}
 										</Button>
-									</div>
-								)}
-								{isPaid && p.paid_via === "offline" && (
-									<div>
+									)}
+
+									{isPaid && p.paid_via === "offline" && (
 										<Button
 											size="sm"
 											variant="ghost"
-											className="text-muted-foreground"
+											className="text-muted-foreground ml-auto"
 											onClick={() => unmarkPaid(p.id)}
 											disabled={busy === `unpay-${p.id}`}
 										>
-											Undo
+											Undo mark-paid
 										</Button>
-									</div>
-								)}
+									)}
+								</div>
 							</li>
 						);
 					})}

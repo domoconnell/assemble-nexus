@@ -11,7 +11,7 @@ import { customer } from "@/db/schema/entities/customer.js";
 import { room } from "@/db/schema/entities/room.js";
 import { room_blockout } from "@/db/schema/entities/room_blockout.js";
 import { room_blockout_room } from "@/db/schema/entities/room_blockout_room.js";
-import { tenancy, tenancy_session } from "@/db/schema/entities/tenancy.js";
+import { tenancy, tenancy_line, tenancy_session } from "@/db/schema/entities/tenancy.js";
 import { capacity_layout } from "@/db/schema/entities/capacity_layout.js";
 import { deposit_policy } from "@/db/schema/entities/deposit_policy.js";
 import { event } from "@/db/schema/entities/event.js";
@@ -547,14 +547,22 @@ export async function listDayActivityForMonth(venueId, monthStartDate, monthEndD
 		// Tenancy sessions go on the heatmap too — they're real bookings
 		// against the calendar even though they were materialised from a
 		// tenancy schedule rather than a one-off booking row.
+		//
+		// INNER JOIN tenancy_line (was: not joined) so sessions whose
+		// underlying line has been deleted (or never had one) don't
+		// inflate the count. The schedule widget already filters those
+		// out via the same join; this keeps the calendar tooltip
+		// consistent with what's actually rendered below it.
 		db
 			.select({ starts_at: tenancy_session.starts_at })
 			.from(tenancy_session)
 			.innerJoin(tenancy, eq(tenancy_session.tenancy_id, tenancy.id))
+			.innerJoin(tenancy_line, eq(tenancy_session.tenancy_line_id, tenancy_line.id))
 			.where(
 				and(
 					eq(tenancy.venue_id, venueId),
 					isNull(tenancy.deletedAt),
+					isNull(tenancy_line.deletedAt),
 					isNull(tenancy_session.deletedAt),
 					eq(tenancy_session.status, "scheduled"),
 					lt(tenancy_session.starts_at, end),
