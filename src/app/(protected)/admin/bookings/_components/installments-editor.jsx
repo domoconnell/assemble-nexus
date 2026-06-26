@@ -279,7 +279,11 @@ export default function InstallmentsEditor({ bookingId, reference, totalCents, p
 						const percent =
 							totalCents > 0 ? Math.round((p.amount_cents / totalCents) * 1000) / 10 : 0;
 						return (
-							<li key={p.id} className="p-3 space-y-2">
+							<li
+								key={p.id}
+								id={`payment-${p.id}`}
+								className="p-3 space-y-2 scroll-mt-24 target:bg-primary/10 target:ring-2 target:ring-primary/40 target:rounded-md"
+							>
 								<div className="flex items-baseline justify-between gap-3 flex-wrap">
 									<div className="flex items-baseline gap-2 flex-wrap">
 										<span className="text-sm font-medium">{p.label}</span>

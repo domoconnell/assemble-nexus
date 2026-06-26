@@ -63,6 +63,10 @@ export default async function RecurringCostsPage() {
 		}
 	}
 
+	// Period stamp passed to the banking drill-down link so the
+	// transaction list lands on this same month's matches.
+	const periodYm = `${year}-${String(month1).padStart(2, "0")}`;
+
 	const sections = RECURRING_COST_TYPES.map((type) => {
 		const sectionItems = itemsByType.get(type) ?? [];
 		// Type-level actual is the sum of its items — keeps the section
@@ -77,7 +81,8 @@ export default async function RecurringCostsPage() {
 			description: TYPE_META[type].description,
 			current_total: currentAmounts[type] ?? 0,
 			actual_total,
-			items: sectionItems,
+			period_ym: periodYm,
+			items: sectionItems.map((it) => ({ ...it, period_ym: periodYm })),
 		};
 	});
 

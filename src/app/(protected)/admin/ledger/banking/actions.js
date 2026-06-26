@@ -12,7 +12,12 @@ import { requireServerSession } from "@/utils/auth/server-guard.js";
 import { requireCurrentVenue } from "@/db/queries/venue.js";
 import { runBankSync } from "@/lib/banking/sync.js";
 import { autoMatchInboundTransactions } from "@/lib/banking/auto-match.js";
-import { tenancy_invoice } from "@/db/schema/entities/tenancy.js";
+import { tenancy, tenancy_invoice } from "@/db/schema/entities/tenancy.js";
+import { booking_payment } from "@/db/schema/entities/booking_payment.js";
+import { booking as bookingTable } from "@/db/schema/entities/booking.js";
+import { customer as customerTable } from "@/db/schema/entities/customer.js";
+import { organisation } from "@/db/schema/entities/organisation.js";
+import { rollUpBookingPaidAmounts } from "@/lib/bookings/payment-rollup.js";
 import { manual_invoice, manual_invoice_line } from "@/db/schema/entities/manual_invoice.js";
 import { nextManualInvoiceReference } from "@/db/queries/manual-invoices.js";
 
@@ -588,18 +593,9 @@ export async function listMatchCandidatesAction(input) {
 	if (!tx) throw new Error("Transaction not found.");
 	const amount = tx.amount_minor ?? 0;
 
-	const { tenancy, tenancy_invoice } = await import(
-		"@/db/schema/entities/tenancy.js"
-	);
-	const { organisation } = await import(
-		"@/db/schema/entities/organisation.js"
-	);
-	const { isNull, desc } = await import("drizzle-orm");
-
-	const [tenancyRows, manualRows] = await Promise.all([
+	const [tenancyRows, manualRows, bookingRows] = await Promise.all([
 		db
 			.select({
-				type: tenancy_invoice.id, // placeholder; we override below
 				id: tenancy_invoice.id,
 				reference: tenancy_invoice.reference,
 				total_cents: tenancy_invoice.total_cents,
@@ -639,6 +635,35 @@ export async function listMatchCandidatesAction(input) {
 			)
 			.orderBy(desc(manual_invoice.issued_at))
 			.limit(200),
+		// Unpaid booking_payment rows — covers offline / bank-transfer
+		// payments against a booking that aren't tied to a Stripe PI.
+		db
+			.select({
+				id: booking_payment.id,
+				booking_id: booking_payment.booking_id,
+				label: booking_payment.label,
+				total_cents: booking_payment.amount_cents,
+				created_at: booking_payment.createdAt,
+				booking_reference: bookingTable.reference,
+				customer_first_name: customerTable.first_name,
+				customer_last_name: customerTable.last_name,
+				customer_organisation: customerTable.organisation,
+				organisation_name: organisation.name,
+			})
+			.from(booking_payment)
+			.innerJoin(bookingTable, eq(bookingTable.id, booking_payment.booking_id))
+			.innerJoin(customerTable, eq(customerTable.id, bookingTable.customer_id))
+			.leftJoin(organisation, eq(organisation.id, bookingTable.organisation_id))
+			.where(
+				and(
+					eq(bookingTable.venue_id, venue.id),
+					isNull(booking_payment.paid_at),
+					isNull(booking_payment.deletedAt),
+					isNull(bookingTable.deletedAt),
+				),
+			)
+			.orderBy(desc(booking_payment.createdAt))
+			.limit(200),
 	]);
 
 	const candidates = [
@@ -657,6 +682,18 @@ export async function listMatchCandidatesAction(input) {
 			total_cents: r.total_cents,
 			issued_at: r.issued_at,
 			label: r.organisation_name ?? r.customer_name ?? "Manual invoice",
+		})),
+		...bookingRows.map((r) => ({
+			type: "booking_payment",
+			id: r.id,
+			reference: `${r.booking_reference} · ${r.label}`,
+			total_cents: r.total_cents,
+			issued_at: r.created_at,
+			label:
+				r.organisation_name ??
+				r.customer_organisation ??
+				[r.customer_first_name, r.customer_last_name].filter(Boolean).join(" ") ??
+				"Booking",
 		})),
 	];
 
@@ -686,17 +723,19 @@ export async function listMatchCandidatesAction(input) {
 
 const ManualMatchSchema = z.object({
 	transaction_id: z.string().uuid(),
-	target_type: z.enum(["tenancy_invoice", "manual_invoice"]),
+	target_type: z.enum(["tenancy_invoice", "manual_invoice", "booking_payment"]),
 	target_id: z.string().uuid(),
 });
 
 /**
- * Link a bank transaction to an invoice the user picked from the
- * candidates dialog. Mirrors the side-effects of the auto-matcher so
- * the resulting state is identical to the "matched automatically" path:
+ * Link a bank transaction to an invoice / payment the user picked from
+ * the candidates dialog. Mirrors the side-effects of the auto-matcher
+ * so the resulting state is identical to the "matched automatically"
+ * path:
  *
  *   - tenancy_invoice  → status='paid', paid_at = settlement time
  *   - manual_invoice   → paid_at      = settlement time
+ *   - booking_payment  → paid_at + paid_via='offline' + rollUp side-effects
  *
  * Refuses to overwrite an existing match — the admin must unmatch first.
  */
@@ -720,7 +759,7 @@ export async function manuallyMatchToInvoiceAction(input) {
 		throw new Error("Already matched. Unmatch first.");
 	}
 	if (tx.direction !== "IN") {
-		throw new Error("Only incoming transactions can be matched to invoices.");
+		throw new Error("Only incoming transactions can be matched.");
 	}
 
 	const paidAt = tx.transaction_time ?? tx.settled_at ?? new Date();
@@ -741,7 +780,7 @@ export async function manuallyMatchToInvoiceAction(input) {
 			.update(tenancy_invoice)
 			.set({ status: "paid", paid_at: paidAt })
 			.where(eq(tenancy_invoice.id, inv.id));
-	} else {
+	} else if (parsed.target_type === "manual_invoice") {
 		const [inv] = await db
 			.select()
 			.from(manual_invoice)
@@ -757,6 +796,31 @@ export async function manuallyMatchToInvoiceAction(input) {
 			.update(manual_invoice)
 			.set({ paid_at: paidAt })
 			.where(eq(manual_invoice.id, inv.id));
+	} else {
+		// booking_payment — verify the parent booking belongs to this
+		// venue, then stamp paid + roll up so the booking flips through
+		// confirmed → completed automatically.
+		const [bp] = await db
+			.select({ id: booking_payment.id, booking_id: booking_payment.booking_id })
+			.from(booking_payment)
+			.innerJoin(bookingTable, eq(bookingTable.id, booking_payment.booking_id))
+			.where(
+				and(
+					eq(booking_payment.id, parsed.target_id),
+					eq(bookingTable.venue_id, venue.id),
+				),
+			)
+			.limit(1);
+		if (!bp) throw new Error("Booking payment not found.");
+		await db
+			.update(booking_payment)
+			.set({
+				paid_at: paidAt,
+				paid_via: "offline",
+				offline_note: "Manually linked from bank",
+			})
+			.where(eq(booking_payment.id, bp.id));
+		await rollUpBookingPaidAmounts(bp.booking_id);
 	}
 
 	await db
@@ -767,5 +831,6 @@ export async function manuallyMatchToInvoiceAction(input) {
 	revalidatePath("/admin/ledger/banking");
 	revalidatePath("/admin/tenancies");
 	revalidatePath("/admin/crm");
+	if (parsed.target_type === "booking_payment") revalidatePath("/admin/bookings");
 	return { ok: true };
 }

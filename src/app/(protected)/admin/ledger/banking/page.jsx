@@ -65,10 +65,33 @@ export default async function BankingPage({ searchParams }) {
 
 	const month = resolveMonth(currentMonthLondon().ym);
 
+	// Drill-down filters from the recurring page: ?recurring=<item_id>
+	// scopes the transaction list to bank rows linked to that item, and
+	// ?period=YYYY-MM clips them to that month. Used by the click-through
+	// from "actual this month".
+	const recurringFilterId = typeof sp?.recurring === "string" ? sp.recurring : null;
+	const periodFilter =
+		typeof sp?.period === "string" && /^\d{4}-\d{2}$/.test(sp.period) ? sp.period : null;
+	let periodStartIso = null;
+	let periodEndIso = null;
+	if (periodFilter) {
+		const filtered = resolveMonth(periodFilter);
+		periodStartIso = filtered.monthStartDate.toISOString();
+		periodEndIso = filtered.monthEndDate.toISOString();
+	}
+
 	const [combined, inOut, txPage, daily, weekly, monthly, categories, recurringItems, organisations] = await Promise.all([
 		getCombinedLatestBalance(venue.id, { accountIds }),
 		getBankInOutBetween(venue.id, month.monthStartDate, month.monthEndDate, { accountIds }),
-		listBankTransactions(venue.id, { limit: PAGE_SIZE, offset, accountIds, showPspIncome }),
+		listBankTransactions(venue.id, {
+			limit: PAGE_SIZE,
+			offset,
+			accountIds,
+			showPspIncome,
+			matchedRecurringItemId: recurringFilterId,
+			periodStartIso,
+			periodEndIso,
+		}),
 		listBankBalanceSeries(venue.id, { bucket: "day", accountIds }),
 		listBankBalanceSeries(venue.id, { bucket: "week", accountIds }),
 		listBankBalanceSeries(venue.id, { bucket: "month", accountIds }),

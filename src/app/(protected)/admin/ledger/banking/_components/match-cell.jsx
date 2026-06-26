@@ -17,6 +17,7 @@ import {
 } from "../actions";
 import CategoriseDialog from "./categorise-dialog";
 import ManualInvoiceDialog from "./manual-invoice-dialog";
+import MatchPickerDialog from "./match-picker-dialog";
 
 /**
  * Match-state pill + context menu for a bank transaction. The menu adapts
@@ -77,6 +78,7 @@ export default function MatchCell({
 	const busy = actionBusy || pending;
 	const [dialogKind, setDialogKind] = useState(null); // "spend" | "refund" | null
 	const [invoiceDialog, setInvoiceDialog] = useState(null); // "create" | "edit" | null
+	const [pickerOpen, setPickerOpen] = useState(false);
 
 	function runWithRefresh(label, fn) {
 		setActionBusy(true);
@@ -140,7 +142,13 @@ export default function MatchCell({
 		// Don't link to a soft-deleted entity — its detail page would
 		// either 404 or render an empty husk.
 		if (matchedToBookingPayment && matchedBookingId && !bookingPaymentGone) {
-			return `/admin/bookings/${matchedBookingId}`;
+			// Anchor-scroll straight to the matched payment row so the
+			// admin doesn't have to find it inside the booking page.
+			// matched_to_id is the booking_payment.id.
+			const anchor = transaction?.matched_to_id ?? "";
+			return anchor
+				? `/admin/bookings/${matchedBookingId}#payment-${anchor}`
+				: `/admin/bookings/${matchedBookingId}`;
 		}
 		if (matchedToTicketOrder && matchedTicketOrderEventId && !ticketOrderGone) {
 			return `/admin/events/${matchedTicketOrderEventId}`;
@@ -335,6 +343,9 @@ export default function MatchCell({
 					)}
 					{!isMatched && isIncoming && (
 						<>
+							<DropdownMenuItem onClick={() => setPickerOpen(true)}>
+								Match to invoice…
+							</DropdownMenuItem>
 							<DropdownMenuItem onClick={() => setDialogKind("refund")}>
 								Mark as refund
 							</DropdownMenuItem>
@@ -367,6 +378,14 @@ export default function MatchCell({
 					}
 					invoiceId={invoiceDialog === "edit" ? matchedManualInvoiceId : null}
 					organisations={organisations}
+				/>
+			)}
+
+			{pickerOpen && (
+				<MatchPickerDialog
+					open
+					onOpenChange={setPickerOpen}
+					transactionId={transactionId}
 				/>
 			)}
 		</>

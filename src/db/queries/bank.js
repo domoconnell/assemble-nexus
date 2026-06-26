@@ -219,7 +219,15 @@ export async function getBankTransactionMatchedTo(matchedToId, matchedToType) {
  */
 export async function listBankTransactions(
 	venueId,
-	{ limit = 50, offset = 0, accountIds, showPspIncome = false } = {},
+	{
+		limit = 50,
+		offset = 0,
+		accountIds,
+		showPspIncome = false,
+		matchedRecurringItemId = null,
+		periodStartIso = null,
+		periodEndIso = null,
+	} = {},
 ) {
 	const filter = accountFilter(accountIds);
 	// Hide individual incoming Stripe / Square card charges (and their
@@ -236,6 +244,23 @@ export async function listBankTransactions(
 	const conditions = [eq(bank_transaction.venue_id, venueId)];
 	if (filter) conditions.push(filter);
 	if (pspNoiseFilter) conditions.push(pspNoiseFilter);
+	// Recurring-cost drill-down: scope to the rows linked to a specific
+	// recurring_cost_item within a month window. Used by the click-through
+	// from the recurring page's "actual this month" figure.
+	if (matchedRecurringItemId) {
+		conditions.push(eq(bank_transaction.matched_to_type, "recurring_cost_item"));
+		conditions.push(eq(bank_transaction.matched_to_id, matchedRecurringItemId));
+	}
+	if (periodStartIso) {
+		conditions.push(
+			sql`COALESCE(${bank_transaction.transaction_time}, ${bank_transaction.settled_at}) >= ${periodStartIso}::timestamptz`,
+		);
+	}
+	if (periodEndIso) {
+		conditions.push(
+			sql`COALESCE(${bank_transaction.transaction_time}, ${bank_transaction.settled_at}) < ${periodEndIso}::timestamptz`,
+		);
+	}
 	const where = and(...conditions);
 	const [rows, [{ count }]] = await Promise.all([
 		db

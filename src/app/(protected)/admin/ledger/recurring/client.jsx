@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/shadcn/components/ui/button";
 import { Input } from "@/shadcn/components/ui/input";
@@ -52,8 +53,20 @@ function currentAmount(history) {
  * showing "-£120.00 (this month)" against zero actuals would mislead.
  * Positive variance = saved against schedule (green); negative = over
  * (amber). Zero shows the neutral "on schedule" line.
+ *
+ * When `drillDownHref` is provided, the actual figure is rendered as a
+ * link to the filtered banking page. When `flagMissing` is true (caller
+ * decides based on the day-of-month threshold), we render an amber
+ * "Nothing paid yet" hint underneath the actual to nudge the admin to
+ * chase / record the payment.
  */
-function ScheduledVsActual({ scheduledCents, actualCents, big = false }) {
+function ScheduledVsActual({
+	scheduledCents,
+	actualCents,
+	big = false,
+	drillDownHref = null,
+	flagMissing = false,
+}) {
 	const variance = (scheduledCents ?? 0) - (actualCents ?? 0);
 	const hasActual = (actualCents ?? 0) !== 0;
 	let varianceLabel = "";
@@ -69,6 +82,8 @@ function ScheduledVsActual({ scheduledCents, actualCents, big = false }) {
 			varianceLabel = "on schedule";
 		}
 	}
+	const actualClass = `font-mono tabular-nums mt-1 ${big ? "text-sm" : "text-xs"}`;
+	const actualNode = hasActual ? fmt(actualCents) : "—";
 	return (
 		<div className={`text-right ${big ? "" : "shrink-0"}`}>
 			<div className={`font-mono tabular-nums ${big ? "font-display text-xl" : ""}`}>
@@ -77,14 +92,26 @@ function ScheduledVsActual({ scheduledCents, actualCents, big = false }) {
 			<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
 				scheduled
 			</div>
-			<div className={`font-mono tabular-nums mt-1 ${big ? "text-sm" : "text-xs"}`}>
-				{hasActual ? fmt(actualCents) : "—"}
-			</div>
+			{drillDownHref && hasActual ? (
+				<Link
+					href={drillDownHref}
+					className={`${actualClass} hover:text-primary underline-offset-2 hover:underline`}
+				>
+					{actualNode}
+				</Link>
+			) : (
+				<div className={actualClass}>{actualNode}</div>
+			)}
 			<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
 				actual this month
 			</div>
 			{varianceLabel && (
 				<div className={`text-[10px] mt-0.5 ${varianceTone}`}>{varianceLabel}</div>
+			)}
+			{flagMissing && (
+				<div className="text-[10px] mt-0.5 text-amber-600 dark:text-amber-400">
+					Nothing paid yet
+				</div>
 			)}
 		</div>
 	);
@@ -116,7 +143,7 @@ function TypeSection({ section }) {
 					actualCents={section.actual_total}
 					big
 				/>
-			</div>
+			</div>{/* section header has no single drill-down (covers many items) */}
 
 			{section.items.length === 0 ? (
 				<p className="text-sm text-muted-foreground border border-dashed rounded-md p-4">
@@ -221,6 +248,16 @@ function ItemRow({ item, type }) {
 					<ScheduledVsActual
 						scheduledCents={current}
 						actualCents={item.actual_cents ?? 0}
+						drillDownHref={`/admin/ledger/banking?recurring=${item.id}&period=${item.period_ym}`}
+						flagMissing={
+							// "Past the 15th of the month and nothing's landed
+							// yet" — most recurring costs hit by mid-month, so
+							// silence on a £-positive schedule after that point
+							// is worth a hint.
+							(current ?? 0) > 0 &&
+							(item.actual_cents ?? 0) === 0 &&
+							new Date().getDate() > 15
+						}
 					/>
 					<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
 						scheduled from {formatYmdMonth(item.history[0]?.effective_from)}
