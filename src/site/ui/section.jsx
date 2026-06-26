@@ -26,9 +26,9 @@ export function Section({
 							</h2>
 						)}
 						{intro && (
-							<p className="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl">
+							<div className="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl">
 								{intro}
-							</p>
+							</div>
 						)}
 					</div>
 				)}

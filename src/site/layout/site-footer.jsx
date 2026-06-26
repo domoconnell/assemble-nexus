@@ -44,12 +44,11 @@ export function SiteFooter({
 	return (
 		<footer className="border-t border-foreground/10 mt-24">
 			<Container>
-				<div className="grid gap-12 py-16 sm:grid-cols-2 lg:grid-cols-5">
-					<div className="lg:col-span-2 max-w-sm">
+				<div className="grid gap-12 py-16 sm:grid-cols-2 lg:grid-cols-[3fr_1fr_1fr_2fr]">
+					<div className="max-w-md sm:col-span-2 lg:col-span-1">
 						<Logo size="lg" />
 						<p className="mt-6 text-sm text-muted-foreground leading-relaxed">
-							A music venue and corporate hire space at the heart of Assemble Church.
-							Three rooms, a working café, and a team that knows the room.
+							The commercial hire arm of Assemble Church.
 						</p>
 					</div>
 

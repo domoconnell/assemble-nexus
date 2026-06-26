@@ -166,23 +166,21 @@ export default async function RoomPage({ params }) {
 
 							{showGallery && (
 								<TabsContent value="gallery" className="mt-8">
-									<div className="grid gap-4 sm:grid-cols-2">
+									<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 										{gallery.map((img) => (
 											<figure
 												key={img.id}
-												className="overflow-hidden rounded-xl border border-foreground/10 bg-card"
+												className="relative overflow-hidden rounded-xl border border-foreground/10 bg-card aspect-square"
 											>
-												<div className="relative aspect-video">
-													<Image
-														src={img.url}
-														alt={img.title || room.name}
-														fill
-														sizes="(min-width: 1024px) 50vw, 100vw"
-														className="object-cover"
-													/>
-												</div>
+												<Image
+													src={img.url}
+													alt={img.title || room.name}
+													fill
+													sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+													className="object-contain"
+												/>
 												{img.title && (
-													<figcaption className="px-4 py-3 text-sm text-foreground/85">
+													<figcaption className="absolute inset-x-0 bottom-0 bg-background/70 backdrop-blur-sm px-4 py-2.5 text-sm text-foreground/95">
 														{img.title}
 													</figcaption>
 												)}

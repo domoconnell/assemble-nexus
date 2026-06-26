@@ -23,6 +23,7 @@ const baseRoomColumns = {
     name: room.name,
     tagline: room.tagline,
     short_description: room.short_description,
+    content_html: room.content_html,
     av_highlight: room.av_highlight,
     accent_hue: room.accent_hue,
     allow_ticketed_events: room.allow_ticketed_events,

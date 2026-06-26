@@ -87,7 +87,7 @@ export default function VenueProfileEditor({ initial }) {
 					<Input
 						id="venue-phone"
 						type="tel"
-						placeholder="01636 556110"
+						placeholder="01636 000000"
 						value={phone}
 						onChange={(e) => setPhone(e.target.value)}
 					/>
@@ -100,7 +100,7 @@ export default function VenueProfileEditor({ initial }) {
 					<Input
 						id="venue-contact-email"
 						type="email"
-						placeholder="hello@assembly-rooms.com"
+						placeholder="enquire@assembly-rooms.com"
 						value={contactEmail}
 						onChange={(e) => setContactEmail(e.target.value)}
 					/>

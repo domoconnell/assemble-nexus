@@ -45,7 +45,7 @@ export default async function HomePage() {
 		);
 	const heroSubtitle = hero.subtitle
 		? <RichText html={hero.subtitle} />
-		: "A 400-capacity concert hall, two flexible rooms, a working café, and a team that knows the room. Hire it. Perform in it. Get married in it.";
+		: "A 250-capacity concert hall and a flexible studio, both inside a late-1800s Methodist building in the centre of Newark. Hire it. Perform in it. Get married in it.";
 
 	return (
 		<>
@@ -73,9 +73,17 @@ export default async function HomePage() {
 			<Section
 				kicker={roomsSec.kicker ?? "Rooms"}
 				title={roomsSec.title ?? "Built to host the night."}
-				intro={roomsSec.intro ?? "From a tuned-up concert hall to a glass-fronted reception space, every room is set up to make the night feel inevitable."}
+				intro={
+					roomsSec.intro ? (
+						<RichText html={roomsSec.intro} />
+					) : (
+						"From a tuned-up concert hall to a glass-fronted reception space, every room is set up to make the night feel inevitable."
+					)
+				}
 			>
-				<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+				<div
+					className={`grid gap-6 md:grid-cols-2 ${rooms.length >= 3 ? "lg:grid-cols-3" : ""}`}
+				>
 					{rooms.map((room) => (
 						<RoomCard key={room.id} room={room} />
 					))}
@@ -86,7 +94,13 @@ export default async function HomePage() {
 				<Section
 					kicker={whatsOnSec.kicker ?? "What's on"}
 					title={whatsOnSec.title ?? "The next few nights."}
-					intro={whatsOnSec.intro ?? "A taste of what's coming up. Some ours, some yours."}
+					intro={
+						whatsOnSec.intro ? (
+							<RichText html={whatsOnSec.intro} />
+						) : (
+							"A taste of what's coming up. Some ours, some yours."
+						)
+					}
 				>
 					<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
 						{upcoming.map((ev) => (
@@ -105,7 +119,13 @@ export default async function HomePage() {
 				align="center"
 				kicker={hireSec.kicker ?? "Hire"}
 				title={hireSec.title ?? "Let's plan your night."}
-				intro={hireSec.intro ?? "Tell us when, what, and how big. We'll quote you within a working day."}
+				intro={
+					hireSec.intro ? (
+						<RichText html={hireSec.intro} />
+					) : (
+						"Tell us when, what, and how big. We'll quote you within a working day."
+					)
+				}
 			>
 				<div className="mt-2 flex justify-center">
 					<CtaButton href="/book" size="lg">
