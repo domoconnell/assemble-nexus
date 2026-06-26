@@ -34,6 +34,12 @@ const groups = [
 			{ title: "Church transfers", description: "Identify the church's bank account so outbound transfers are auto-tagged in the ledger.", href: "/admin/settings/church-transfer" },
 		],
 	},
+	{
+		section: "System",
+		cards: [
+			{ title: "Users & roles", description: "Add admins, assign roles, and re-send welcome magic links. Anyone who can log in to Nexus lives here.", href: "/admin/users" },
+		],
+	},
 ];
 
 export default function SettingsPage() {

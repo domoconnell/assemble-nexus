@@ -1,20 +1,3 @@
-<!--
-  Template: tenancy-invoice
-  Audience: tenant contact (admin has issued the monthly tenancy invoice)
-  Variables:
-    {{venue_name}}        Public venue name.
-    {{first_name}}        Tenant contact's first name (may be empty).
-    {{organisation_name}} Tenant organisation name.
-    {{reference}}         Invoice reference, e.g. TI-2026-FKIK.
-    {{period}}            Human-readable period, e.g. 'June 2026'.
-    {{amount}}            Pre-formatted amount, e.g. '£515.00'.
-    {{due_label}}         Pre-formatted due date or 'on receipt'.
-    {{auto_billed}}       Boolean — when true the invoice will be auto-charged
-                          via the org's Direct Debit; we tell the tenant
-                          they don't need to do anything. Use with {{#if}}.
-  Notes:
-    Rendered tenancy-invoice PDF is attached. Body just frames it.
--->
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#0f172a;font-size:14px;line-height:1.55;">
   <tr>
     <td style="padding:0 24px;">

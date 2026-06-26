@@ -304,6 +304,15 @@ export async function deleteEventAction(id) {
 	const [e] = await db.select().from(event).where(eq(event.id, id)).limit(1);
 	if (!e) return;
 	await db.update(event).set({ deletedAt: new Date(), status: "cancelled" }).where(eq(event.id, id));
+	// Cascade to ticket orders. Pending (abandoned checkout) → cancel
+	// outright. Paid orders stay live so the admin can refund manually;
+	// keeping them in their paid state preserves the audit trail and
+	// the refund-friendly accounting referenced in `cancelEventAction`'s
+	// comment.
+	await db
+		.update(ticket_order)
+		.set({ status: "cancelled" })
+		.where(and(eq(ticket_order.event_id, id), eq(ticket_order.status, "pending")));
 	revalidatePath("/admin/events");
 	revalidatePath("/whats-on");
 }
@@ -347,6 +356,13 @@ export async function cancelEventAction(id) {
 		.set({ status: "cancelled" })
 		.where(eq(event.id, id))
 		.returning();
+	// Cascade pending ticket orders so the auto-matcher and finalisers
+	// stop treating them as live targets. Paid orders stay in their
+	// paid state for refund-friendly accounting (per the comment above).
+	await db
+		.update(ticket_order)
+		.set({ status: "cancelled" })
+		.where(and(eq(ticket_order.event_id, id), eq(ticket_order.status, "pending")));
 	revalidatePath("/admin/events");
 	revalidatePath(`/admin/events/${id}`);
 	revalidatePath("/whats-on");

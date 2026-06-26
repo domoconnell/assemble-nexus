@@ -241,9 +241,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"tenancy-invoice": {
-		// User will wire the SendGrid template id once they've authored it.
-		// Falls back to safeSend skipping (logs "not wired in SendGrid yet").
-		templateId: "",
+		templateId: "d-e3d7e7970c614ebe9906796952359b29",
 		description: "Sent when an admin clicks 'Send' on a tenancy invoice. The rendered invoice PDF is attached.",
 		audience: "delegate",
 		fields: {
