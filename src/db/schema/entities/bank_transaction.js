@@ -46,6 +46,15 @@ export const bank_transaction = pgTable(
 		settled_at: timestamp("settled_at", { withTimezone: true }),
 		transaction_time: timestamp("transaction_time", { withTimezone: true }),
 		raw_payload: jsonb("raw_payload"),
+		// Set when the row comes from a PSP (Stripe today; Square is POS,
+		// not a PSP) AND the underlying charge has a Payment Intent. This
+		// is the BRIDGE from a bank line to whatever generated it on the
+		// PSP side — auto-match uses it to find the matching
+		// `booking_payment` (via `booking_payment.stripe_payment_intent_id`)
+		// or `ticket_order`. `external_id` here remains the balance
+		// transaction id (`txn_xxx`) because that's what's unique on the
+		// bank-feed side; this column carries the `pi_xxx` separately.
+		psp_intent_external_id: text("psp_intent_external_id"),
 		matched_to_id: uuid("matched_to_id"),
 		matched_to_type: text("matched_to_type"),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

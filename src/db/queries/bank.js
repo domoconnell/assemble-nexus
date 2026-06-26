@@ -4,6 +4,13 @@ import { bank_account } from "@/db/schema/entities/bank_account.js";
 import { bank_transaction } from "@/db/schema/entities/bank_transaction.js";
 import { bank_balance_snapshot } from "@/db/schema/entities/bank_balance_snapshot.js";
 import { tenancy_invoice } from "@/db/schema/entities/tenancy.js";
+import { manual_invoice } from "@/db/schema/entities/manual_invoice.js";
+import { expense } from "@/db/schema/entities/expense.js";
+import { expense_category } from "@/db/schema/entities/expense_category.js";
+import { recurring_cost_item } from "@/db/schema/entities/recurring_cost_item.js";
+import { booking_payment } from "@/db/schema/entities/booking_payment.js";
+import { booking } from "@/db/schema/entities/booking.js";
+import { ticket_order } from "@/db/schema/entities/ticket_order.js";
 
 /**
  * Active bank accounts for a venue, ordered by sort then created.
@@ -210,11 +217,26 @@ export async function getBankTransactionMatchedTo(matchedToId, matchedToType) {
  * Paginated transaction list, newest first by settled_at (falls back to
  * transaction_time for items that haven't settled).
  */
-export async function listBankTransactions(venueId, { limit = 50, offset = 0, accountIds } = {}) {
+export async function listBankTransactions(
+	venueId,
+	{ limit = 50, offset = 0, accountIds, showPspIncome = false } = {},
+) {
 	const filter = accountFilter(accountIds);
-	const where = filter
-		? and(eq(bank_transaction.venue_id, venueId), filter)
-		: eq(bank_transaction.venue_id, venueId);
+	// Hide individual incoming Stripe / Square card charges (and their
+	// synthetic processing-fee siblings) by default — café swipes and
+	// per-event ticket purchases would otherwise drown out the rest of
+	// the ledger. Transfers out of the PSPs to Monzo are direction=OUT
+	// so they're unaffected here, as are matched / non-PSP transactions.
+	const pspNoiseFilter = showPspIncome
+		? null
+		: sql`NOT (${bank_transaction.source} IN ('stripe','square') AND (
+			(${bank_transaction.direction} = 'IN' AND COALESCE(${bank_transaction.category_uid}, '') NOT IN ('payout','transfer'))
+			OR COALESCE(${bank_transaction.category_uid}, '') IN ('stripe_fee','square_fee')
+		))`;
+	const conditions = [eq(bank_transaction.venue_id, venueId)];
+	if (filter) conditions.push(filter);
+	if (pspNoiseFilter) conditions.push(pspNoiseFilter);
+	const where = and(...conditions);
 	const [rows, [{ count }]] = await Promise.all([
 		db
 			.select({
@@ -242,6 +264,40 @@ export async function listBankTransactions(venueId, { limit = 50, offset = 0, ac
 				// match against another entity won't accidentally bind.
 				matched_invoice_reference: tenancy_invoice.reference,
 				matched_invoice_status: tenancy_invoice.status,
+				// Same shape for expense-typed matches: surface the
+				// category name + kind so the pill can read "Marketing"
+				// or "Refund · Marketing".
+				matched_expense_kind: expense.kind,
+				matched_expense_category: expense_category.name,
+				// Recurring-cost-item matches: surface the type + label so the
+				// pill can show "Utilities · Electric".
+				matched_recurring_type: recurring_cost_item.type,
+				matched_recurring_label: recurring_cost_item.label,
+				// Manual-invoice matches: reference + total so the pill shows
+				// "MI-2026-0001" and the click-to-download URL knows which
+				// PDF to fetch.
+				matched_manual_invoice_reference: manual_invoice.reference,
+				matched_manual_invoice_id: manual_invoice.id,
+				// Booking-payment matches: surface the booking reference +
+				// payment label so the pill reads e.g. "BK-2026-0123 · Deposit".
+				// `_deleted` flags propagate so the UI can render a "deleted
+				// booking" pill instead of pretending the entity still exists.
+				matched_booking_payment_label: booking_payment.label,
+				matched_booking_payment_deleted: booking_payment.deletedAt,
+				matched_booking_reference: booking.reference,
+				matched_booking_id: booking.id,
+				matched_booking_deleted: booking.deletedAt,
+				// Ticket-order matches: surface the order ref so the pill reads
+				// the order id; the View link points at the event.
+				matched_ticket_order_reference: ticket_order.reference,
+				matched_ticket_order_event_id: ticket_order.event_id,
+				matched_ticket_order_deleted: ticket_order.deletedAt,
+				// Stripe-orphan matches (matched_to_type='stripe_orphan',
+				// matched_to_id=null): no entity to join to, so we extract the
+				// original BK-/TIX- reference from the stored Stripe metadata
+				// blob (`raw_payload.source.metadata.reference`) so the pill
+				// can show what the receipt was originally for.
+				matched_orphan_reference: sql`${bank_transaction.raw_payload}->'source'->'metadata'->>'reference'`,
 			})
 			.from(bank_transaction)
 			.leftJoin(
@@ -249,6 +305,46 @@ export async function listBankTransactions(venueId, { limit = 50, offset = 0, ac
 				and(
 					eq(bank_transaction.matched_to_id, tenancy_invoice.id),
 					eq(bank_transaction.matched_to_type, "tenancy_invoice"),
+				),
+			)
+			.leftJoin(
+				expense,
+				and(
+					eq(bank_transaction.matched_to_id, expense.id),
+					eq(bank_transaction.matched_to_type, "expense"),
+				),
+			)
+			.leftJoin(
+				expense_category,
+				eq(expense_category.id, expense.expense_category_id),
+			)
+			.leftJoin(
+				recurring_cost_item,
+				and(
+					eq(bank_transaction.matched_to_id, recurring_cost_item.id),
+					eq(bank_transaction.matched_to_type, "recurring_cost_item"),
+				),
+			)
+			.leftJoin(
+				manual_invoice,
+				and(
+					eq(bank_transaction.matched_to_id, manual_invoice.id),
+					eq(bank_transaction.matched_to_type, "manual_invoice"),
+				),
+			)
+			.leftJoin(
+				booking_payment,
+				and(
+					eq(bank_transaction.matched_to_id, booking_payment.id),
+					eq(bank_transaction.matched_to_type, "booking_payment"),
+				),
+			)
+			.leftJoin(booking, eq(booking.id, booking_payment.booking_id))
+			.leftJoin(
+				ticket_order,
+				and(
+					eq(bank_transaction.matched_to_id, ticket_order.id),
+					eq(bank_transaction.matched_to_type, "ticket_order"),
 				),
 			)
 			.where(where)

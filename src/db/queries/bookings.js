@@ -45,6 +45,12 @@ export async function getBookingByReference(reference) {
 			subtotal_cents: booking.subtotal_cents,
 			vat_cents: booking.vat_cents,
 			total_cents: booking.total_cents,
+			original_subtotal_cents: booking.original_subtotal_cents,
+			original_vat_cents: booking.original_vat_cents,
+			original_total_cents: booking.original_total_cents,
+			override_reason: booking.override_reason,
+			override_applied_at: booking.override_applied_at,
+			override_by_user_id: booking.override_by_user_id,
 			discount_id: booking.discount_id,
 			discount_label_snapshot: booking.discount_label_snapshot,
 			discount_percent_x100_snapshot: booking.discount_percent_x100_snapshot,
@@ -86,6 +92,12 @@ export async function getBookingById(id) {
 			subtotal_cents: booking.subtotal_cents,
 			vat_cents: booking.vat_cents,
 			total_cents: booking.total_cents,
+			original_subtotal_cents: booking.original_subtotal_cents,
+			original_vat_cents: booking.original_vat_cents,
+			original_total_cents: booking.original_total_cents,
+			override_reason: booking.override_reason,
+			override_applied_at: booking.override_applied_at,
+			override_by_user_id: booking.override_by_user_id,
 			discount_id: booking.discount_id,
 			discount_label_snapshot: booking.discount_label_snapshot,
 			discount_percent_x100_snapshot: booking.discount_percent_x100_snapshot,
@@ -189,6 +201,8 @@ export async function listBookingsForAdmin(venueId, { tab = "all" } = {}) {
 		conditions.push(inArray(booking.status, ["rejected", "cancelled", "completed"]));
 	}
 
+	const { organisation } = await import("@/db/schema/entities/organisation.js");
+	const { contact } = await import("@/db/schema/entities/contact.js");
 	const rows = await db
 		.select({
 			id: booking.id,
@@ -197,13 +211,26 @@ export async function listBookingsForAdmin(venueId, { tab = "all" } = {}) {
 			total_cents: booking.total_cents,
 			submitted_at: booking.submitted_at,
 			ticketing_enabled: booking.ticketing_enabled,
+			// Legacy booking-time snapshot of the hirer. Stays as-is once
+			// the booking is linked to a CRM org — admins keep the CRM
+			// contact current, not this row.
 			customer_first_name: customer.first_name,
 			customer_last_name: customer.last_name,
 			customer_email: customer.email,
 			customer_organisation: customer.organisation,
+			// Linked CRM organisation + its primary contact — preferred
+			// display when set since these track the live records as the
+			// admin edits the CRM. Null on bookings that were never
+			// linked to a CRM org.
+			linked_organisation_name: organisation.name,
+			linked_contact_first_name: contact.first_name,
+			linked_contact_last_name: contact.last_name,
+			linked_contact_email: contact.email,
 		})
 		.from(booking)
 		.innerJoin(customer, eq(booking.customer_id, customer.id))
+		.leftJoin(organisation, eq(organisation.id, booking.organisation_id))
+		.leftJoin(contact, eq(contact.id, organisation.primary_contact_id))
 		.where(and(...conditions))
 		.orderBy(desc(booking.submitted_at));
 	return rows;

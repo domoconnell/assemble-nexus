@@ -343,3 +343,56 @@ export async function sendBookingPaymentLinkEmail({ booking, customer, payment }
 		pay_url,
 	});
 }
+
+/**
+ * Send an invoice PDF to the customer for either a single scheduled
+ * payment (deposit, installment, etc.) or the full booking total.
+ *
+ *   - `payment` provided  → scoped to that booking_payment row, attaches
+ *                            the per-payment PDF, body links to the
+ *                            payment's pay URL.
+ *   - `payment` null      → full-booking invoice, no per-payment pay URL.
+ *
+ * Caller is responsible for rendering the PDF buffer (passed in via
+ * `pdfBuffer`) so we don't double-render it here.
+ */
+export async function sendBookingInvoiceEmail({ booking, customer, payment = null, pdfBuffer }) {
+	if (!customer?.email) return;
+	const venue_name = await venueNameFor(booking.venue_id);
+	const base = (process.env.BASE_URL || "").replace(/\/$/, "");
+
+	const isPaymentInvoice = !!payment;
+	const label = isPaymentInvoice ? payment.label : "Full payment";
+	const amountCents = isPaymentInvoice ? payment.amount_cents : booking.total_cents;
+	const pay_url = isPaymentInvoice
+		? `${base}/booking/${booking.reference}/pay-installment/${payment.pay_token}`
+		: "";
+
+	const attachments = pdfBuffer
+		? [
+				{
+					content: pdfBuffer.toString("base64"),
+					filename: isPaymentInvoice
+						? `invoice-${booking.reference}-${label.replace(/\s+/g, "-").toLowerCase()}.pdf`
+						: `invoice-${booking.reference}.pdf`,
+					type: "application/pdf",
+					disposition: "attachment",
+				},
+			]
+		: undefined;
+
+	await safeSend(
+		"booking-payment-invoice",
+		customer.email,
+		{
+			venue_name,
+			first_name: customer.first_name ?? "",
+			reference: booking.reference,
+			label,
+			amount: gbp(amountCents),
+			pay_url,
+			has_pay_url: !!pay_url,
+		},
+		attachments ? { attachments } : undefined,
+	);
+}

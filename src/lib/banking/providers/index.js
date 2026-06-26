@@ -2,12 +2,14 @@ import { starlingProvider } from "./starling.js";
 import { revolutProvider } from "./revolut.js";
 import { monzoProvider } from "./monzo.js";
 import { stripeBankProvider } from "./stripe.js";
+import { squareBankProvider } from "./square.js";
 
 export const PROVIDERS = {
 	starling: starlingProvider,
 	revolut: revolutProvider,
 	monzo: monzoProvider,
 	stripe: stripeBankProvider,
+	square: squareBankProvider,
 };
 
 export const PROVIDER_LIST = Object.values(PROVIDERS).map((p) => ({

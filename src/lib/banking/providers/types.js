@@ -63,4 +63,4 @@
  *   call when the saved token is close to expiry. Plugins that use
  *   long-lived tokens (Starling PAT) can omit this.
  */
-export const BANK_PROVIDER_KEYS = ["starling", "revolut", "monzo", "stripe"];
+export const BANK_PROVIDER_KEYS = ["starling", "revolut", "monzo", "stripe", "square"];

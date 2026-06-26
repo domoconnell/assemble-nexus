@@ -101,14 +101,14 @@ export default async function AdminBookingsPage({ searchParams }) {
 									</td>
 									<td className="px-4 py-3">
 										<div>
-											{r.customer_first_name} {r.customer_last_name}
-											{r.customer_organisation && (
+											{r.linked_contact_first_name ?? r.customer_first_name} {r.linked_contact_last_name ?? r.customer_last_name}
+											{(r.linked_organisation_name || r.customer_organisation) && (
 												<span className="text-muted-foreground">
-													{" "}· {r.customer_organisation}
+													{" "}· {r.linked_organisation_name ?? r.customer_organisation}
 												</span>
 											)}
 										</div>
-										<div className="text-xs text-muted-foreground">{r.customer_email}</div>
+										<div className="text-xs text-muted-foreground">{r.linked_contact_email ?? r.customer_email}</div>
 									</td>
 									<td className="px-4 py-3 text-muted-foreground">
 										{r.submitted_at ? dateFmt.format(new Date(r.submitted_at)) : "-"}

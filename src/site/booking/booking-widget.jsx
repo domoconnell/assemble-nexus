@@ -406,7 +406,12 @@ export default function BookingWidget({
 		};
 	}, [apiSegments, apiFacilitySelections, discountId, ticketingEnabled, room?.allow_ticketed_events, roomId]);
 
-	// Per-step "can advance" rule
+	// Per-step "can advance" rule.
+	// Admins can push through conflicts (the warning still shows, but it
+	// doesn't block) because they often need to post historic bookings
+	// against rooms that were "in use" by something we already cancelled.
+	const isAdmin = mode === "admin";
+	const conflictBlocks = (row) => !isAdmin && row.conflict;
 	const canAdvance = (() => {
 		switch (currentStep?.key) {
 			case "room":
@@ -415,19 +420,19 @@ export default function BookingWidget({
 				return (
 					eventRows.length > 0 &&
 					eventRows.every(isRowComplete) &&
-					eventRows.every((r) => !r.conflict)
+					eventRows.every((r) => !conflictBlocks(r))
 				);
 			case "setup":
-				return setupRows.every(isRowComplete) && setupRows.every((r) => !r.conflict);
+				return setupRows.every(isRowComplete) && setupRows.every((r) => !conflictBlocks(r));
 			case "rehearsal":
 				return (
 					rehearsalRows.every(isRowComplete) &&
-					rehearsalRows.every((r) => !r.conflict)
+					rehearsalRows.every((r) => !conflictBlocks(r))
 				);
 			case "teardown":
 				return (
 					teardownRows.every(isRowComplete) &&
-					teardownRows.every((r) => !r.conflict)
+					teardownRows.every((r) => !conflictBlocks(r))
 				);
 			case "facilities":
 				return true;
@@ -561,6 +566,7 @@ export default function BookingWidget({
 							onLayoutChange={setLayoutId}
 							required
 							roomId={roomId}
+							adminMode={isAdmin}
 						/>
 						{canRepeat && (
 							<RecurrenceBlock
@@ -579,6 +585,7 @@ export default function BookingWidget({
 						onChange={setSetupRows}
 						addLabel="+ Add a setup day"
 						roomId={roomId}
+						adminMode={isAdmin}
 					/>
 				)}
 				{currentStep?.key === "rehearsal" && (
@@ -589,6 +596,7 @@ export default function BookingWidget({
 						onChange={setRehearsalRows}
 						addLabel="+ Add a rehearsal day"
 						roomId={roomId}
+						adminMode={isAdmin}
 					/>
 				)}
 				{currentStep?.key === "teardown" && (
@@ -599,6 +607,7 @@ export default function BookingWidget({
 						onChange={setTeardownRows}
 						addLabel="+ Add a teardown day"
 						roomId={roomId}
+						adminMode={isAdmin}
 					/>
 				)}
 				{currentStep?.key === "facilities" && (
@@ -854,7 +863,7 @@ function RoomStep({ rooms, roomId, onChange }) {
 	);
 }
 
-function DateRow({ row, onChange, onRemove, canRemove, roomId, onConflictChange }) {
+function DateRow({ row, onChange, onRemove, canRemove, roomId, onConflictChange, adminMode = false }) {
 	function set(patch) {
 		onChange({ ...row, ...patch });
 	}
@@ -926,6 +935,7 @@ function DateRow({ row, onChange, onRemove, canRemove, roomId, onConflictChange 
 						value={row.date}
 						onChange={(v) => set({ date: v })}
 						placeholder="Pick a date"
+						allowPast={adminMode}
 					/>
 				</div>
 				<div className="space-y-1.5">
@@ -948,13 +958,17 @@ function DateRow({ row, onChange, onRemove, canRemove, roomId, onConflictChange 
 				<p className="text-xs text-muted-foreground">Checking availability…</p>
 			)}
 			{!checking && conflicts.length > 0 && (
-				<ConflictWarning conflicts={conflicts} bufferMinutes={availability.buffer_minutes ?? 0} />
+				<ConflictWarning
+					conflicts={conflicts}
+					bufferMinutes={availability.buffer_minutes ?? 0}
+					adminMode={adminMode}
+				/>
 			)}
 		</div>
 	);
 }
 
-function ConflictWarning({ conflicts, bufferMinutes }) {
+function ConflictWarning({ conflicts, bufferMinutes, adminMode = false }) {
 	const first = conflicts[0];
 	// Show the *effective* unavailable window - the booked/event time
 	// plus the room's required buffer either side.
@@ -970,13 +984,26 @@ function ConflictWarning({ conflicts, bufferMinutes }) {
 			: first.kind === "blockout"
 				? "The room isn't available then."
 				: "Time conflicts with an existing booking.";
+	// In admin mode the conflict is informational rather than blocking
+	// (admins use this to back-fill historic bookings). Render the same
+	// content but in an amber "heads-up" tone so it's obviously different
+	// from the public hard-stop variant.
+	const tone = adminMode
+		? "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-300"
+		: "border-destructive/30 bg-destructive/5 text-destructive";
+	const moreTone = adminMode ? "text-amber-700/80 dark:text-amber-300/80" : "text-destructive/80";
 	return (
-		<div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-			<div className="font-medium">{heading}</div>
+		<div className={`rounded-md border px-3 py-2 text-xs ${tone}`}>
+			<div className="font-medium">
+				{adminMode ? `Heads up: ${heading.toLowerCase()}` : heading}
+			</div>
 			<div className="mt-0.5">
 				Room in use {dateStr} · {startStr}-{endStr}
 				{conflicts.length > 1 && (
-					<span className="text-destructive/80"> · +{conflicts.length - 1} more</span>
+					<span className={moreTone}> · +{conflicts.length - 1} more</span>
+				)}
+				{adminMode && (
+					<span className={moreTone}> · admins can save through this</span>
 				)}
 			</div>
 		</div>
@@ -994,6 +1021,7 @@ function DateRowsStep({
 	onLayoutChange,
 	required = false,
 	roomId,
+	adminMode = false,
 }) {
 	function update(i, next) {
 		onChange(rows.map((r, j) => (j === i ? next : r)));
@@ -1064,6 +1092,7 @@ function DateRowsStep({
 						onRemove={() => remove(i)}
 						canRemove={rows.length > 1 || !required}
 						roomId={roomId}
+						adminMode={adminMode}
 						onConflictChange={(c) =>
 							onChange((prev) =>
 								prev.map((pr, j) => (j === i ? { ...pr, conflict: c } : pr)),
@@ -1289,7 +1318,7 @@ function getOrdinal(n) {
 	return s[(v - 20) % 10] ?? s[v] ?? s[0];
 }
 
-function ConditionalDateStep({ title, subtitle, rows, onChange, addLabel, roomId }) {
+function ConditionalDateStep({ title, subtitle, rows, onChange, addLabel, roomId, adminMode = false }) {
 	function update(i, next) {
 		onChange(rows.map((r, j) => (j === i ? next : r)));
 	}
@@ -1318,6 +1347,7 @@ function ConditionalDateStep({ title, subtitle, rows, onChange, addLabel, roomId
 							onRemove={() => onChange(rows.filter((_, j) => j !== i))}
 							canRemove
 							roomId={roomId}
+							adminMode={adminMode}
 							onConflictChange={(c) =>
 								onChange((prev) =>
 									prev.map((pr, j) => (j === i ? { ...pr, conflict: c } : pr)),

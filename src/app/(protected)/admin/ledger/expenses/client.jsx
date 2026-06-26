@@ -79,8 +79,15 @@ export default function ExpensesClient({ ym, monthLabel, categories, expenses, e
 	const [editing, setEditing] = useState(null);
 	const [confirmId, setConfirmId] = useState(null);
 
+	// Net of refunds: a row with kind='refund' stores a positive amount
+	// but represents money coming back in, so it offsets spend. Mirrors
+	// the SQL CASE WHEN we apply to reporting aggregates.
 	const total = useMemo(
-		() => expenses.reduce((s, e) => s + (e.amount_cents ?? 0), 0),
+		() =>
+			expenses.reduce(
+				(s, e) => s + (e.kind === "refund" ? -1 : 1) * (e.amount_cents ?? 0),
+				0,
+			),
 		[expenses],
 	);
 
@@ -184,11 +191,19 @@ export default function ExpensesClient({ ym, monthLabel, categories, expenses, e
 						<tbody>
 							{expenses.map((row) => {
 								const linkedEvent = row.linked_event_id ? eventsById.get(row.linked_event_id) : null;
+								const isRefund = row.kind === "refund";
 								return (
 									<tr key={row.id} className="border-t border-foreground/5">
 										<td className="px-4 py-2 whitespace-nowrap">{formatDate(row.date)}</td>
 										<td className="px-4 py-2">
-											<div>{row.description}</div>
+											<div className="flex items-baseline gap-2 flex-wrap">
+												<span>{row.description}</span>
+												{isRefund && (
+													<span className="text-[10px] uppercase tracking-[0.18em] rounded-full border border-primary/30 bg-primary/10 text-primary px-2 py-0.5">
+														Refund
+													</span>
+												)}
+											</div>
 											{linkedEvent && (
 												<div className="text-xs text-muted-foreground">
 													Event: {linkedEvent.title}
@@ -197,7 +212,9 @@ export default function ExpensesClient({ ym, monthLabel, categories, expenses, e
 										</td>
 										<td className="px-4 py-2 text-muted-foreground">{row.category_name ?? "-"}</td>
 										<td className="px-4 py-2 text-muted-foreground">{row.supplier_name ?? "-"}</td>
-										<td className="px-4 py-2 text-right font-mono whitespace-nowrap">{fmt(row.amount_cents)}</td>
+										<td className={`px-4 py-2 text-right font-mono whitespace-nowrap ${isRefund ? "text-primary" : ""}`}>
+											{isRefund ? `-${fmt(row.amount_cents)}` : fmt(row.amount_cents)}
+										</td>
 										<td className="px-2 py-2 whitespace-nowrap text-right">
 											<Button variant="ghost" size="sm" onClick={() => openEdit(row)}>
 												Edit

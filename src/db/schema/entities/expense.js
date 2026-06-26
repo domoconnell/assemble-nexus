@@ -11,6 +11,12 @@ export const expense = pgTable(
 		id: uuid("id").defaultRandom().primaryKey(),
 		venue_id: uuid("venue_id").notNull().references(() => venue.id, { onDelete: "cascade" }),
 		expense_category_id: uuid("expense_category_id").references(() => expense_category.id, { onDelete: "set null" }),
+		// `spend` = money out (the usual case). `refund` = money RECEIVED back
+		// from a supplier / category (e.g. Olilo crediting us). We store the
+		// amount as a positive value in both cases and let `kind` drive the
+		// sign in reports — Net spend = SUM(CASE WHEN kind='refund' THEN
+		// -amount_cents ELSE amount_cents END).
+		kind: text("kind").notNull().default("spend"),
 		date: date("date", { mode: "string" }).notNull(),
 		description: text("description").notNull(),
 		amount_cents: integer("amount_cents").notNull(),

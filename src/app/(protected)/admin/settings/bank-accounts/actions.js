@@ -19,6 +19,7 @@ import {
 	listMonzoAccounts,
 } from "@/lib/banking/providers/monzo.js";
 import { stripeBankProvider } from "@/lib/banking/providers/stripe.js";
+import { squareBankProvider } from "@/lib/banking/providers/square.js";
 import { getStripeSettings } from "@/db/queries/settings.js";
 import { syncBankAccount } from "@/lib/banking/sync.js";
 
@@ -544,6 +545,84 @@ export async function hasStripePspKeyAction() {
 	const venue = await requireCurrentVenue();
 	const psp = await getStripeSettings(venue.id);
 	return { ok: true, has_key: !!psp?.secret_key, env: psp?.environment ?? null };
+}
+
+// ── Square ─────────────────────────────────────────────────────────────
+
+const SquareBankSaveSchema = z.object({
+	id: z.string().uuid().optional().nullable(),
+	label: z.string().min(1).max(120),
+	// Optional on edit (keep the existing token); required on create.
+	access_token: z.string().min(1).max(2000).optional().nullable(),
+});
+
+/**
+ * Single-step Square setup. Pastes an access token, looks up the merchant's
+ * first ACTIVE location, persists everything. The location_id is required
+ * for the /v2/payouts endpoint and is cached on the row so we don't have
+ * to look it up on every sync.
+ */
+export async function saveSquareBankAccountAction(input) {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const parsed = SquareBankSaveSchema.parse(input);
+
+	let existing = null;
+	if (parsed.id) existing = await loadAccount(parsed.id, venue.id);
+	const existingCreds = existing?.credentials ?? {};
+
+	const access_token = parsed.access_token?.trim() || existingCreds.access_token || null;
+	if (!access_token) {
+		throw new Error("Paste a Square access token first.");
+	}
+
+	// Probe the token + grab the first ACTIVE location so the credentials
+	// carry a location_id (needed for /payouts) and we can set
+	// external_account_uid for transfer dedup.
+	const probe = await squareBankProvider.probe({ credentials: { access_token } });
+	if (!probe.ok) {
+		throw new Error(probe.error || "Square rejected the access token.");
+	}
+	const location_id = probe.external_account_uid;
+
+	const credentials = { access_token, location_id };
+	const external_account_uid = location_id ?? "square_balance";
+
+	if (existing) {
+		await db
+			.update(bank_account)
+			.set({
+				label: parsed.label,
+				credentials,
+				external_account_uid,
+				currency: "GBP",
+			})
+			.where(eq(bank_account.id, existing.id));
+		revalidate();
+		return { ok: true, id: existing.id };
+	}
+
+	const [inserted] = await db
+		.insert(bank_account)
+		.values({
+			venue_id: venue.id,
+			provider: "square",
+			label: parsed.label,
+			external_account_uid,
+			credentials,
+			currency: "GBP",
+			sort_order: Date.now() % 1000,
+		})
+		.returning();
+	revalidate();
+	return { ok: true, id: inserted.id };
+}
+
+export async function probeSquareBankAccountAction(input) {
+	await gate();
+	const venue = await requireCurrentVenue();
+	const account = await loadAccount(input.id, venue.id);
+	return squareBankProvider.probe(account);
 }
 
 // ── Generic ────────────────────────────────────────────────────────────

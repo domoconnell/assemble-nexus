@@ -39,6 +39,57 @@ function currentAmount(history) {
 	return history[0]?.monthly_amount_cents ?? 0;
 }
 
+/**
+ * Render the scheduled monthly cost next to what we've actually paid
+ * out (sum of bank transactions linked to this recurring item this
+ * month). Two visual modes:
+ *
+ *   - `big`: type-section header. Larger scheduled total, actual underneath.
+ *   - default: per-item row. Compact stacked layout matching the
+ *              previous single-figure look.
+ *
+ * Variance only shows once there's at least one bank transaction —
+ * showing "-£120.00 (this month)" against zero actuals would mislead.
+ * Positive variance = saved against schedule (green); negative = over
+ * (amber). Zero shows the neutral "on schedule" line.
+ */
+function ScheduledVsActual({ scheduledCents, actualCents, big = false }) {
+	const variance = (scheduledCents ?? 0) - (actualCents ?? 0);
+	const hasActual = (actualCents ?? 0) !== 0;
+	let varianceLabel = "";
+	let varianceTone = "text-muted-foreground";
+	if (hasActual) {
+		if (variance > 0) {
+			varianceLabel = `${fmt(variance)} under`;
+			varianceTone = "text-primary";
+		} else if (variance < 0) {
+			varianceLabel = `${fmt(Math.abs(variance))} over`;
+			varianceTone = "text-amber-600 dark:text-amber-400";
+		} else {
+			varianceLabel = "on schedule";
+		}
+	}
+	return (
+		<div className={`text-right ${big ? "" : "shrink-0"}`}>
+			<div className={`font-mono tabular-nums ${big ? "font-display text-xl" : ""}`}>
+				{fmt(scheduledCents)}
+			</div>
+			<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+				scheduled
+			</div>
+			<div className={`font-mono tabular-nums mt-1 ${big ? "text-sm" : "text-xs"}`}>
+				{hasActual ? fmt(actualCents) : "—"}
+			</div>
+			<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+				actual this month
+			</div>
+			{varianceLabel && (
+				<div className={`text-[10px] mt-0.5 ${varianceTone}`}>{varianceLabel}</div>
+			)}
+		</div>
+	);
+}
+
 export default function RecurringCostsClient({ sections }) {
 	return (
 		<div className="space-y-8">
@@ -60,12 +111,11 @@ function TypeSection({ section }) {
 						{section.description}
 					</p>
 				</div>
-				<div className="text-right">
-					<div className="font-display text-xl tabular-nums">{fmt(section.current_total)}</div>
-					<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-						current monthly total
-					</div>
-				</div>
+				<ScheduledVsActual
+					scheduledCents={section.current_total}
+					actualCents={section.actual_total}
+					big
+				/>
 			</div>
 
 			{section.items.length === 0 ? (
@@ -167,10 +217,13 @@ function ItemRow({ item, type }) {
 						{item.history.length} entr{item.history.length === 1 ? "y" : "ies"} in history
 					</div>
 				</div>
-				<div className="text-right shrink-0">
-					<div className="font-mono tabular-nums">{fmt(current)}</div>
+				<div className="text-right shrink-0 space-y-1">
+					<ScheduledVsActual
+						scheduledCents={current}
+						actualCents={item.actual_cents ?? 0}
+					/>
 					<div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-						from {formatYmdMonth(item.history[0]?.effective_from)}
+						scheduled from {formatYmdMonth(item.history[0]?.effective_from)}
 					</div>
 				</div>
 			</div>

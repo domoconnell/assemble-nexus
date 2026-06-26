@@ -75,8 +75,8 @@ export async function getVatReturnRollup(venueId, { fromDate, toDate }) {
 			),
 		db
 			.select({
-				gross_cents: sql`COALESCE(SUM(${expense.amount_cents}), 0)::bigint`.as("gross"),
-				vat_cents: sql`COALESCE(SUM(${expense.vat_cents}), 0)::bigint`.as("vat"),
+				gross_cents: sql`COALESCE(SUM(CASE WHEN ${expense.kind} = 'refund' THEN -${expense.amount_cents} ELSE ${expense.amount_cents} END), 0)::bigint`.as("gross"),
+				vat_cents: sql`COALESCE(SUM(CASE WHEN ${expense.kind} = 'refund' THEN -${expense.vat_cents} ELSE ${expense.vat_cents} END), 0)::bigint`.as("vat"),
 				count: sql`COUNT(*)::int`.as("count"),
 			})
 			.from(expense)

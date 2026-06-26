@@ -27,6 +27,7 @@ import {
 	STRIPE_MIN_CENTS,
 } from "@/lib/bookings/instalments.js";
 import { getActiveBookingAgreementSnapshot } from "@/lib/bookings/agreement.js";
+import { rollUpBookingPaidAmounts } from "@/lib/bookings/payment-rollup.js";
 import { expandPattern } from "@/lib/booking/recurrence.js";
 import { booking_segment } from "@/db/schema/entities/booking_segment.js";
 import { requireServerSession } from "@/utils/auth/server-guard.js";
@@ -372,43 +373,177 @@ export async function assignBookingOrganisationAction(input) {
 const OverridePriceSchema = z.object({
 	booking_id: z.string().uuid(),
 	total_pounds: z.coerce.number().min(0),
+	reason: z.string().max(500).optional().nullable(),
+});
+
+const ClearOverrideSchema = z.object({
+	booking_id: z.string().uuid(),
 });
 
 /**
  * Override the booking's total. Recomputes subtotal + VAT preserving the
  * original VAT proportion so downstream reports still round correctly.
- * Only valid while the booking is pending — once approved/confirmed the
- * customer has been quoted a price.
+ *
+ * The pre-override price is snapshotted into `original_subtotal_cents` /
+ * `original_vat_cents` / `original_total_cents` the FIRST time we run
+ * (subsequent override edits leave those untouched), so the booking
+ * detail page can always show "rack price: £X · effective: £Y · saving:
+ * £Z" no matter how many times the admin tweaks the override. Clearing
+ * the override (`clearBookingOverrideAction`) restores those values and
+ * blanks the snapshots back out.
+ *
+ * Available at any open status (pending / approved / confirmed) so an
+ * invoice can still be re-priced when an admin agrees a reduction after
+ * the fact. Locked once the booking is in a terminal state.
  */
 export async function overrideBookingTotalAction(input) {
-	await gateAdmin();
+	const session = await gateAdmin();
 	const parsed = OverridePriceSchema.parse(input);
 	const b = await getBookingById(parsed.booking_id);
 	if (!b) throw new Error("Booking not found.");
-	if (b.status !== "pending") {
-		throw new Error("Price can only be overridden while the booking is pending.");
+	if (b.status === "rejected" || b.status === "cancelled" || b.status === "completed") {
+		throw new Error(`Can't override a ${b.status} booking.`);
 	}
 	const newTotal = Math.round(parsed.total_pounds * 100);
 	const prevTotal = b.total_cents ?? 0;
 	const prevVat = b.vat_cents ?? 0;
+	const prevSubtotal = b.subtotal_cents ?? 0;
 	// Apportion VAT by the original VAT-to-total ratio. If the original
 	// had no VAT (or no total), keep VAT at zero.
 	const vatRatio = prevTotal > 0 ? prevVat / prevTotal : 0;
 	const newVat = Math.round(newTotal * vatRatio);
 	const newSubtotal = newTotal - newVat;
+
+	// Snapshot the originals only the FIRST time we override — subsequent
+	// edits to the override leave the rack-rate reference untouched so
+	// the UI can always show "vs. standard rate".
+	const hasExistingSnapshot = b.original_total_cents != null;
+	const originalUpdate = hasExistingSnapshot
+		? {}
+		: {
+				original_subtotal_cents: prevSubtotal,
+				original_vat_cents: prevVat,
+				original_total_cents: prevTotal,
+			};
+
 	const updated = await db
 		.update(booking)
 		.set({
+			...originalUpdate,
 			total_cents: newTotal,
 			vat_cents: newVat,
 			subtotal_cents: newSubtotal,
+			override_reason: parsed.reason?.trim() || null,
+			override_applied_at: new Date(),
+			override_by_user_id: session.user?.id ?? null,
 		})
 		.where(eq(booking.id, parsed.booking_id))
 		.returning();
+
+	// Rebalance any unpaid payment splits so the schedule still adds up
+	// to the new total. Scale each unpaid row by (new_outstanding /
+	// old_outstanding) and absorb rounding into the last row. Paid rows
+	// are sacred and never touched. Deposit_required_cents is also
+	// rescaled proportionally for the legacy field. See
+	// `rebalanceUnpaidPaymentsForNewTotal` below.
+	await rebalanceUnpaidPaymentsForNewTotal(b, newTotal);
+
 	revalidatePath(`/admin/bookings/${parsed.booking_id}`);
 	revalidatePath("/admin/bookings");
 	if (updated[0]?.reference) revalidatePath(`/booking/${updated[0].reference}`);
 	return { ok: true, total_cents: newTotal };
+}
+
+/**
+ * After the booking total changes (override applied or cleared), scale
+ * each unpaid `booking_payment` row proportionally so the unpaid rows
+ * still sum to the new outstanding balance. Paid rows are not touched.
+ * The last unpaid row absorbs any rounding drift so the sum is exact.
+ *
+ * If there are no unpaid rows (everything's paid or none ever set up),
+ * we only update `deposit_required_cents` proportionally so reports
+ * that still look at the legacy field stay in sync.
+ */
+async function rebalanceUnpaidPaymentsForNewTotal(prevBooking, newTotal) {
+	const payments = await listBookingPayments(prevBooking.id);
+	const paid = payments.filter((p) => p.paid_at);
+	const unpaid = payments.filter((p) => !p.paid_at);
+	const paidSum = paid.reduce((s, p) => s + (p.amount_cents ?? 0), 0);
+	const newOutstanding = Math.max(0, newTotal - paidSum);
+
+	// Rescale the legacy deposit_required_cents in proportion to the
+	// total change. e.g. 50% deposit on £400 → 50% deposit on £200.
+	const prevTotal = prevBooking.total_cents ?? 0;
+	if (prevTotal > 0 && (prevBooking.deposit_required_cents ?? 0) > 0) {
+		const scaledDeposit = Math.round(
+			((prevBooking.deposit_required_cents ?? 0) * newTotal) / prevTotal,
+		);
+		await db
+			.update(booking)
+			.set({ deposit_required_cents: scaledDeposit })
+			.where(eq(booking.id, prevBooking.id));
+	}
+
+	if (unpaid.length === 0) return;
+
+	const oldUnpaidSum = unpaid.reduce((s, p) => s + (p.amount_cents ?? 0), 0);
+	if (oldUnpaidSum === 0) {
+		// No unpaid amount to rescale (everything's paid). Nothing to do
+		// — the row count is fine, the amounts are zero, leave them.
+		return;
+	}
+
+	// Scale every unpaid row by the same ratio. Absorb rounding into the
+	// final row so the unpaid sum is exactly newOutstanding.
+	let runningSum = 0;
+	const newAmounts = unpaid.map((p, i) => {
+		const isLast = i === unpaid.length - 1;
+		if (isLast) return newOutstanding - runningSum;
+		const scaled = Math.round((p.amount_cents * newOutstanding) / oldUnpaidSum);
+		runningSum += scaled;
+		return scaled;
+	});
+
+	for (let i = 0; i < unpaid.length; i++) {
+		await updateBookingPayment(unpaid[i].id, { amount_cents: newAmounts[i] });
+	}
+}
+
+/**
+ * Remove an override and restore the snapshotted original price. No-op
+ * on bookings that were never overridden.
+ */
+export async function clearBookingOverrideAction(input) {
+	await gateAdmin();
+	const parsed = ClearOverrideSchema.parse(input);
+	const b = await getBookingById(parsed.booking_id);
+	if (!b) throw new Error("Booking not found.");
+	if (b.original_total_cents == null) {
+		return { ok: true, already: true };
+	}
+	const restoredTotal = b.original_total_cents ?? 0;
+	const updated = await db
+		.update(booking)
+		.set({
+			subtotal_cents: b.original_subtotal_cents ?? 0,
+			vat_cents: b.original_vat_cents ?? 0,
+			total_cents: restoredTotal,
+			original_subtotal_cents: null,
+			original_vat_cents: null,
+			original_total_cents: null,
+			override_reason: null,
+			override_applied_at: null,
+			override_by_user_id: null,
+		})
+		.where(eq(booking.id, parsed.booking_id))
+		.returning();
+	// Rescale unpaid splits + the legacy deposit_required_cents back to
+	// match the restored total.
+	await rebalanceUnpaidPaymentsForNewTotal(b, restoredTotal);
+	revalidatePath(`/admin/bookings/${parsed.booking_id}`);
+	revalidatePath("/admin/bookings");
+	if (updated[0]?.reference) revalidatePath(`/booking/${updated[0].reference}`);
+	return { ok: true };
 }
 
 export async function saveBookingInternalNotesAction(input) {
@@ -824,39 +959,162 @@ export async function sendBookingPaymentLinkAction(input) {
 	return { ok: true };
 }
 
+const SendInvoiceSchema = z.object({
+	booking_id: z.string().uuid(),
+	// Optional — when omitted the email goes out for the FULL booking
+	// total instead of a single scheduled payment.
+	booking_payment_id: z.string().uuid().optional().nullable(),
+});
+
 /**
- * Sum every paid instalment on a booking and roll it into the legacy
- * `deposit_paid_cents` field so existing widgets / CRM totals keep
- * working. `balance_paid_cents` stays at zero — once we're on
- * instalments the deposit/balance split is just a roll-up. Also flips
- * the booking to `confirmed` once the first instalment lands and
- * `completed` once everything is paid.
+ * Build the booking invoice PDF (per-payment or full-booking) and email
+ * it to the customer. Doesn't transition any status — purely a delivery
+ * action. Marks the payment row's `sent_at` when scoped to a single
+ * payment so the row gets the "sent" pill.
  */
-async function rollUpBookingPaidAmounts(bookingId) {
-	const payments = await listBookingPayments(bookingId);
-	const paidSum = payments
-		.filter((p) => p.paid_at)
-		.reduce((s, p) => s + (p.amount_cents ?? 0), 0);
-	const [b] = await db
-		.select()
-		.from(booking)
-		.where(eq(booking.id, bookingId))
-		.limit(1);
-	if (!b) return;
-	const patch = {
-		deposit_paid_cents: paidSum,
-		balance_paid_cents: 0,
-	};
-	const total = b.total_cents ?? 0;
-	const now = new Date();
-	if (paidSum > 0 && b.status === "approved") {
-		patch.status = "confirmed";
-		patch.confirmed_at = now;
+export async function sendBookingInvoiceAction(input) {
+	await gateAdmin();
+	const parsed = SendInvoiceSchema.parse(input);
+	const b = await getBookingById(parsed.booking_id);
+	if (!b) throw new Error("Booking not found.");
+
+	let payment = null;
+	if (parsed.booking_payment_id) {
+		const [row] = await db
+			.select()
+			.from(booking_payment)
+			.where(eq(booking_payment.id, parsed.booking_payment_id))
+			.limit(1);
+		if (!row || row.booking_id !== b.id) {
+			throw new Error("Payment not found.");
+		}
+		payment = row;
 	}
-	if (paidSum >= total && total > 0 && b.status !== "completed") {
-		patch.status = "completed";
-		patch.completed_at = now;
-		patch.balance_paid_at = now;
+
+	const [
+		segments,
+		payments,
+		{ listBookingFacilitySelections },
+		{ getVenueById },
+		{ getOrganisationWithContact },
+	] = await Promise.all([
+		listBookingSegments(b.id),
+		listBookingPayments(b.id),
+		import("@/db/queries/bookings.js"),
+		import("@/db/queries/venue.js"),
+		import("@/db/queries/crm.js"),
+	]);
+	const [facilities, venueRow, organisation] = await Promise.all([
+		listBookingFacilitySelections(b.id),
+		getVenueById(b.venue_id),
+		b.organisation_id ? getOrganisationWithContact(b.organisation_id) : null,
+	]);
+
+	// Prefer the linked CRM org's primary contact over the legacy
+	// booking-time customer snapshot. See the route handler for the
+	// rationale.
+	const customer = organisation?.contact_first_name
+		? {
+				first_name: organisation.contact_first_name,
+				last_name: organisation.contact_last_name,
+				email: organisation.contact_email,
+			}
+		: {
+				first_name: b.customer_first_name,
+				last_name: b.customer_last_name,
+				email: b.customer_email,
+			};
+
+	const { buildBookingInvoicePdfBuffer } = await import(
+		"@/lib/bookings/invoice-pdf.js"
+	);
+	const pdfBuffer = await buildBookingInvoicePdfBuffer({
+		booking: b,
+		payment,
+		payments,
+		segments: segments.map((s) => ({
+			id: s.id,
+			room_name: s.room_name,
+			starts_at: s.starts_at,
+			ends_at: s.ends_at,
+			booking_type_label: s.booking_type_label,
+			rate_snapshot_kind: s.rate_snapshot_kind,
+			rate_snapshot_amount_cents: s.rate_snapshot_amount_cents,
+			units_x100: s.units_x100,
+			subtotal_cents: s.computed_subtotal_cents,
+		})),
+		facilities,
+		customer,
+		organisation,
+		venue: venueRow,
+	});
+
+	const { sendBookingInvoiceEmail } = await import(
+		"@/utils/email/booking-emails.js"
+	);
+	await sendBookingInvoiceEmail({
+		booking: b,
+		customer,
+		payment,
+		pdfBuffer,
+	});
+
+	if (payment) {
+		await updateBookingPayment(payment.id, { sent_at: new Date() });
 	}
-	await db.update(booking).set(patch).where(eq(booking.id, bookingId));
+	revalidatePath(`/admin/bookings/${b.id}`);
+	return { ok: true };
 }
+
+const SwitchToFullPaymentSchema = z.object({
+	booking_id: z.string().uuid(),
+});
+
+/**
+ * Collapse all unpaid `booking_payment` rows into a single "Full
+ * payment" row covering the remaining outstanding balance. Paid rows
+ * stay where they are. Used when the customer asks to settle the rest
+ * in one go instead of working through the existing schedule.
+ *
+ * No-op when nothing is unpaid OR when there's already exactly one
+ * unpaid row that would BE the full payment.
+ */
+export async function switchToFullPaymentAction(input) {
+	await gateAdmin();
+	const parsed = SwitchToFullPaymentSchema.parse(input);
+	const b = await getBookingById(parsed.booking_id);
+	if (!b) throw new Error("Booking not found.");
+
+	const payments = await listBookingPayments(b.id);
+	const paid = payments.filter((p) => p.paid_at);
+	const unpaid = payments.filter((p) => !p.paid_at);
+	const paidSum = paid.reduce((s, p) => s + (p.amount_cents ?? 0), 0);
+	const outstanding = (b.total_cents ?? 0) - paidSum;
+
+	if (outstanding <= 0) {
+		throw new Error("Booking is already paid in full.");
+	}
+	if (unpaid.length === 1 && unpaid[0].amount_cents === outstanding) {
+		return { ok: true, already: true };
+	}
+
+	for (const p of unpaid) {
+		await softDeleteBookingPayment(p.id);
+	}
+
+	await insertBookingPayments([
+		{
+			booking_id: b.id,
+			sort_order: paid.length,
+			label: "Full payment",
+			amount_cents: outstanding,
+			pay_token: payToken(),
+		},
+	]);
+
+	revalidatePath(`/admin/bookings/${b.id}`);
+	return { ok: true };
+}
+
+// rollUpBookingPaidAmounts moved to lib/bookings/payment-rollup.js so the
+// banking auto-matcher can call it too.

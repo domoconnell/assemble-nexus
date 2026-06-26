@@ -87,6 +87,10 @@ export async function syncBankAccount(account, { force = false } = {}) {
 			settled_at: item.settled_at,
 			transaction_time: item.transaction_time,
 			raw_payload: item.raw_payload,
+			// Optional bridge to the PSP intent (Stripe Payment Intent id)
+			// for downstream auto-match. Set by the Stripe provider when
+			// the underlying source has a payment_intent; null otherwise.
+			psp_intent_external_id: item.psp_intent_external_id ?? null,
 		};
 		const result = await db
 			.insert(bank_transaction)
@@ -103,6 +107,7 @@ export async function syncBankAccount(account, { force = false } = {}) {
 					settled_at: values.settled_at,
 					transaction_time: values.transaction_time,
 					raw_payload: values.raw_payload,
+					psp_intent_external_id: values.psp_intent_external_id,
 				},
 			})
 			.returning({

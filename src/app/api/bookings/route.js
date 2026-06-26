@@ -171,42 +171,49 @@ export async function POST(request) {
 		.where(inArray(room.id, roomIds));
 	const bufferByRoom = new Map(rooms.map((r) => [r.id, r.buffer_minutes ?? 0]));
 
-	const conflicts = [];
-	for (const seg of parsed.data.segments) {
-		const buffer = bufferByRoom.get(seg.room_id) ?? 0;
-		const startsAt = new Date(seg.starts_at);
-		const endsAt = new Date(seg.ends_at);
-		const expandedStart = new Date(startsAt.getTime() - buffer * 60000);
-		const expandedEnd = new Date(endsAt.getTime() + buffer * 60000);
-		const [foundBookings, foundEvents, foundBlockouts] = await Promise.all([
-			findConflictingSegments({
-				roomId: seg.room_id,
-				startsAt: expandedStart,
-				endsAt: expandedEnd,
-			}),
-			findConflictingEvents({
-				roomId: seg.room_id,
-				startsAt: expandedStart,
-				endsAt: expandedEnd,
-			}),
-			findConflictingBlockouts({
-				roomId: seg.room_id,
-				startsAt: expandedStart,
-				endsAt: expandedEnd,
-			}),
-		]);
-		if (foundBookings.length || foundEvents.length || foundBlockouts.length) {
-			conflicts.push({
-				segment: seg,
-				conflicts: [...foundBookings, ...foundEvents, ...foundBlockouts],
+	// Admin back-fill flow skips the conflict gate so historic / overlapping
+	// bookings can be recorded after the fact (e.g. cash takings that
+	// happened during an already-booked slot). Public submissions still
+	// have to clear the check.
+	const isAdminCreate = parsed.data.identity.mode === "admin_create";
+	if (!isAdminCreate) {
+		const conflicts = [];
+		for (const seg of parsed.data.segments) {
+			const buffer = bufferByRoom.get(seg.room_id) ?? 0;
+			const startsAt = new Date(seg.starts_at);
+			const endsAt = new Date(seg.ends_at);
+			const expandedStart = new Date(startsAt.getTime() - buffer * 60000);
+			const expandedEnd = new Date(endsAt.getTime() + buffer * 60000);
+			const [foundBookings, foundEvents, foundBlockouts] = await Promise.all([
+				findConflictingSegments({
+					roomId: seg.room_id,
+					startsAt: expandedStart,
+					endsAt: expandedEnd,
+				}),
+				findConflictingEvents({
+					roomId: seg.room_id,
+					startsAt: expandedStart,
+					endsAt: expandedEnd,
+				}),
+				findConflictingBlockouts({
+					roomId: seg.room_id,
+					startsAt: expandedStart,
+					endsAt: expandedEnd,
+				}),
+			]);
+			if (foundBookings.length || foundEvents.length || foundBlockouts.length) {
+				conflicts.push({
+					segment: seg,
+					conflicts: [...foundBookings, ...foundEvents, ...foundBlockouts],
+				});
+			}
+		}
+		if (conflicts.length) {
+			return json(409, {
+				error: "One or more dates conflict with existing bookings or events.",
+				conflicts,
 			});
 		}
-	}
-	if (conflicts.length) {
-		return json(409, {
-			error: "One or more dates conflict with existing bookings or events.",
-			conflicts,
-		});
 	}
 
 	const depositPolicy = await getActiveDepositPolicy(venue.id);
@@ -325,7 +332,6 @@ export async function POST(request) {
 		await db.insert(booking_facility_selection).values(facilityRows);
 	}
 
-	const isAdminCreate = parsed.data.identity.mode === "admin_create";
 	const adminSession = isAdminCreate ? await getServerSession() : null;
 	await db.insert(booking_status_event).values({
 		booking_id: createdBooking.id,

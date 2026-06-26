@@ -12,7 +12,7 @@ import BookingDetailActions from "../_components/booking-detail-actions";
 import RecurrencePanel from "../_components/recurrence-panel";
 import BookingOrganisationPicker from "../_components/booking-organisation-picker";
 import InstallmentsEditor from "../_components/installments-editor";
-import { listOrganisations } from "@/db/queries/crm";
+import { listOrganisations, getOrganisationWithContact } from "@/db/queries/crm";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import InternalNotesEditor from "../_components/internal-notes-editor";
 
@@ -77,6 +77,20 @@ export default async function AdminBookingDetailPage({ params }) {
 	const currentOrg = booking.organisation_id
 		? organisations.find((o) => o.id === booking.organisation_id) ?? null
 		: null;
+	// The booking's `customer` row is a frozen snapshot of what the
+	// hirer typed when they originally booked. Once an admin links a
+	// CRM organisation we treat the org's primary contact as the
+	// source-of-truth — that's the record the admin keeps current.
+	// `currentOrgContact` carries the live contact name + email used in
+	// the header, the Customer card and the invoice billed-to block.
+	const currentOrgContact = booking.organisation_id
+		? await getOrganisationWithContact(booking.organisation_id)
+		: null;
+	const displayFirstName =
+		currentOrgContact?.contact_first_name ?? booking.customer_first_name;
+	const displayLastName =
+		currentOrgContact?.contact_last_name ?? booking.customer_last_name;
+	const displayEmail = currentOrgContact?.contact_email ?? booking.customer_email;
 	// The initial status event (status null → pending) carries an
 	// actor_user_id when an admin created the booking on the customer's
 	// behalf — public submissions don't have one. We use this to flip the
@@ -103,7 +117,7 @@ export default async function AdminBookingDetailPage({ params }) {
 				<div className="mt-2 flex items-center gap-3 flex-wrap">
 					<h1 className="text-2xl font-semibold">
 						<span className="font-mono text-base text-muted-foreground mr-2">{booking.reference}</span>
-						{booking.customer_first_name} {booking.customer_last_name}
+						{displayFirstName} {displayLastName}
 					</h1>
 					<span
 						className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs ${statusClass(booking.status)}`}
@@ -144,8 +158,8 @@ export default async function AdminBookingDetailPage({ params }) {
 							<div>
 								<dt className="text-xs text-muted-foreground">Email</dt>
 								<dd>
-									<a className="hover:underline" href={`mailto:${booking.customer_email}`}>
-										{booking.customer_email}
+									<a className="hover:underline" href={`mailto:${displayEmail}`}>
+										{displayEmail}
 									</a>
 								</dd>
 							</div>
@@ -155,11 +169,32 @@ export default async function AdminBookingDetailPage({ params }) {
 									<dd>{booking.customer_phone}</dd>
 								</div>
 							)}
-							{booking.customer_organisation && (
+							{/* Prefer the LINKED CRM organisation (booking.organisation_id)
+							 * over the free-text customer.organisation column. The linked
+							 * org has a current address; the free-text column is just
+							 * whatever the customer typed when they first booked. */}
+							{currentOrg ? (
 								<div className="sm:col-span-2">
 									<dt className="text-xs text-muted-foreground">Organisation</dt>
-									<dd>{booking.customer_organisation}</dd>
+									<dd>{currentOrg.name}</dd>
+									{Array.isArray(currentOrg.address_lines) && currentOrg.address_lines.length > 0 && (
+										<dd className="text-xs text-muted-foreground whitespace-pre-line mt-0.5">
+											{currentOrg.address_lines.join("\n")}
+										</dd>
+									)}
+									{currentOrg.vat_number && (
+										<dd className="text-xs text-muted-foreground mt-0.5">
+											VAT: {currentOrg.vat_number}
+										</dd>
+									)}
 								</div>
+							) : (
+								booking.customer_organisation && (
+									<div className="sm:col-span-2">
+										<dt className="text-xs text-muted-foreground">Organisation</dt>
+										<dd>{booking.customer_organisation}</dd>
+									</div>
+								)
 							)}
 						</dl>
 						{booking.customer_notes && (
@@ -298,6 +333,15 @@ export default async function AdminBookingDetailPage({ params }) {
 				<aside className="space-y-6">
 					<section className="rounded-lg border border-primary/30 bg-primary/5 p-6 space-y-3">
 						<h2 className="text-xs uppercase tracking-[0.2em] text-primary">Total</h2>
+						{/* When the booking has been overridden, lead with the standard
+						 * price (struck through, muted) so the discount is visible at
+						 * a glance. The big number stays as the EFFECTIVE total because
+						 * that's what the customer is actually paying. */}
+						{booking.original_total_cents != null && (
+							<div className="text-sm text-muted-foreground line-through font-mono">
+								{formatGbp(booking.original_total_cents)}
+							</div>
+						)}
 						<div className="font-display text-3xl tracking-tight">{formatGbp(booking.total_cents)}</div>
 						<dl className="space-y-1 text-sm pt-3 border-t border-foreground/10">
 							<div className="flex justify-between">
@@ -308,6 +352,16 @@ export default async function AdminBookingDetailPage({ params }) {
 								<dt className="text-muted-foreground">VAT</dt>
 								<dd className="font-mono">{formatGbp(booking.vat_cents)}</dd>
 							</div>
+							{booking.original_total_cents != null && (
+								<div className="flex justify-between">
+									<dt className="text-muted-foreground">
+										{booking.override_reason ? `Discount — ${booking.override_reason}` : "Discount"}
+									</dt>
+									<dd className="font-mono text-primary">
+										−{formatGbp((booking.original_total_cents ?? 0) - (booking.total_cents ?? 0))}
+									</dd>
+								</div>
+							)}
 							{booking.discount_amount_cents > 0 && (
 								<div className="flex justify-between">
 									<dt className="text-muted-foreground">
@@ -362,6 +416,9 @@ export default async function AdminBookingDetailPage({ params }) {
 						totalCents={booking.total_cents ?? 0}
 						subtotalCents={booking.subtotal_cents ?? 0}
 						vatCents={booking.vat_cents ?? 0}
+						originalTotalCents={booking.original_total_cents ?? null}
+						overrideReason={booking.override_reason ?? null}
+						overrideAppliedAt={booking.override_applied_at ?? null}
 						balanceInvoiceIssuedAt={booking.balance_invoice_issued_at ?? null}
 						createdByAdmin={createdByAdmin}
 					/>

@@ -11,6 +11,7 @@ import {
 	rejectBookingAction,
 	cancelBookingAction,
 	overrideBookingTotalAction,
+	clearBookingOverrideAction,
 } from "../actions";
 
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
@@ -25,6 +26,9 @@ export default function BookingDetailActions({
 	totalCents = 0,
 	subtotalCents = 0,
 	vatCents = 0,
+	originalTotalCents = null,
+	overrideReason = null,
+	overrideAppliedAt = null,
 	balanceInvoiceIssuedAt = null,
 	createdByAdmin = false,
 }) {
@@ -41,6 +45,15 @@ export default function BookingDetailActions({
 	const [overridePounds, setOverridePounds] = useState(
 		((totalCents ?? 0) / 100).toFixed(2),
 	);
+	const [overrideReasonInput, setOverrideReasonInput] = useState(overrideReason ?? "");
+
+	const hasOverride = originalTotalCents != null;
+	const reductionCents = hasOverride ? (originalTotalCents ?? 0) - (totalCents ?? 0) : 0;
+	const reductionPct = hasOverride && originalTotalCents > 0
+		? Math.round((reductionCents / originalTotalCents) * 1000) / 10
+		: 0;
+	const overrideLocked =
+		status === "rejected" || status === "cancelled" || status === "completed";
 
 	// Customer submissions show "Approve". Admin-created bookings show
 	// "Confirm" — the admin isn't reviewing someone else's enquiry, they're
@@ -56,11 +69,26 @@ export default function BookingDetailActions({
 			await overrideBookingTotalAction({
 				booking_id: bookingId,
 				total_pounds: Number(overridePounds),
+				reason: overrideReasonInput.trim() || null,
 			});
 			setPriceOpen(false);
 			router.refresh();
 		} catch (err) {
 			setError(err?.message || "Could not update price.");
+		} finally {
+			setBusy(null);
+		}
+	}
+
+	async function clearOverride() {
+		setBusy("clear-override");
+		setError(null);
+		try {
+			await clearBookingOverrideAction({ booking_id: bookingId });
+			setOverrideReasonInput("");
+			router.refresh();
+		} catch (err) {
+			setError(err?.message || "Could not clear override.");
 		} finally {
 			setBusy(null);
 		}
@@ -180,22 +208,57 @@ export default function BookingDetailActions({
 			<div className="space-y-2">
 				<div className="flex items-baseline justify-between">
 					<label className="text-sm font-medium">Price override</label>
-					{!priceOpen && (
+					{!priceOpen && !overrideLocked && (
 						<button
 							type="button"
 							className="text-xs text-muted-foreground hover:text-foreground underline"
 							onClick={() => setPriceOpen(true)}
 						>
-							Change
+							{hasOverride ? "Edit" : "Change"}
 						</button>
 					)}
 				</div>
+
+				{/* Permanent at-a-glance snapshot of the current invoice price and,
+				 * when an override is in place, what it WOULD have been at rack
+				 * rates. Mirrors the tenancy-line override pattern so the
+				 * historical invoice shows both numbers. */}
+				{hasOverride && (
+					<div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs space-y-1">
+						<div className="flex items-baseline justify-between gap-3">
+							<span className="text-muted-foreground">Standard price</span>
+							<span className="font-mono line-through text-muted-foreground">
+								{fmt(originalTotalCents)}
+							</span>
+						</div>
+						<div className="flex items-baseline justify-between gap-3">
+							<span className="text-muted-foreground">Effective price</span>
+							<span className="font-mono font-medium">{fmt(totalCents)}</span>
+						</div>
+						<div className="flex items-baseline justify-between gap-3">
+							<span className="text-amber-700 dark:text-amber-300">Discount applied</span>
+							<span className="font-mono text-amber-700 dark:text-amber-300">
+								-{fmt(reductionCents)}
+								{reductionPct > 0 && ` (${reductionPct}%)`}
+							</span>
+						</div>
+						{overrideReason && (
+							<div className="pt-1 text-muted-foreground">
+								<span className="text-[10px] uppercase tracking-[0.18em]">Reason</span>
+								<div className="text-foreground">{overrideReason}</div>
+							</div>
+						)}
+					</div>
+				)}
+
 				{!priceOpen ? (
-					<p className="text-xs text-muted-foreground">
-						Total quoted is <span className="font-mono text-foreground">{fmt(totalCents)}</span>.
-						Use this to lock in a different figure (e.g. a goodwill discount) before
-						{" "}{createdByAdmin ? "confirming" : "approving"}.
-					</p>
+					!hasOverride && (
+						<p className="text-xs text-muted-foreground">
+							Total quoted is <span className="font-mono text-foreground">{fmt(totalCents)}</span>.
+							Override to lock in a different figure (goodwill discount, retrospective
+							agreement, etc.). The original price stays on record for the invoice.
+						</p>
+					)
 				) : (
 					<div className="space-y-2">
 						<Input
@@ -206,9 +269,16 @@ export default function BookingDetailActions({
 							onChange={(e) => setOverridePounds(e.target.value)}
 							placeholder="Total (£)"
 						/>
+						<Textarea
+							rows={2}
+							value={overrideReasonInput}
+							onChange={(e) => setOverrideReasonInput(e.target.value)}
+							placeholder="Reason (shown alongside the override in the booking record)…"
+						/>
 						<p className="text-[11px] text-muted-foreground">
 							VAT will be recomputed proportionally
 							{vatCents > 0 ? ` (${Math.round((vatCents / Math.max(1, totalCents)) * 1000) / 10}% VAT)` : ""}.
+							{!hasOverride && " The current total will be snapshotted as the standard rate."}
 						</p>
 						<div className="flex items-center gap-2">
 							<Button
@@ -216,7 +286,7 @@ export default function BookingDetailActions({
 								onClick={saveOverride}
 								disabled={busy !== null || !overridePounds}
 							>
-								{busy === "override-price" ? "Saving…" : "Save"}
+								{busy === "override-price" ? "Saving…" : "Save override"}
 							</Button>
 							<Button
 								size="sm"
@@ -224,11 +294,23 @@ export default function BookingDetailActions({
 								onClick={() => {
 									setPriceOpen(false);
 									setOverridePounds(((totalCents ?? 0) / 100).toFixed(2));
+									setOverrideReasonInput(overrideReason ?? "");
 								}}
 								disabled={busy !== null}
 							>
 								Cancel
 							</Button>
+							{hasOverride && (
+								<Button
+									size="sm"
+									variant="ghost"
+									className="ml-auto text-destructive hover:text-destructive"
+									onClick={clearOverride}
+									disabled={busy !== null}
+								>
+									{busy === "clear-override" ? "Clearing…" : "Clear override"}
+								</Button>
+							)}
 						</div>
 					</div>
 				)}

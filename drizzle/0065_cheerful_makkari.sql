@@ -1,0 +1,1 @@
+ALTER TABLE "bank_transaction" ADD COLUMN "psp_intent_external_id" text;

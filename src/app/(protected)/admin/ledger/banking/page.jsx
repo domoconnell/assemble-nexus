@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { requireCurrentVenue } from "@/db/queries/venue";
 import {
 	getCombinedLatestBalance,
@@ -7,12 +8,15 @@ import {
 	listBankTransactions,
 	listBankBalanceSeries,
 } from "@/db/queries/bank";
+import { listExpenseCategories, listRecurringCostItems } from "@/db/queries/finance";
+import { listOrganisations } from "@/db/queries/crm";
+import { RECURRING_COST_TYPES } from "@/db/schema/entities/recurring_cost_schedule";
 import { currentMonthLondon, resolveMonth, monthLabel } from "@/lib/finance/months";
 import BalanceChart from "./_components/balance-chart";
 import AccountPills from "./_components/account-pills";
-import ChurchTransferToggle from "./_components/church-transfer-toggle";
 import SyncNowButton from "./_components/sync-now-button";
 import MatchCell from "./_components/match-cell";
+import PspIncomeToggle from "./_components/psp-income-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +53,10 @@ export default async function BankingPage({ searchParams }) {
 	const sp = await searchParams;
 	const page = Math.max(1, Number(sp?.page) || 1);
 	const offset = (page - 1) * PAGE_SIZE;
+	// User preference lives in a cookie (no URL param, no scroll jump
+	// when toggled). Defaults to hidden.
+	const cookieStore = await cookies();
+	const showPspIncome = cookieStore.get("psp_income_shown")?.value === "1";
 
 	const venue = await requireCurrentVenue();
 	const accounts = await listBankAccounts(venue.id);
@@ -57,14 +65,33 @@ export default async function BankingPage({ searchParams }) {
 
 	const month = resolveMonth(currentMonthLondon().ym);
 
-	const [combined, inOut, txPage, daily, weekly, monthly] = await Promise.all([
+	const [combined, inOut, txPage, daily, weekly, monthly, categories, recurringItems, organisations] = await Promise.all([
 		getCombinedLatestBalance(venue.id, { accountIds }),
 		getBankInOutBetween(venue.id, month.monthStartDate, month.monthEndDate, { accountIds }),
-		listBankTransactions(venue.id, { limit: PAGE_SIZE, offset, accountIds }),
+		listBankTransactions(venue.id, { limit: PAGE_SIZE, offset, accountIds, showPspIncome }),
 		listBankBalanceSeries(venue.id, { bucket: "day", accountIds }),
 		listBankBalanceSeries(venue.id, { bucket: "week", accountIds }),
 		listBankBalanceSeries(venue.id, { bucket: "month", accountIds }),
+		listExpenseCategories(venue.id),
+		listRecurringCostItems(venue.id),
+		listOrganisations(venue.id),
 	]);
+
+	// Pre-shape the recurring items into [{ type, label, items: [...] }, ...]
+	// so the dialog doesn't have to redo the grouping client-side.
+	const RECURRING_TYPE_LABELS = {
+		utilities: "Utilities",
+		staff: "Staff",
+		mortgage: "Mortgage",
+		mortgage_extra: "Extra mortgage payments",
+	};
+	const recurringGroups = RECURRING_COST_TYPES.map((type) => ({
+		type,
+		label: RECURRING_TYPE_LABELS[type] ?? type,
+		items: recurringItems
+			.filter((i) => i.type === type)
+			.map((i) => ({ id: i.id, label: i.label })),
+	})).filter((g) => g.items.length > 0);
 
 	const totalPages = Math.max(1, Math.ceil(txPage.total / PAGE_SIZE));
 	const noAccountsConnected = accounts.length === 0;
@@ -126,8 +153,11 @@ export default async function BankingPage({ searchParams }) {
 							<h2 className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
 								Transactions
 							</h2>
-							<div className="text-xs text-muted-foreground">
-								{txPage.total} total · page {page} of {totalPages}
+							<div className="flex items-center gap-3 text-xs text-muted-foreground">
+								<PspIncomeToggle initial={showPspIncome} />
+								<span>
+									{txPage.total} total · page {page} of {totalPages}
+								</span>
 							</div>
 						</div>
 						{txPage.rows.length === 0 ? (
@@ -139,7 +169,13 @@ export default async function BankingPage({ searchParams }) {
 								to pull the latest.
 							</p>
 						) : (
-							<TransactionsTable rows={txPage.rows} accountsById={Object.fromEntries(accounts.map((a) => [a.id, a]))} />
+							<TransactionsTable
+								rows={txPage.rows}
+								accountsById={Object.fromEntries(accounts.map((a) => [a.id, a]))}
+								categories={categories}
+								recurringGroups={recurringGroups}
+								organisations={organisations.map((o) => ({ id: o.id, name: o.name }))}
+							/>
 						)}
 						{totalPages > 1 && (
 							<Pagination page={page} totalPages={totalPages} sp={sp} />
@@ -207,11 +243,24 @@ function Card({ label, value, sub, footer, tone = "default" }) {
 	);
 }
 
-function TransactionsTable({ rows, accountsById }) {
+function TransactionsTable({ rows, accountsById, categories, recurringGroups, organisations }) {
 	const now = Date.now();
 	return (
-		<div className="rounded-xl border bg-card overflow-hidden">
-			<table className="w-full text-sm">
+		// `overflow-x-auto` lets the table scroll horizontally on narrower
+		// viewports rather than clipping the amount column off the right
+		// edge. `table-fixed` plus explicit column widths in the colgroup
+		// force the counterparty + reference columns to stay capped so
+		// the truncation actually kicks in.
+		<div className="rounded-xl border bg-card overflow-x-auto">
+			<table className="w-full text-sm table-fixed">
+				<colgroup>
+					<col className="w-27.5" />
+					<col className="w-35" />
+					<col className="w-65" />
+					<col className="w-50" />
+					<col className="w-50" />
+					<col className="w-30" />
+				</colgroup>
 				<thead className="bg-muted/40 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
 					<tr>
 						<th className="text-left px-4 py-2">Date</th>
@@ -239,11 +288,11 @@ function TransactionsTable({ rows, accountsById }) {
 						const isPending = settledMs == null;
 						const isIn = r.direction === "IN";
 						const accountLabel = accountsById[r.bank_account_id]?.label ?? "-";
-						// Synthetic Stripe fee rows ride along with their parent
-						// balance_transaction (external_id `${parent.id}#fee`).
+						// Synthetic PSP fee rows (Stripe + Square) ride along with
+						// their parent payment via external_id `${parent.id}#fee`.
 						// Render them as a visually nested child of the row above.
 						const isFee =
-							r.source === "stripe" &&
+							(r.source === "stripe" || r.source === "square") &&
 							typeof r.external_id === "string" &&
 							r.external_id.endsWith("#fee");
 						return (
@@ -257,32 +306,21 @@ function TransactionsTable({ rows, accountsById }) {
 								<td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
 									{isFee ? "" : accountLabel}
 								</td>
-								<td className="px-4 py-2.5">
-									<div className="flex items-baseline gap-2 flex-wrap">
+								<td className="px-4 py-2.5 max-w-xs">
+									<div className="flex items-baseline gap-2 min-w-0">
 										{isFee && (
 											<span
 												aria-hidden
-												className="inline-block w-3 h-3 border-l border-b border-muted-foreground/40 ml-1 mr-1 self-center -translate-y-0.75"
+												className="inline-block w-3 h-3 border-l border-b border-muted-foreground/40 ml-1 mr-1 self-center -translate-y-0.75 shrink-0"
 											/>
 										)}
-										<span className={isFee ? "text-muted-foreground text-xs" : ""}>
+										<span className={`truncate ${isFee ? "text-muted-foreground text-xs" : ""}`}>
 											{r.counterparty_name || "-"}
 										</span>
 										{isPending && !r.is_transfer && !isFee && (
-											<span className="text-[10px] uppercase tracking-[0.15em] text-amber-700 dark:text-amber-300 border border-amber-500/30 bg-amber-500/10 rounded-full px-1.5 py-0.5">
+											<span className="text-[10px] uppercase tracking-[0.15em] text-amber-700 dark:text-amber-300 border border-amber-500/30 bg-amber-500/10 rounded-full px-1.5 py-0.5 shrink-0">
 												Pending
 											</span>
-										)}
-										{r.is_transfer && (
-											<span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground border border-foreground/15 rounded-full px-1.5 py-0.5">
-												Transfer
-											</span>
-										)}
-										{!r.is_transfer && !isIn && !isFee && (
-											<ChurchTransferToggle
-												transactionId={r.id}
-												initial={r.is_church_transfer}
-											/>
 										)}
 									</div>
 								</td>
@@ -290,15 +328,40 @@ function TransactionsTable({ rows, accountsById }) {
 									{r.reference || ""}
 								</td>
 								<td className="px-4 py-2.5 whitespace-nowrap">
-									{isFee || r.is_transfer ? (
+									{r.source === "square" && r.direction === "IN" ? (
+										// Square incoming: no order/booking is ingested for
+										// it on our side, so there's nothing to match against
+										// — dash it rather than implying it's actionable.
 										<span className="text-muted-foreground/60 text-xs">—</span>
 									) : (
 										<MatchCell
 											transactionId={r.id}
 											direction={r.direction}
+											isTransfer={r.is_transfer}
+											isFee={isFee}
+											isChurchTransfer={r.is_church_transfer}
 											matchedToType={r.matched_to_type}
 											matchedReference={r.matched_invoice_reference}
 											matchedInvoiceStatus={r.matched_invoice_status}
+											matchedExpenseKind={r.matched_expense_kind}
+											matchedExpenseCategory={r.matched_expense_category}
+											matchedRecurringType={r.matched_recurring_type}
+											matchedRecurringLabel={r.matched_recurring_label}
+											matchedManualInvoiceReference={r.matched_manual_invoice_reference}
+											matchedManualInvoiceId={r.matched_manual_invoice_id}
+											matchedBookingPaymentLabel={r.matched_booking_payment_label}
+											matchedBookingPaymentDeleted={r.matched_booking_payment_deleted}
+											matchedBookingReference={r.matched_booking_reference}
+											matchedBookingId={r.matched_booking_id}
+											matchedBookingDeleted={r.matched_booking_deleted}
+											matchedTicketOrderReference={r.matched_ticket_order_reference}
+											matchedTicketOrderEventId={r.matched_ticket_order_event_id}
+											matchedTicketOrderDeleted={r.matched_ticket_order_deleted}
+											matchedOrphanReference={r.matched_orphan_reference}
+											transaction={r}
+											categories={categories}
+											recurringGroups={recurringGroups}
+											organisations={organisations}
 										/>
 									)}
 								</td>

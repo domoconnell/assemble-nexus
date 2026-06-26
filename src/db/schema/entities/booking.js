@@ -27,6 +27,19 @@ export const booking = pgTable(
         vat_cents: integer("vat_cents").default(0).notNull(),
         total_cents: integer("total_cents").default(0).notNull(),
 
+        // Snapshot of the rack-rate price the booking *would* have been
+        // before an admin overrode it. Populated the first time
+        // `overrideBookingTotalAction` runs; left untouched on subsequent
+        // overrides so the "what was the standard rate?" reference stays
+        // stable. Cleared back to NULL if the override is removed.
+        // Effective discount = original_total_cents - total_cents.
+        original_subtotal_cents: integer("original_subtotal_cents"),
+        original_vat_cents: integer("original_vat_cents"),
+        original_total_cents: integer("original_total_cents"),
+        override_reason: text("override_reason"),
+        override_applied_at: timestamp("override_applied_at", { withTimezone: true }),
+        override_by_user_id: uuid("override_by_user_id"),
+
         discount_id: uuid("discount_id"),
         discount_label_snapshot: text("discount_label_snapshot"),
         discount_percent_x100_snapshot: integer("discount_percent_x100_snapshot"),

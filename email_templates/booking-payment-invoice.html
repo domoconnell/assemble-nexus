@@ -1,0 +1,91 @@
+<!--
+  Template: booking-payment-invoice
+  Audience: hirer (admin has clicked "Send invoice" on a payment row, or
+            "Send invoice" for the full booking)
+  Notes:    The body just frames the attached PDF — that's the actual
+            invoice. The PDF is attached at send-time by the action.
+  Variables:
+    {{venue_name}}    Public venue name.
+    {{first_name}}    Hirer's first name (may be empty).
+    {{reference}}     Booking reference, e.g. BK-XXXX.
+    {{label}}         Payment label ('Deposit', 'Final payment', 'Full payment', …).
+    {{amount}}        GBP-formatted amount, e.g. '£150.00'.
+    {{pay_url}}       Public pay URL with token. Empty when the invoice
+                      is the full-booking variant with no scheduled
+                      booking_payment row.
+    {{has_pay_url}}   Boolean - use {{#if has_pay_url}} … {{/if}} to
+                      branch the CTA off when there's no pay link.
+-->
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#0f172a;font-size:14px;line-height:1.55;">
+  <tr>
+    <td style="padding:0 24px;">
+      <p style="margin:0 0 14px;">Hi {{first_name}},</p>
+      <p style="margin:0 0 14px;color:#334155;">
+        Please find attached your invoice for
+        <strong>{{label}}</strong>
+        on booking
+        <strong style="font-family:'SF Mono','Menlo',monospace;">{{reference}}</strong>
+        with {{venue_name}}.
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:14px 24px 0;">
+      <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin:0 0 12px;">
+        Invoice summary
+      </div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tr>
+          <td style="padding:5px 0;color:#64748b;width:160px;">Reference</td>
+          <td style="padding:5px 0;font-family:'SF Mono','Menlo',monospace;font-size:13px;">{{reference}}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:#64748b;">For</td>
+          <td style="padding:5px 0;">{{label}}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-top:1px solid #e2e8f0;">Amount due</td>
+          <td style="padding:8px 0;font-weight:600;font-size:16px;border-top:1px solid #e2e8f0;">{{amount}}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:14px 24px 0;">
+      <div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;color:#334155;font-size:13px;">
+        <span style="font-weight:600;color:#0f172a;">PDF attached.</span>
+        Open the attached invoice for the full breakdown, payment terms
+        and reference.
+      </div>
+    </td>
+  </tr>
+
+  {{#if has_pay_url}}
+  <tr>
+    <td style="padding:22px 24px 6px;text-align:center;">
+      <a href="{{pay_url}}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:6px;font-weight:600;">
+        Pay {{label}} ({{amount}}) →
+      </a>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="padding:0 24px 12px;text-align:center;">
+      <p style="margin:6px 0 0;color:#64748b;font-size:13px;">
+        The link is unique to this payment - please keep it private.
+      </p>
+    </td>
+  </tr>
+  {{/if}}
+
+  <tr>
+    <td style="padding:18px 24px 12px;">
+      <p style="margin:0;color:#0f172a;">
+        Thanks,<br />
+        {{venue_name}}
+      </p>
+    </td>
+  </tr>
+</table>

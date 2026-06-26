@@ -925,25 +925,47 @@ function combineScheduleItems(segments, blockouts, tenancySessions, todayKey, to
 			status: "scheduled",
 		});
 	}
+	// `listBlockoutsInRange` returns one row per (blockout × room ×
+	// expanded occurrence). The dashboard widget treats a single blockout
+	// occurrence as ONE schedule entry — so we group the per-room rows
+	// back together and present the rooms as a comma-separated list. The
+	// grouping key is the blockout id + occurrence start, which is unique
+	// across the expansion.
+	const blockoutGroups = new Map();
 	for (const b of blockouts) {
 		const startsAt = new Date(b.starts_at);
 		const key = londonDayKey(startsAt);
 		if (todayOnly && key !== todayKey) continue;
-		// listBlockoutsInRange returns one row per (blockout × room ×
-		// expanded occurrence), so the underlying blockout id alone isn't
-		// unique enough for a React key - include the occurrence start +
-		// room.
-		const rowKey = `blk-${b.id}-${startsAt.getTime()}-${b.room_id ?? "all"}`;
+		const groupKey = `${b.id}-${startsAt.getTime()}`;
+		let group = blockoutGroups.get(groupKey);
+		if (!group) {
+			group = {
+				id: `blk-${groupKey}`,
+				kind: "blockout",
+				day_key: key,
+				starts_at: startsAt,
+				ends_at: new Date(b.ends_at),
+				rooms: [],
+				label: b.reason,
+				href: "/admin/blockouts",
+				status: b.is_public ? "public" : "private",
+			};
+			blockoutGroups.set(groupKey, group);
+		}
+		group.rooms.push(b.room_name ?? "All rooms");
+	}
+	for (const group of blockoutGroups.values()) {
+		const rooms = group.rooms;
+		const roomLabel =
+			rooms.length === 0
+				? "All rooms"
+				: rooms.length <= 3
+					? rooms.join(", ")
+					: `${rooms.slice(0, 2).join(", ")} +${rooms.length - 2} more`;
 		items.push({
-			id: rowKey,
-			kind: "blockout",
-			day_key: key,
-			starts_at: startsAt,
-			ends_at: new Date(b.ends_at),
-			room_name: b.room_name ?? "All rooms",
-			label: b.reason,
-			href: "/admin/blockouts",
-			status: b.is_public ? "public" : "private",
+			...group,
+			room_name: roomLabel,
+			room_count: rooms.length,
 		});
 	}
 	items.sort((a, b) => a.starts_at - b.starts_at);

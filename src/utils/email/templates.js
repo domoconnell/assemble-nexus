@@ -94,9 +94,7 @@ export const EMAIL_TEMPLATES = {
 	},
 
 	"booking-payment-link": {
-		// User wires the SendGrid template id once authored. safeSend skips
-		// silently while the id is empty.
-		templateId: "",
+		templateId: "d-d3673648b68f47c1830aacfc9d7e3395",
 		description: "Sent when an admin clicks 'Send link' on a booking instalment. Contains the per-instalment pay URL with token.",
 		audience: "delegate",
 		fields: {
@@ -106,6 +104,21 @@ export const EMAIL_TEMPLATES = {
 			label: "Instalment label, e.g. 'Deposit' or 'Final payment'.",
 			amount: "Pre-formatted amount, e.g. '£150.00'.",
 			pay_url: "Public link to pay this instalment.",
+		},
+	},
+
+	"booking-payment-invoice": {
+		templateId: "d-6806fad042c04c1f887ac4a57eba0534",
+		description: "Invoice email for a booking. PDF is attached. Used for both per-payment slices (deposit, installment) and full-booking one-off payments.",
+		audience: "delegate",
+		fields: {
+			venue_name: "Public venue name.",
+			first_name: "Customer's first name (may be empty).",
+			reference: "Booking reference, e.g. BK-XXXX.",
+			label: "Payment label ('Deposit', 'Full payment', etc.).",
+			amount: "Pre-formatted amount, e.g. '£150.00'.",
+			pay_url: "Public link to pay (matching pay_token). Omitted for full-booking when no single payment row is involved.",
+			has_pay_url: "Boolean — true when pay_url is present so Handlebars can branch.",
 		},
 	},
 

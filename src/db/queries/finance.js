@@ -9,6 +9,7 @@ import { booking } from "@/db/schema/entities/booking.js";
 import { ticket_order } from "@/db/schema/entities/ticket_order.js";
 import { event } from "@/db/schema/entities/event.js";
 import { recurring_cost_item } from "@/db/schema/entities/recurring_cost_item.js";
+import { bank_transaction } from "@/db/schema/entities/bank_transaction.js";
 import { sumChurchTransfers } from "@/db/queries/bank.js";
 import { sumTenancyRentalForMonth } from "@/db/queries/tenancies.js";
 
@@ -124,6 +125,45 @@ export async function listRecurringCostItems(venueId) {
 		.orderBy(asc(recurring_cost_item.type), asc(recurring_cost_item.sort_order), asc(recurring_cost_item.label));
 }
 
+/**
+ * Sum the bank transactions matched to each recurring_cost_item for the
+ * given month window. Outgoing (OUT) rows are spend; incoming (IN) rows
+ * (e.g. utility credit notes) net against the spend. Returns a Map
+ * keyed by recurring_cost_item.id → { actual_cents, count }.
+ *
+ * Window bounds use `transaction_time` falling back to `settled_at` —
+ * matches the rest of the bank ledger so a row landing on month-end
+ * always falls into the same period everywhere.
+ */
+export async function getRecurringActualsForMonth(
+	venueId,
+	ymdFirstOfMonth,
+	ymdFirstOfNextMonth,
+) {
+	const rows = await db.execute(sql`
+		select
+			matched_to_id as item_id,
+			coalesce(sum(case when direction = 'OUT' then amount_minor else -amount_minor end), 0)::bigint as actual_cents,
+			count(*)::int as count
+		from ${bank_transaction}
+		where venue_id = ${venueId}
+		  and matched_to_type = 'recurring_cost_item'
+		  and matched_to_id is not null
+		  and coalesce(transaction_time, settled_at) >= ${ymdFirstOfMonth}::timestamptz
+		  and coalesce(transaction_time, settled_at) < ${ymdFirstOfNextMonth}::timestamptz
+		group by matched_to_id
+	`);
+	const list = rows.rows ?? rows;
+	const out = new Map();
+	for (const r of list) {
+		out.set(r.item_id, {
+			actual_cents: Number(r.actual_cents ?? 0),
+			count: Number(r.count ?? 0),
+		});
+	}
+	return out;
+}
+
 export async function insertRecurringCostItem(values) {
 	const [row] = await db.insert(recurring_cost_item).values(values).returning();
 	return row;
@@ -210,6 +250,7 @@ export async function listExpensesForMonth(venueId, ymdFirstOfMonth, ymdFirstOfN
 			id: expense.id,
 			date: expense.date,
 			description: expense.description,
+			kind: expense.kind,
 			amount_cents: expense.amount_cents,
 			vat_cents: expense.vat_cents,
 			supplier_name: expense.supplier_name,
@@ -250,10 +291,17 @@ export async function listExpensesForEvent(eventId) {
 		.orderBy(desc(expense.date), desc(expense.createdAt));
 }
 
+// Refunds are stored as POSITIVE amounts with kind='refund'. To get the
+// real net spend we flip refunds to negative inside the SUM. This shape
+// is repeated everywhere expense totals are computed so reports stop
+// double-counting refunds as additional spend.
+const NET_AMOUNT_SQL = sql`coalesce(sum(case when ${expense.kind} = 'refund' then -${expense.amount_cents} else ${expense.amount_cents} end), 0)`;
+const NET_VAT_SQL = sql`coalesce(sum(case when ${expense.kind} = 'refund' then -${expense.vat_cents} else ${expense.vat_cents} end), 0)`;
+
 export async function sumExpensesForEvent(eventId) {
 	const [r] = await db
 		.select({
-			total: sql`coalesce(sum(${expense.amount_cents}), 0)`,
+			total: NET_AMOUNT_SQL,
 			count: sql`count(*)`,
 		})
 		.from(expense)
@@ -267,12 +315,14 @@ export async function sumExpensesForEvent(eventId) {
 export async function expensesByCategoryForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth) {
 	// Returns rows grouped by category for the month - used by the director
 	// board pack to show the cost-of-delivery breakdown. Uncategorised
-	// expenses are rolled up under name = "Uncategorised".
+	// expenses are rolled up under name = "Uncategorised". Refunds (kind =
+	// 'refund') are netted into the same category total so the row shows
+	// the customer-facing spend.
 	const rows = await db.execute(sql`
 		select
 			coalesce(c.name, 'Uncategorised') as name,
 			coalesce(c.is_cost_of_delivery, true) as is_cost_of_delivery,
-			coalesce(sum(e.amount_cents), 0)::bigint as total,
+			coalesce(sum(case when e.kind = 'refund' then -e.amount_cents else e.amount_cents end), 0)::bigint as total,
 			count(e.id)::int as count
 		from ${expense} e
 		left join ${expense_category} c on c.id = e.expense_category_id
@@ -294,7 +344,7 @@ export async function expensesByCategoryForMonth(venueId, ymdFirstOfMonth, ymdFi
 
 export async function sumExpensesForMonth(venueId, ymdFirstOfMonth, ymdFirstOfNextMonth) {
 	const [r] = await db
-		.select({ total: sql`coalesce(sum(${expense.amount_cents}), 0)` })
+		.select({ total: NET_AMOUNT_SQL })
 		.from(expense)
 		.leftJoin(expense_category, eq(expense_category.id, expense.expense_category_id))
 		.where(

@@ -202,10 +202,12 @@ export async function listOrganisationsWithBalances(venueId) {
 		.groupBy(event.organiser_organisation_id);
 
 	// Expenses paid TO an organisation reduce we_owe_them (counts as payout).
+	// Refund rows on those expenses flip the sign so a refund from the org
+	// puts the money the other way again.
 	const expensesPaid = await db
 		.select({
 			org_id: expense.organisation_id,
-			amount: sql`coalesce(sum(${expense.amount_cents}), 0)::bigint`,
+			amount: sql`coalesce(sum(case when ${expense.kind} = 'refund' then -${expense.amount_cents} else ${expense.amount_cents} end), 0)::bigint`,
 		})
 		.from(expense)
 		.where(

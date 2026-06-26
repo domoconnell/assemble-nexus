@@ -16,6 +16,7 @@ import StarlingForm from "./starling-form";
 import RevolutForm from "./revolut-form";
 import MonzoForm from "./monzo-form";
 import StripeBankForm from "./stripe-bank-form";
+import SquareBankForm from "./square-bank-form";
 import {
 	deleteBankAccountAction,
 	setBankAccountActiveAction,
@@ -30,6 +31,7 @@ const PROVIDER_OPTIONS = [
 	{ key: "revolut", label: "Revolut Business", blurb: "Certificate-based OAuth. Supports multi-currency sub-accounts." },
 	{ key: "monzo", label: "Monzo", blurb: "OAuth client. Personal + Business accounts. Needs in-app approval after setup." },
 	{ key: "stripe", label: "Stripe balance", blurb: "Surface funds currently held by Stripe (pre-payout) as a bank line. Re-uses your PSP Stripe key." },
+	{ key: "square", label: "Square balance", blurb: "Surface funds currently held by Square (café card swipes pre-payout) as a bank line. Access token from the Square Developer dashboard." },
 ];
 
 const PROVIDER_LABELS = {
@@ -37,6 +39,7 @@ const PROVIDER_LABELS = {
 	revolut: "Revolut",
 	monzo: "Monzo",
 	stripe: "Stripe",
+	square: "Square",
 };
 
 export default function BankAccountsClient({ accounts, oauthStatus, oauthMessage, openAccountId }) {
@@ -230,6 +233,13 @@ export default function BankAccountsClient({ accounts, oauthStatus, oauthMessage
 			)}
 			{chosenProvider === "stripe" && (
 				<StripeBankForm
+					open
+					onOpenChange={(o) => !o && closeForm()}
+					initial={editing}
+				/>
+			)}
+			{chosenProvider === "square" && (
+				<SquareBankForm
 					open
 					onOpenChange={(o) => !o && closeForm()}
 					initial={editing}

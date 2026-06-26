@@ -22,6 +22,8 @@ adding or changing a variable, update both.
 | `booking-balance-invoice.html`      | `booking-balance-invoice`     | hirer     |                                                             |
 | `booking-balance-paid.html`         | `booking-balance-paid`        | hirer     |                                                             |
 | `booking-rejected.html`             | `booking-rejected`            | hirer     |                                                             |
+| `booking-payment-link.html`         | `booking-payment-link`        | hirer     | Admin clicks "Send link" on a payment row                   |
+| `booking-payment-invoice.html`      | `booking-payment-invoice`     | hirer     | PDF attached · per-payment OR full-booking invoice          |
 | `ticket-delivery.html`              | `ticket-delivery`             | delegate  | Already in SendGrid · PDF attached · order summary inline   |
 | `monthly-board-pack.html`           | `monthly-board-pack`          | staff     | Already in SendGrid · PDF attached                          |
 | `tenancy-agreement-send.html`       | `tenancy-agreement-send`      | delegate  | Sent when admin clicks "Send agreement" on a tenancy        |

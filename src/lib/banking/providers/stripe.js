@@ -166,6 +166,20 @@ function mapBalanceTransaction(tx) {
 	const createdMs = tx.created ? tx.created * 1000 : null;
 	const src = typeof tx.source === "object" && tx.source ? tx.source : null;
 
+	// Pull the Payment Intent id off the expanded charge / refund. The
+	// auto-matcher uses this to bridge from `bank_transaction` to the
+	// `booking_payment` / `ticket_order` rows that the webhook already
+	// stamped with the same PI id. Refunds carry it on
+	// `source.payment_intent` too. Stripe fee balance txns have no PI.
+	let pspIntentExternalId = null;
+	if (src) {
+		if (typeof src.payment_intent === "string") {
+			pspIntentExternalId = src.payment_intent;
+		} else if (src.payment_intent && typeof src.payment_intent.id === "string") {
+			pspIntentExternalId = src.payment_intent.id;
+		}
+	}
+
 	return {
 		external_id: tx.id,
 		direction,
@@ -178,6 +192,7 @@ function mapBalanceTransaction(tx) {
 		counterparty_account: tx.type === "payout" ? "stripe_payout" : null,
 		reference: describeStripeReference(tx, src),
 		category_uid: tx.type ?? null,
+		psp_intent_external_id: pspIntentExternalId,
 		settled_at: settledMs ? new Date(settledMs) : null,
 		transaction_time: createdMs ? new Date(createdMs) : null,
 		raw_payload: tx,

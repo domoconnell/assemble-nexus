@@ -91,8 +91,20 @@ export default function BalanceChart({ series, defaultBucket = "day" }) {
 								</linearGradient>
 							</defs>
 							<CartesianGrid strokeDasharray="3 3" stroke="rgba(127,127,127,0.15)" />
+							{/* Numeric time scale: previously the axis used the
+							 * formatted label ("25 Jun") as the dataKey, which
+							 * collides across years on the daily/weekly buckets.
+							 * Recharts would then map a hover near the right
+							 * edge back to the FIRST point sharing that label —
+							 * i.e. the follow-dot jumped to the start.
+							 * Using the raw timestamp as a numeric scale gives
+							 * every point a unique x position. */}
 							<XAxis
-								dataKey="label"
+								dataKey="timestamp"
+								type="number"
+								scale="time"
+								domain={["dataMin", "dataMax"]}
+								tickFormatter={(t) => labelFmts[bucket].format(new Date(t))}
 								tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
 								axisLine={false}
 								tickLine={false}

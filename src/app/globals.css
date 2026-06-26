@@ -194,3 +194,42 @@
   color: var(--primary);
 }
 
+/* Global scrollbar styling - applies to every scrollable element across
+   the app so we stop fighting chunky default browser scrollbars in
+   dialogs, tables, dropdowns, etc. Tokens reused from the theme so
+   light + dark mode read consistently.
+
+   Firefox: `scrollbar-width: thin` + `scrollbar-color`.
+   WebKit (Chrome / Safari / Edge): the explicit ::-webkit-scrollbar*
+   pseudo-elements below. They override the OS default for any element
+   with overflow: auto/scroll.
+
+   Track stays transparent so the scrollbar feels like an inset overlay
+   on top of the parent background, not a chrome panel. Thumb uses a
+   translucent foreground so it picks up contrast on both light cards
+   and dark surfaces. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--foreground) 25%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklch, var(--foreground) 22%, transparent);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklch, var(--foreground) 40%, transparent);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+

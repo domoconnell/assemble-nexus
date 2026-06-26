@@ -6,10 +6,19 @@ import { toast } from "sonner";
 import { Button } from "@/shadcn/components/ui/button";
 import { Input } from "@/shadcn/components/ui/input";
 import {
+	DropdownMenu,
+	DropdownMenuTrigger,
+	DropdownMenuContent,
+	DropdownMenuItem,
+} from "@/shadcn/components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
+import {
 	replaceBookingPaymentsAction,
 	markBookingPaymentPaidOfflineAction,
 	unmarkBookingPaymentPaidAction,
 	sendBookingPaymentLinkAction,
+	sendBookingInvoiceAction,
+	switchToFullPaymentAction,
 } from "../actions";
 
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
@@ -182,7 +191,49 @@ export default function InstallmentsEditor({ bookingId, reference, totalCents, p
 		}
 	}
 
+	function downloadInvoice({ paymentId = null } = {}) {
+		const qs = paymentId ? `?payment_id=${paymentId}` : "";
+		// Trigger a download via location — the API route returns
+		// Content-Disposition: attachment so the browser will save it
+		// instead of navigating away.
+		window.location.href = `/api/admin/bookings/${bookingId}/invoice${qs}`;
+	}
+
+	async function sendInvoice({ paymentId = null } = {}) {
+		const key = paymentId ? `inv-${paymentId}` : "inv-full";
+		setBusy(key);
+		try {
+			await sendBookingInvoiceAction({
+				booking_id: bookingId,
+				booking_payment_id: paymentId,
+			});
+			toast.success("Invoice emailed");
+			router.refresh();
+		} catch (err) {
+			toast.error(err?.message || "Couldn't send invoice");
+		} finally {
+			setBusy(null);
+		}
+	}
+
+	async function switchToFullPayment() {
+		setBusy("switch-full");
+		try {
+			await switchToFullPaymentAction({ booking_id: bookingId });
+			toast.success("Switched to single full payment");
+			router.refresh();
+		} catch (err) {
+			toast.error(err?.message || "Couldn't switch");
+		} finally {
+			setBusy(null);
+		}
+	}
+
 	const noInstallments = payments.length === 0;
+	const unpaidCount = payments.filter((p) => !p.paid_at).length;
+	// "Switch to single full payment" is only useful when there's a real
+	// split to collapse (more than one unpaid row).
+	const canSwitchToFull = unpaidCount > 1 && outstandingCents > 0;
 
 	return (
 		<section className="rounded-lg border bg-card p-6 space-y-4">
@@ -191,13 +242,25 @@ export default function InstallmentsEditor({ bookingId, reference, totalCents, p
 					Payments
 				</h2>
 				{!editing && outstandingCents > 0 && (
-					<button
-						type="button"
-						className="text-xs text-muted-foreground hover:text-foreground underline"
-						onClick={() => setEditing(true)}
-					>
-						{noInstallments ? "Set splits" : "Edit splits"}
-					</button>
+					<div className="flex items-center gap-3 whitespace-nowrap">
+						{canSwitchToFull && (
+							<button
+								type="button"
+								className="text-xs text-muted-foreground hover:text-foreground underline"
+								onClick={switchToFullPayment}
+								disabled={busy === "switch-full"}
+							>
+								{busy === "switch-full" ? "Switching…" : "Switch to full payment"}
+							</button>
+						)}
+						<button
+							type="button"
+							className="text-xs text-muted-foreground hover:text-foreground underline"
+							onClick={() => setEditing(true)}
+						>
+							{noInstallments ? "Set splits" : "Edit splits"}
+						</button>
+					</div>
 				)}
 			</div>
 
@@ -246,28 +309,62 @@ export default function InstallmentsEditor({ bookingId, reference, totalCents, p
 								)}
 								{!isPaid && (
 									<div className="flex flex-wrap items-center gap-2">
-										<Button
-											size="sm"
-											variant="outline"
-											onClick={() => copyLink(p.pay_token)}
-										>
-											Copy link
-										</Button>
-										<Button
-											size="sm"
-											variant="ghost"
-											onClick={() => sendLink(p.id)}
-											disabled={busy === `send-${p.id}`}
-										>
-											{busy === `send-${p.id}` ? "Sending…" : "Send link"}
-										</Button>
+										{/* Pay link: copy or email. The dropdown trigger is the
+										 * primary outline button — clicking it opens the menu
+										 * which has the two flavours. */}
+										<DropdownMenu>
+											<DropdownMenuTrigger asChild>
+												<Button
+													size="sm"
+													variant="outline"
+													disabled={busy === `send-${p.id}`}
+												>
+													{busy === `send-${p.id}` ? "Sending…" : "Pay link"}
+													<ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
+												</Button>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="start" className="w-44">
+												<DropdownMenuItem onClick={() => copyLink(p.pay_token)}>
+													Copy link
+												</DropdownMenuItem>
+												<DropdownMenuItem onClick={() => sendLink(p.id)}>
+													Email link to customer
+												</DropdownMenuItem>
+											</DropdownMenuContent>
+										</DropdownMenu>
+
+										{/* Invoice: download or email. Same pattern as Pay link
+										 * so the action surface feels consistent. */}
+										<DropdownMenu>
+											<DropdownMenuTrigger asChild>
+												<Button
+													size="sm"
+													variant="ghost"
+													disabled={busy === `inv-${p.id}`}
+												>
+													{busy === `inv-${p.id}` ? "Sending…" : "Invoice"}
+													<ChevronDown className="ml-1 h-3.5 w-3.5 opacity-60" />
+												</Button>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="start" className="w-44">
+												<DropdownMenuItem
+													onClick={() => downloadInvoice({ paymentId: p.id })}
+												>
+													Download PDF
+												</DropdownMenuItem>
+												<DropdownMenuItem onClick={() => sendInvoice({ paymentId: p.id })}>
+													Email to customer
+												</DropdownMenuItem>
+											</DropdownMenuContent>
+										</DropdownMenu>
+
 										<Button
 											size="sm"
 											variant="ghost"
 											onClick={() => markPaidOffline(p.id)}
 											disabled={busy === `paid-${p.id}`}
 										>
-											{busy === `paid-${p.id}` ? "…" : "Mark paid (offline)"}
+											{busy === `paid-${p.id}` ? "…" : "Mark paid"}
 										</Button>
 									</div>
 								)}
