@@ -90,36 +90,51 @@ export async function gatherBoardPackData({ venueId, ym, venueName }) {
 			: null,
 	].filter(Boolean);
 
-	// `pnl.income.tenancy` is now the PAID figure (cash basis). The
-	// board pack still wants to show the accrued / issued amount as a
-	// sub-line when there's a deferral gap.
-	const tenancyIssued = pnl.income.tenancy_issued ?? pnl.income.tenancy ?? 0;
-	const tenancyPaid = pnl.income.tenancy_paid ?? 0;
+	// Income breakdown — bank-matched basis (matches dashboard + banking
+	// page exactly). Each row is a chunk of bank IN attributed to a
+	// matched entity type. Sum reconciles to pnl.cash_in_net.
+	const byType = pnl.cash_in_by_type ?? {};
 	const incomeItems = [
-		{ label: "Hire fees", value: pnl.income.bookings },
-		{ label: "Ticket fees (net of Stripe)", value: pnl.income.tickets },
-		{ label: "Cafe POS", value: pnl.income.pos_net },
-		{ label: "Manual income", value: pnl.income.manual },
+		{ label: "Bookings", value: byType.bookings ?? 0 },
+		{ label: "Tickets", value: byType.tickets ?? 0 },
+		{ label: "Tenancies", value: byType.tenancies ?? 0 },
+		{ label: "Manual invoices", value: byType.manual_invoices ?? 0 },
 		{
-			label: "Manual invoices (net of VAT)",
-			value: pnl.income.manual_invoices ?? 0,
-			sub:
-				(pnl.income.manual_invoices_vat ?? 0) > 0
-					? `${gbpForBoardSub(pnl.income.manual_invoices_vat)} VAT`
-					: null,
+			label: "PSP payouts (Stripe / Square)",
+			value: byType.psp_payouts ?? 0,
+		},
+		{ label: "Other / unmatched", value: byType.unmatched ?? 0 },
+		{ label: "Refunds (netted)", value: byType.refunds ?? 0 },
+	].filter((it) => it.value !== 0);
+
+	// Pending — money the venue has earned but hasn't received yet
+	// (held in PSP awaiting payout) or hasn't collected yet (invoices
+	// issued, booking balances outstanding). Surfaced as a second block
+	// next to the headline so directors see the full picture.
+	const psp_held = pnl.psp_held ?? { total: 0, by_provider: { stripe: 0, square: 0 } };
+	const outstanding = pnl.outstanding ?? { tenancy: 0, manual: 0, bookings: 0, total: 0 };
+	const pendingItems = [
+		{ label: "Tenancy invoices issued", value: outstanding.tenancy },
+		{ label: "Manual invoices issued", value: outstanding.manual },
+		{ label: "Booking balances outstanding", value: outstanding.bookings },
+		{
+			label: "Held in Stripe (awaiting payout)",
+			value: psp_held.by_provider?.stripe ?? 0,
 		},
 		{
-			// Cash-basis: only counts what landed this month. When the
-			// issued figure differs (i.e. a tenant deferred), show the
-			// gap as a sub-line so the directors can see it.
-			label: "Rental income (tenancies)",
-			value: tenancyPaid,
-			sub:
-				tenancyIssued !== tenancyPaid
-					? `${gbpForBoardSub(tenancyIssued)} issued`
-					: null,
+			label: "Held in Square (awaiting payout)",
+			value: psp_held.by_provider?.square ?? 0,
 		},
 	].filter((it) => it.value !== 0);
+	const pendingTotal = outstanding.total + psp_held.total;
+
+	// Recognised income — the cash-in + pending combined ("everything
+	// earned in or towards this month"). Plus projected bank balance
+	// once everything settles.
+	const cashIn = pnl.cash_in_net ?? 0;
+	const recognisedIncome = cashIn + pendingTotal;
+	const currentBankCleared = bankLatest?.cleared_minor ?? 0;
+	const projectedBankBalance = currentBankCleared + pendingTotal;
 
 	const buildingItems = [
 		{ label: "Utilities", value: pnl.fixed.utilities },
@@ -149,5 +164,12 @@ export async function gatherBoardPackData({ venueId, ym, venueName }) {
 		codItems,
 		buildingItems,
 		byCategory,
+		// New cash-in + pending shape used by the redesigned PDF.
+		cashIn,
+		pendingItems,
+		pendingTotal,
+		recognisedIncome,
+		projectedBankBalance,
+		currentBankCleared,
 	};
 }

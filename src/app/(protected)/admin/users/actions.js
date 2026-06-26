@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/index.js";
@@ -116,8 +117,12 @@ export async function addAdminAction(input) {
 			// a one-time link and pipes it through the configured
 			// `sendMagicLink` handler in auth.js (which renders the
 			// `magic-link` SendGrid template).
+			// Better Auth requires `headers` on every internal API call;
+			// we forward the incoming request headers so the audit/rate
+			// limit context is preserved.
 			await auth.api.signInMagicLink({
 				body: { email, callbackURL: "/admin/users" },
+				headers: await headers(),
 			});
 		} catch (err) {
 			welcomeError = err?.message || "Magic link send failed.";
@@ -165,6 +170,7 @@ export async function resendWelcomeAction(input) {
 	const parsed = z.object({ email: z.string().email() }).parse(input);
 	await auth.api.signInMagicLink({
 		body: { email: parsed.email, callbackURL: "/admin/users" },
+		headers: await headers(),
 	});
 	return { ok: true };
 }

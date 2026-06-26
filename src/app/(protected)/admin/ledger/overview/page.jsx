@@ -100,20 +100,29 @@ export default async function LedgerDashboardPage({ searchParams }) {
 	const balanceSeries = { day: daily, week: weekly, month: monthly };
 	const hasBalanceData = daily.length > 0 || weekly.length > 0 || monthly.length > 0;
 
+	// Income lead with bank-actual cash-in (matches dashboard + banking
+	// page + board pack). Recompute the waterfall inline so Business Net
+	// etc flow from the same anchor — pnl.business_net was computed from
+	// the per-entity total in getMonthlyPnl and diverges by 100s of £.
+	const cashIn = pnl.cash_in_net ?? 0;
+	const businessNet = cashIn - pnl.cost_of_business;
+	const buildingNet = businessNet - pnl.cost_of_building;
+	const ministryNet = buildingNet - pnl.fixed.mortgage_extra;
+
 	const flowRows = [
-		{ kind: "value", label: "Income", value: pnl.income.total },
+		{ kind: "value", label: "Income (actual in bank)", value: cashIn },
 		{ kind: "deduction", label: "Cost of business", value: pnl.cost_of_business },
-		{ kind: "subtotal", label: "Business Net", value: pnl.business_net },
+		{ kind: "subtotal", label: "Business Net", value: businessNet },
 		{ kind: "deduction", label: "Cost of building", value: pnl.cost_of_building },
 		{
 			kind: "subtotal",
 			label: "Building Net",
-			value: pnl.building_net,
+			value: buildingNet,
 			sub: "Transferable to the church",
 			highlight: true,
 		},
 		{ kind: "deduction", label: "Extra mortgage", value: pnl.fixed.mortgage_extra },
-		{ kind: "subtotal", label: "Ministry Net", value: pnl.ministry_net, highlight: true },
+		{ kind: "subtotal", label: "Ministry Net", value: ministryNet, highlight: true },
 	];
 
 	return (
@@ -299,8 +308,15 @@ export default async function LedgerDashboardPage({ searchParams }) {
 							}
 						/>
 						<div className="border-t border-foreground/10 mt-2 pt-2">
-							<Row label="Total" value={fmt(pnl.income.total)} bold />
+							<Row label="Total earned (paid_at basis)" value={fmt(pnl.income.total)} bold />
 						</div>
+						<p className="text-[11px] text-muted-foreground pt-1">
+							These per-source rows use each entity&apos;s paid_at / confirmed_at
+							timestamp. The headline above uses bank settled date —
+							the two diverge by 1–7 days for PSP-routed receipts. Treat
+							this block as "where the money came from", the headline as
+							"when it landed".
+						</p>
 					</dl>
 				</section>
 

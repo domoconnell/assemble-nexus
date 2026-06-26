@@ -430,7 +430,6 @@ export function BoardPackDocument({ data }) {
 		generatedAt,
 		pnl,
 		manualIncome,
-		churchAvailable,
 		monthlyTrend,
 		bankDaily,
 		bankLatest,
@@ -441,17 +440,34 @@ export function BoardPackDocument({ data }) {
 		codItems,
 		buildingItems,
 		byCategory,
+		cashIn,
+		pendingItems,
+		pendingTotal,
+		recognisedIncome,
+		projectedBankBalance,
+		currentBankCleared,
 	} = data;
 
 	const generatedStr = dateLongFmt.format(new Date(generatedAt));
-	const transferable = churchAvailable.available_to_transfer;
+	// Income mix pie now uses the bank-matched buckets so the chart
+	// agrees with the waterfall numbers above it.
+	const byType = pnl.cash_in_by_type ?? {};
 	const incomePieSlices = [
-		{ name: "Hire fees", value: pnl.income.bookings },
-		{ name: "Ticket fees (net of Stripe)", value: pnl.income.tickets },
-		{ name: "Cafe POS", value: pnl.income.pos_net },
-		{ name: "Manual income", value: pnl.income.manual },
-		{ name: "Rental (tenancies)", value: pnl.income.tenancy ?? 0 },
-	];
+		{ name: "Bookings", value: byType.bookings ?? 0 },
+		{ name: "Tickets", value: byType.tickets ?? 0 },
+		{ name: "Tenancies", value: byType.tenancies ?? 0 },
+		{ name: "Manual invoices", value: byType.manual_invoices ?? 0 },
+		{ name: "PSP payouts", value: byType.psp_payouts ?? 0 },
+		{ name: "Other / unmatched", value: byType.unmatched ?? 0 },
+	].filter((s) => s.value > 0);
+
+	// Re-derive waterfall from cash-in so the PDF agrees with the
+	// dashboard's headline. `pnl.business_net` etc are still computed
+	// from the per-entity total in getMonthlyPnl for historical-data
+	// reasons; the board pack overrides them.
+	const businessNet = cashIn - pnl.cost_of_business;
+	const buildingNet = businessNet - pnl.cost_of_building;
+	const ministryNet = buildingNet - pnl.fixed.mortgage_extra;
 
 	return (
 		<Document
@@ -475,7 +491,12 @@ export function BoardPackDocument({ data }) {
 				<View style={styles.section}>
 					<Text style={styles.sectionTitle}>Money flow this month</Text>
 
-					<MainRow label="Income" value={fmt(pnl.income.total)} />
+					{/* Income headline is now the bank-actual cash-in figure.
+					 * Previously this was `pnl.income.total` (a sum of per-entity
+					 * paid_at timestamps) which diverged from the bank by 100s
+					 * of £ due to PSP payout lag. Cash-in is the same number
+					 * the dashboard and banking page show. */}
+					<MainRow label="Income (actual in bank)" value={fmt(cashIn)} />
 					{incomeItems.map((it) => (
 						<SubItem
 							key={it.label}
@@ -497,8 +518,8 @@ export function BoardPackDocument({ data }) {
 
 					<SubtotalRow
 						label="Business Net"
-						value={fmt(pnl.business_net)}
-						negative={pnl.business_net < 0}
+						value={fmt(businessNet)}
+						negative={businessNet < 0}
 					/>
 
 					<MainRow
@@ -513,8 +534,8 @@ export function BoardPackDocument({ data }) {
 					<SubtotalRow
 						label="Building Net"
 						sub="Transferable to the church"
-						value={fmt(pnl.building_net)}
-						negative={pnl.building_net < 0}
+						value={fmt(buildingNet)}
+						negative={buildingNet < 0}
 					/>
 
 					<MainRow
@@ -525,48 +546,125 @@ export function BoardPackDocument({ data }) {
 
 					<SubtotalRow
 						label="Ministry Net"
-						value={fmt(pnl.ministry_net)}
-						negative={pnl.ministry_net < 0}
+						value={fmt(ministryNet)}
+						negative={ministryNet < 0}
 					/>
 				</View>
 
-				<View
-					style={[
-						styles.highlightBox,
-						{
-							borderColor: transferable < 0 ? COLOURS.destructive : COLOURS.primary,
-							backgroundColor: transferable < 0 ? COLOURS.destructiveBg : COLOURS.primaryBg,
-						},
-					]}
-				>
-					<Text style={[styles.highlightTitle, { color: transferable < 0 ? COLOURS.destructive : COLOURS.primary }]}>
-						Actual transfer to church
-					</Text>
-					<Text style={[styles.highlightValue, { color: transferable < 0 ? COLOURS.destructive : COLOURS.primary }]}>
-						{fmt(transferable)}
-					</Text>
-					<Text style={styles.highlightSub}>
-						Historic sum of every month&apos;s Building Net minus every church transfer
-						settled to date
-						{churchAvailable.month_count > 0
-							? ` · ${churchAvailable.month_count} month${churchAvailable.month_count === 1 ? "" : "s"} of P&L tracked.`
-							: "."}
-					</Text>
-					<View style={{ flexDirection: "row", marginTop: 6, gap: 20 }}>
-						<Text style={{ fontSize: 9, color: COLOURS.muted }}>
-							Cumulative Building Net{" "}
-							<Text style={{ fontFamily: "Helvetica-Bold", color: COLOURS.text }}>
-								{fmt(churchAvailable.cumulative_available)}
-							</Text>
-						</Text>
-						<Text style={{ fontSize: 9, color: COLOURS.muted }}>
-							Transferred{" "}
-							<Text style={{ fontFamily: "Helvetica-Bold", color: COLOURS.text }}>
-								{fmt(churchAvailable.transferred_to_church)}
-							</Text>
-						</Text>
+				{pendingTotal > 0 && (
+					<View style={[styles.section, { marginTop: 14 }]}>
+						<Text style={styles.sectionTitle}>Pending — due to come in</Text>
+						<View
+							style={{
+								borderWidth: 1,
+								borderColor: COLOURS.border,
+								borderRadius: 6,
+								padding: 10,
+							}}
+						>
+							{pendingItems.map((it) => (
+								<View
+									key={it.label}
+									style={{
+										flexDirection: "row",
+										justifyContent: "space-between",
+										paddingVertical: 2.5,
+									}}
+								>
+									<Text style={styles.subLabel}>{it.label}</Text>
+									<Text style={styles.subValue}>{fmt(it.value)}</Text>
+								</View>
+							))}
+							<View
+								style={{
+									flexDirection: "row",
+									justifyContent: "space-between",
+									borderTopWidth: 0.5,
+									borderTopColor: COLOURS.border,
+									paddingTop: 5,
+									marginTop: 4,
+								}}
+							>
+								<Text style={styles.mainLabel}>Total pending</Text>
+								<Text style={styles.mainValue}>{fmt(pendingTotal)}</Text>
+							</View>
+						</View>
+						<View
+							style={{
+								flexDirection: "row",
+								gap: 10,
+								marginTop: 10,
+							}}
+						>
+							<View
+								style={{
+									flex: 1,
+									borderWidth: 1,
+									borderColor: COLOURS.border,
+									borderRadius: 6,
+									padding: 10,
+								}}
+							>
+								<Text
+									style={{
+										fontSize: 8,
+										letterSpacing: 2,
+										textTransform: "uppercase",
+										color: COLOURS.muted,
+										marginBottom: 4,
+									}}
+								>
+									Recognised income
+								</Text>
+								<Text
+									style={{
+										fontSize: 20,
+										fontFamily: "Helvetica-Bold",
+										color: COLOURS.text,
+									}}
+								>
+									{fmt(recognisedIncome)}
+								</Text>
+								<Text style={{ fontSize: 8, color: COLOURS.muted, marginTop: 3 }}>
+									{fmt(cashIn)} in bank + {fmt(pendingTotal)} pending
+								</Text>
+							</View>
+							<View
+								style={{
+									flex: 1,
+									borderWidth: 1,
+									borderColor: COLOURS.border,
+									borderRadius: 6,
+									padding: 10,
+								}}
+							>
+								<Text
+									style={{
+										fontSize: 8,
+										letterSpacing: 2,
+										textTransform: "uppercase",
+										color: COLOURS.muted,
+										marginBottom: 4,
+									}}
+								>
+									Projected bank balance
+								</Text>
+								<Text
+									style={{
+										fontSize: 20,
+										fontFamily: "Helvetica-Bold",
+										color: COLOURS.text,
+									}}
+								>
+									{fmt(projectedBankBalance)}
+								</Text>
+								<Text style={{ fontSize: 8, color: COLOURS.muted, marginTop: 3 }}>
+									{fmt(currentBankCleared)} now + {fmt(pendingTotal)} once pending lands
+								</Text>
+							</View>
+						</View>
 					</View>
-				</View>
+				)}
 
 				<Footer venueName={venueName} ym={ym} pageLabel="1 · Money flow" />
 			</Page>
