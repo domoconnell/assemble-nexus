@@ -499,23 +499,28 @@ export async function sendWelcomeEmailAction(tenancyId) {
 			"No contact email on this tenancy. Assign a contact in the CRM, or set the organisation's primary contact.",
 		);
 	}
-	if (t.org_direct_debit_ready_at) {
-		throw new Error("This organisation already has an active direct debit.");
-	}
 	const all = await listAgreementsForTenancy(t.id);
-	if (all.some((a) => a.status === "signed")) {
-		throw new Error("This tenancy already has a signed agreement.");
-	}
+	// Pick the agreement whose link to share:
+	//   1) a draft (will be flipped to sent on this call)
+	//   2) the most recent sent (re-share the existing link if the
+	//      tenant lost the original — same token, no state change)
+	//   3) signed (rare but useful for record-sharing)
 	const draft = all.find((a) => a.status === "draft");
-	if (!draft) {
-		throw new Error("No draft agreement to send. Create one first.");
+	const sent = all.find((a) => a.status === "sent");
+	const signed = all.find((a) => a.status === "signed");
+	const agreement = draft ?? sent ?? signed;
+	if (!agreement) {
+		throw new Error("No agreement to send. Create one first.");
 	}
-	const now = new Date();
-	const updated = await updateAgreement(draft.id, {
-		status: "sent",
-		sent_at: now,
-		expires_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-	});
+	let updated = agreement;
+	if (agreement.status === "draft") {
+		const now = new Date();
+		updated = await updateAgreement(agreement.id, {
+			status: "sent",
+			sent_at: now,
+			expires_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+		});
+	}
 	const welcomeLines = await listLinesForTenancy(t.id);
 	await sendTenancyWelcomeEmail({
 		tenancy: t,

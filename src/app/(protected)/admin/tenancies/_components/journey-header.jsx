@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/shadcn/components/ui/button";
 import { sendWelcomeEmailAction } from "../actions";
+import { CopyableUrl } from "@/site/ui/copyable-url";
 
 const dateTimeFmt = new Intl.DateTimeFormat("en-GB", {
 	day: "numeric", month: "short", year: "numeric",
@@ -13,21 +14,30 @@ const dateTimeFmt = new Intl.DateTimeFormat("en-GB", {
 
 /**
  * Top-of-page status strip showing the 3 onboarding milestones plus the
- * "Send welcome email" button. The button is only enabled when there's a
- * draft agreement, no signed agreement, and no active direct debit -
- * i.e. the happy-path first contact has not yet happened.
+ * "Send welcome email" button. The button stays enabled regardless of
+ * status so we can re-send if a tenant lost the original. We also
+ * surface the underlying agreement URL with a copy-to-clipboard so the
+ * admin can share it directly (e.g. paste into a SMS or WhatsApp).
  */
 export default function JourneyHeader({ tenancy, agreements }) {
 	const router = useRouter();
 	const [sending, setSending] = useState(false);
 
-	const hasDraft = agreements.some((a) => a.status === "draft");
 	const hasSent = agreements.some((a) => a.status === "sent");
 	const signed = agreements.find((a) => a.status === "signed");
 	const ddReady = !!tenancy.org_direct_debit_ready_at;
 
 	const agreementCreated = agreements.length > 0;
-	const welcomeEligible = hasDraft && !signed && !ddReady;
+	// Surface the URL the welcome email points at. Prefer a draft (the
+	// next one to be sent); fall back to sent / signed so admins can
+	// always re-share the link that's currently active.
+	const linkAgreement =
+		agreements.find((a) => a.status === "draft") ??
+		agreements.find((a) => a.status === "sent") ??
+		agreements.find((a) => a.status === "signed");
+	const agreementPath = linkAgreement?.token
+		? `/tenancy/agreement/${linkAgreement.token}`
+		: null;
 
 	async function sendWelcome() {
 		setSending(true);
@@ -83,16 +93,22 @@ export default function JourneyHeader({ tenancy, agreements }) {
 				<Button
 					size="sm"
 					onClick={sendWelcome}
-					disabled={!welcomeEligible || sending}
+					disabled={sending || !agreementPath}
 					title={
-						!welcomeEligible
-							? "Available when a draft exists and the tenant hasn't signed or set up DD yet."
-							: undefined
+						!agreementPath
+							? "Create an agreement first — the welcome email needs a link to send."
+							: hasSent || signed || ddReady
+								? "Re-sends the welcome email with the same link."
+								: undefined
 					}
 				>
-					{sending ? "Sending…" : "Send welcome email"}
+					{sending ? "Sending…" : hasSent || signed || ddReady ? "Resend welcome email" : "Send welcome email"}
 				</Button>
 			</div>
+
+			{agreementPath && (
+				<CopyableUrl path={agreementPath} label="Agreement link" />
+			)}
 
 			<ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				{steps.map((s, i) => (
