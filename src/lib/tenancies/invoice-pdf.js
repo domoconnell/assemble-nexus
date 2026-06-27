@@ -1,5 +1,6 @@
 import path from "node:path";
 import React from "react";
+import { renderBankBlock } from "@/lib/invoices/bank-block.js";
 import {
 	Document,
 	Page,
@@ -560,6 +561,12 @@ export async function buildTenancyInvoicePdfBuffer({ invoice, lines, tenancy, ve
 					),
 				),
 			),
+
+			// Pay to — bank details so the customer can settle by BACS /
+			// FPS without coming back to ask. Sits between the meta header
+			// and the line-items table, the spot a customer's eye lands on
+			// most often when actioning an invoice.
+			renderBankBlock(venue?.bank_details),
 
 			// table header
 			renderTableHead(showReductionColumns),

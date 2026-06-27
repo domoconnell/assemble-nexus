@@ -1,5 +1,6 @@
 import path from "node:path";
 import React from "react";
+import { renderBankBlock } from "@/lib/invoices/bank-block.js";
 import {
 	Document,
 	Page,
@@ -274,6 +275,11 @@ export async function buildManualInvoicePdfBuffer({ invoice, lines, venue }) {
 						)
 					: null,
 			),
+
+			// Pay to — bank details so the customer can settle by BACS /
+			// FPS without coming back to ask. Reads from
+			// `venue.bank_details` (jsonb).
+			renderBankBlock(venue?.bank_details),
 
 			// Lines
 			React.createElement(Text, { style: styles.sectionTitle }, "Items"),
