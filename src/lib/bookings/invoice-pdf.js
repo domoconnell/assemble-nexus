@@ -1,6 +1,6 @@
 import path from "node:path";
 import React from "react";
-import { renderBankBlock } from "@/lib/invoices/bank-block.js";
+import { renderBankMetaCell } from "@/lib/invoices/bank-block.js";
 import {
 	Document,
 	Page,
@@ -438,6 +438,16 @@ export async function buildBookingInvoicePdfBuffer({
 								)
 							: null,
 					),
+					// Payment information cell — slots between Reference and
+					// Issued so the meta row reads Billed to → Reference →
+					// Payment info → Issued. Naturally wraps to a 2×2 grid
+					// on narrower widths.
+					renderBankMetaCell(venue?.bank_details, {
+						cellStyle: styles.metaCell,
+						labelStyle: styles.metaLabel,
+						valueStyle: styles.metaValue,
+						mutedValueStyle: [styles.metaValue, styles.muted],
+					}),
 					React.createElement(
 						View,
 						{ style: styles.metaCell },
@@ -446,11 +456,6 @@ export async function buildBookingInvoicePdfBuffer({
 					),
 				),
 			),
-
-			// Pay to — bank details so the customer can settle by BACS /
-			// FPS without coming back to ask. Reads from
-			// `venue.bank_details` (jsonb).
-			renderBankBlock(venue?.bank_details),
 
 			// SEGMENTS + FACILITIES TABLE
 			React.createElement(Text, { style: styles.sectionTitle }, "Booking details"),

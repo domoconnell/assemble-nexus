@@ -1,6 +1,6 @@
 import path from "node:path";
 import React from "react";
-import { renderBankBlock } from "@/lib/invoices/bank-block.js";
+import { renderBankMetaCell } from "@/lib/invoices/bank-block.js";
 import {
 	Document,
 	Page,
@@ -553,6 +553,16 @@ export async function buildTenancyInvoicePdfBuffer({ invoice, lines, tenancy, ve
 						React.createElement(Text, { style: styles.subLabel }, "Reference"),
 						React.createElement(Text, { style: styles.subValue }, invoice.reference),
 					),
+					// Payment information — venue's bank details rendered as a
+					// compact meta cell. Slots in between Reference and Issued
+					// so the customer's eye flows from "what's it for" → "how
+					// to pay" → "when was it issued".
+					renderBankMetaCell(venue?.bank_details, {
+						cellStyle: styles.subCell,
+						labelStyle: styles.subLabel,
+						valueStyle: styles.subValue,
+						mutedValueStyle: [styles.subValue, styles.muted],
+					}),
 					React.createElement(
 						View,
 						{ style: styles.subCell },
@@ -561,12 +571,6 @@ export async function buildTenancyInvoicePdfBuffer({ invoice, lines, tenancy, ve
 					),
 				),
 			),
-
-			// Pay to — bank details so the customer can settle by BACS /
-			// FPS without coming back to ask. Sits between the meta header
-			// and the line-items table, the spot a customer's eye lands on
-			// most often when actioning an invoice.
-			renderBankBlock(venue?.bank_details),
 
 			// table header
 			renderTableHead(showReductionColumns),
