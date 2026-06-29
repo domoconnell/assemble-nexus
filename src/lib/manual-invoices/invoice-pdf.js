@@ -1,6 +1,6 @@
 import path from "node:path";
 import React from "react";
-import { renderBankMetaCell } from "@/lib/invoices/bank-block.js";
+import { renderInvoiceHeader } from "@/lib/invoices/meta-header.js";
 import {
 	Document,
 	Page,
@@ -199,91 +199,23 @@ export async function buildManualInvoicePdfBuffer({ invoice, lines, venue }) {
 			Page,
 			{ size: "A4", style: styles.page },
 
-			// Header
-			React.createElement(
-				View,
-				{ style: styles.header },
-				React.createElement(
-					View,
-					{ style: styles.headerTopRow },
-					React.createElement(Image, { src: LOGO_PATH, style: styles.logo }),
-					React.createElement(
+			// Shared invoice header: logo + venue From block + 4-cell meta
+			// row. Identical across every invoice PDF.
+			renderInvoiceHeader({
+				logoPath: LOGO_PATH,
+				venue,
+				billedTo,
+				reference: invoice.reference,
+				issued,
+			}),
+			invoice.description
+				? React.createElement(
 						View,
-						{ style: styles.fromBlock },
-						React.createElement(Text, { style: styles.fromLabel }, "From"),
-						React.createElement(Text, { style: styles.fromLine }, venue?.name ?? "Venue"),
-						...venueAddressLines.map((line, i) =>
-							React.createElement(Text, { key: `va-${i}`, style: styles.fromMuted }, line),
-						),
-						venue?.contact_email
-							? React.createElement(Text, { style: styles.fromMuted }, venue.contact_email)
-							: null,
-						venue?.phone
-							? React.createElement(Text, { style: styles.fromMuted }, venue.phone)
-							: null,
-					),
-				),
-				React.createElement(
-					View,
-					{ style: styles.metaRow },
-					React.createElement(
-						View,
-						{ style: [styles.metaCell, { maxWidth: 240 }] },
-						React.createElement(Text, { style: styles.metaLabel }, "Billed to"),
-						React.createElement(Text, { style: styles.metaValue }, billedTo.name),
-						...billedTo.lines.map((line, i) =>
-							React.createElement(
-								Text,
-								{ key: `bt-${i}`, style: [styles.metaValue, styles.muted] },
-								line,
-							),
-						),
-						billedTo.email
-							? React.createElement(
-									Text,
-									{ style: [styles.metaValue, styles.muted] },
-									billedTo.email,
-								)
-							: null,
-						billedTo.vat
-							? React.createElement(
-									Text,
-									{ style: [styles.metaValue, styles.muted] },
-									`VAT: ${billedTo.vat}`,
-								)
-							: null,
-					),
-					React.createElement(
-						View,
-						{ style: styles.metaCell },
-						React.createElement(Text, { style: styles.metaLabel }, "Reference"),
-						React.createElement(Text, { style: styles.metaValue }, invoice.reference),
-					),
-					// Payment information cell — slots between Reference and
-					// Issued, so the meta row reads Billed to → Reference →
-					// Payment info → Issued.
-					renderBankMetaCell(venue?.bank_details, {
-						cellStyle: styles.metaCell,
-						labelStyle: styles.metaLabel,
-						valueStyle: styles.metaValue,
-						mutedValueStyle: [styles.metaValue, styles.muted],
-					}),
-					React.createElement(
-						View,
-						{ style: styles.metaCell },
-						React.createElement(Text, { style: styles.metaLabel }, "Issued"),
-						React.createElement(Text, { style: styles.metaValue }, issued),
-					),
-				),
-				invoice.description
-					? React.createElement(
-							View,
-							{ style: styles.descriptionBlock },
-							React.createElement(Text, { style: styles.descriptionLabel }, "For"),
-							React.createElement(Text, { style: styles.descriptionText }, invoice.description),
-						)
-					: null,
-			),
+						{ style: styles.descriptionBlock },
+						React.createElement(Text, { style: styles.descriptionLabel }, "For"),
+						React.createElement(Text, { style: styles.descriptionText }, invoice.description),
+					)
+				: null,
 
 			// Lines
 			React.createElement(Text, { style: styles.sectionTitle }, "Items"),

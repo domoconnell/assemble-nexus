@@ -1,6 +1,6 @@
 import path from "node:path";
 import React from "react";
-import { renderBankMetaCell } from "@/lib/invoices/bank-block.js";
+import { renderInvoiceHeader } from "@/lib/invoices/meta-header.js";
 import {
 	Document,
 	Page,
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
 		lineHeight: 1,
 	},
 	bigTotalPeriod: { fontSize: 10, color: "#64748b" },
-	subRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
+	subRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 8, gap: 10, flexWrap: "wrap" },
 	subCell: { flexDirection: "column" },
 	subLabel: { fontSize: 7, letterSpacing: 1.5, textTransform: "uppercase", color: "#94a3b8" },
 	subValue: { marginTop: 1, fontSize: 9 },
@@ -515,62 +515,24 @@ export async function buildTenancyInvoicePdfBuffer({ invoice, lines, tenancy, ve
 		React.createElement(
 			Page,
 			{ size: "A4", style: styles.page },
-			// header — logo top-left, meta + billed-to underneath
-			React.createElement(
-				View,
-				{ style: styles.header },
-				React.createElement(Image, { src: LOGO_PATH, style: styles.logo }),
-				React.createElement(
-					View,
-					{ style: [styles.subRow, { marginTop: 14 }] },
-					React.createElement(
-						View,
-						{ style: [styles.subCell, { flexShrink: 1, maxWidth: 220 }] },
-						React.createElement(Text, { style: styles.subLabel }, "Billed to"),
-						React.createElement(Text, { style: styles.subValue }, tenancy?.organisation_name ?? "—"),
-						...(Array.isArray(tenancy?.organisation_address_lines)
-							? tenancy.organisation_address_lines.map((line, i) =>
-								React.createElement(Text, { key: `addr-${i}`, style: [styles.subValue, styles.muted] }, line),
-							)
-							: []),
-						tenancy?.organisation_vat_number
-							? React.createElement(
-								Text,
-								{ style: [styles.subValue, styles.muted] },
-								`VAT: ${tenancy.organisation_vat_number}`,
-							)
-							: null,
-					),
-					React.createElement(
-						View,
-						{ style: styles.subCell },
-						React.createElement(Text, { style: styles.subLabel }, "Period"),
-						React.createElement(Text, { style: styles.subValue }, period),
-					),
-					React.createElement(
-						View,
-						{ style: styles.subCell },
-						React.createElement(Text, { style: styles.subLabel }, "Reference"),
-						React.createElement(Text, { style: styles.subValue }, invoice.reference),
-					),
-					// Payment information — venue's bank details rendered as a
-					// compact meta cell. Slots in between Reference and Issued
-					// so the customer's eye flows from "what's it for" → "how
-					// to pay" → "when was it issued".
-					renderBankMetaCell(venue?.bank_details, {
-						cellStyle: styles.subCell,
-						labelStyle: styles.subLabel,
-						valueStyle: styles.subValue,
-						mutedValueStyle: [styles.subValue, styles.muted],
-					}),
-					React.createElement(
-						View,
-						{ style: styles.subCell },
-						React.createElement(Text, { style: styles.subLabel }, "Issued"),
-						React.createElement(Text, { style: styles.subValue }, issued),
-					),
-				),
-			),
+			// Shared invoice header: logo + venue From block on top row,
+			// 4-cell meta row underneath. Identical across every PDF.
+			renderInvoiceHeader({
+				logoPath: LOGO_PATH,
+				venue,
+				billedTo: {
+					name: tenancy?.organisation_name ?? "—",
+					lines: Array.isArray(tenancy?.organisation_address_lines)
+						? tenancy.organisation_address_lines
+						: [],
+					vat: tenancy?.organisation_vat_number ?? null,
+				},
+				reference: invoice.reference,
+				// Tenancy invoices show the period as a sub-line under the
+				// reference — it's a tenancy-specific bit of context.
+				referenceSub: period,
+				issued,
+			}),
 
 			// table header
 			renderTableHead(showReductionColumns),
